@@ -54,12 +54,29 @@ def _request() -> TuneRequest:
     )
 
 
-def test_close_verifies_records_and_publishes_manifest_only(
+def test_close_preserves_bundle_after_verifier_failure_then_retries(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     bundle = open_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID)
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
     (bundle / "jobs.tsv").write_text("temporary", encoding="utf-8")
+    inputs = {
+        path.relative_to(bundle): path.read_bytes() for path in bundle.rglob("*") if path.is_file()
+    }
+    canonical = bundle.with_name(str(_EXPERIMENT_ID))
+
+    def fail(_root: Path, _study_id: UUID) -> None:
+        raise RuntimeError("record is incomplete")
+
+    with pytest.raises(RuntimeError, match="record is incomplete"):
+        close_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID, "study_id", fail)
+
+    assert not canonical.exists()
+    assert not (bundle / "manifest.json").exists()
+    assert {
+        path.relative_to(bundle): path.read_bytes() for path in bundle.rglob("*") if path.is_file()
+    } == inputs
+
     verified: list[UUID] = []
 
     close_bundle(
@@ -78,7 +95,6 @@ def test_close_verifies_records_and_publishes_manifest_only(
     assert load_roster(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID, "study_id") == {
         "ethereum.lstm.full": _STUDY_ID
     }
-    canonical = bundle.with_name(str(_EXPERIMENT_ID))
     assert {path.name for path in canonical.iterdir()} == {"manifest.json"}
     assert not bundle.exists()
 

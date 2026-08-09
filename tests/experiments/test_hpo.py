@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 from pathlib import Path
+from types import ModuleType
 from uuid import UUID
 
 import pytest
 
-from kairos.config import TuneRequest
+from kairos.config import FitMethod, Method, TransformerLstmDefinition, TuneRequest
 from kairos.experiments import ExperimentKind, ExperimentManifest, experiment_manifest_path
 from tests.experiments.helpers import publish_generated_studies
 from tests.helpers import read_tsv_rows, run_script
@@ -18,6 +20,105 @@ _HPO_SCRIPT = _ROOT / "experiments" / "hpo.py"
 _CHAINS = ("ethereum", "polygon", "avalanche")
 _FAMILIES = ("lstm", "transformer", "transformer_lstm")
 _CONTEXTS = (1, 2, 3, 4, 5, 10, 15, 20, 25, 50, 100, 200, 400)
+
+
+def _load_hpo(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    monkeypatch.syspath_prepend(str(_ROOT / "experiments"))
+    spec = importlib.util.spec_from_file_location("experiment_hpo_owner", _HPO_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_methods_derive_search_from_the_selected_method(monkeypatch: pytest.MonkeyPatch) -> None:
+    hpo = _load_hpo(monkeypatch)
+    selected = Method(
+        model=TransformerLstmDefinition(
+            family="transformer_lstm",
+            model_width=90,
+            attention_heads=5,
+            transformer_layers=7,
+            feedforward_width=270,
+            lstm_hidden=73,
+            lstm_layers=3,
+            head_hidden=41,
+            dropout=0.17,
+        ),
+        fit=FitMethod(
+            learning_rate=0.0023,
+            weight_decay=0.0041,
+            accumulation=3,
+            gradient_clip_norm=0.75,
+            seed=424_242,
+            max_epochs=17,
+            validate_every_completed_epoch=3,
+            patience=4,
+            min_delta=0.007,
+        ),
+    )
+
+    methods = hpo._methods(selected)
+
+    assert len(methods) == 9
+    assert [method.model for method in methods[:3]] == [
+        selected.model.model_copy(update={"dropout": dropout}) for dropout in (0.2, 0.1, 0.3)
+    ]
+    dimensions = (
+        "model_width",
+        "attention_heads",
+        "transformer_layers",
+        "feedforward_width",
+        "head_hidden",
+    )
+    assert [tuple(getattr(method.model, name) for name in dimensions) for method in methods] == [
+        (90, 5, 7, 270, 41),
+        (90, 5, 7, 270, 41),
+        (90, 5, 7, 270, 41),
+        (192, 4, 3, 384, 192),
+        (192, 4, 3, 384, 192),
+        (192, 4, 3, 384, 192),
+        (384, 8, 4, 768, 256),
+        (384, 8, 4, 768, 256),
+        (384, 8, 4, 768, 256),
+    ]
+    assert [(method.model.lstm_hidden, method.model.lstm_layers) for method in methods] == [
+        (73, 3),
+        (73, 3),
+        (73, 3),
+        (192, 1),
+        (192, 1),
+        (192, 1),
+        (384, 1),
+        (384, 1),
+        (384, 1),
+    ]
+    nonsearched = (
+        "accumulation",
+        "gradient_clip_norm",
+        "seed",
+        "max_epochs",
+        "validate_every_completed_epoch",
+        "patience",
+        "min_delta",
+    )
+    assert {tuple(getattr(method.fit, field) for field in nonsearched) for method in methods} == {
+        tuple(getattr(selected.fit, field) for field in nonsearched)
+    }
+    assert [
+        (method.model.dropout, method.fit.learning_rate, method.fit.weight_decay)
+        for method in methods
+    ] == [
+        (0.2, 0.0003, 0.0001),
+        (0.1, 0.0001, 0.0),
+        (0.3, 0.001, 0.001),
+        (0.2, 0.0001, 0.001),
+        (0.1, 0.001, 0.0001),
+        (0.3, 0.0003, 0.0),
+        (0.2, 0.001, 0.0),
+        (0.1, 0.0003, 0.001),
+        (0.3, 0.0001, 0.0001),
+    ]
 
 
 def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: Path) -> None:
@@ -141,59 +242,6 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
         for chain in _CHAINS
     } == {"ethereum": {25}, "polygon": {50}, "avalanche": {200}}
     assert {len(request.methods) for request in requests.values()} == {9}
-    dimensions = (
-        "model_width",
-        "attention_heads",
-        "transformer_layers",
-        "feedforward_width",
-        "head_hidden",
-    )
-    expected_dimensions = [
-        (256, 4, 4, 512, 256),
-        (256, 4, 4, 512, 256),
-        (256, 4, 4, 512, 256),
-        (192, 4, 3, 384, 192),
-        (192, 4, 3, 384, 192),
-        (192, 4, 3, 384, 192),
-        (384, 8, 4, 768, 256),
-        (384, 8, 4, 768, 256),
-        (384, 8, 4, 768, 256),
-    ]
-    transformer = requests["ethereum.transformer"].methods
-    hybrid = requests["ethereum.transformer_lstm"].methods
-    assert [
-        tuple(getattr(method.model, name) for name in dimensions) for method in transformer
-    ] == (expected_dimensions)
-    assert [tuple(getattr(method.model, name) for name in dimensions) for method in hybrid] == (
-        expected_dimensions
-    )
-    assert [(method.model.lstm_hidden, method.model.lstm_layers) for method in hybrid] == [
-        (width, 1) for width, *_ in expected_dimensions
-    ]
-    control = requests["ethereum.lstm"].methods[0]
-    assert (control.model.hidden, control.model.layers, control.model.head_hidden) == (256, 2, 256)
-    assert (
-        control.fit.accumulation,
-        control.fit.gradient_clip_norm,
-        control.fit.max_epochs,
-        control.fit.validate_every_completed_epoch,
-        control.fit.patience,
-        control.fit.min_delta,
-    ) == (1, 1.0, 36, 1, 8, 0.0)
-    assert [
-        (method.model.dropout, method.fit.learning_rate, method.fit.weight_decay)
-        for method in requests["ethereum.transformer"].methods
-    ] == [
-        (0.2, 0.0003, 0.0001),
-        (0.1, 0.0001, 0.0),
-        (0.3, 0.001, 0.001),
-        (0.2, 0.0001, 0.001),
-        (0.1, 0.001, 0.0001),
-        (0.3, 0.0003, 0.0),
-        (0.2, 0.001, 0.0),
-        (0.1, 0.0003, 0.001),
-        (0.3, 0.0001, 0.0001),
-    ]
 
     publish_generated_studies(tmp_path, rows, default_objective=0.5)
     selected = run_script(_HPO_SCRIPT, "select", tmp_path, hpo_experiment_id)

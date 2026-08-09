@@ -346,6 +346,9 @@ fixed; remaining operational cleanup proposed, awaiting approval
 
 - Balanced packing preserves sustained and tail GPU occupancy. Submission failures leave later
   groups pending; failed submitted rows can be pruned and resubmitted with candidate scratch intact.
+- For identical inputs and remote resource values, the generated script must request the same
+  allocation count/sizes, partition, task count, total GRES name/count, one GPU per `srun` step,
+  CPUs, memory, and time limit. Flattening configuration may not change schedulable capacity.
 - Poll removal intentionally makes future latency/energy values measure the declared computation
   more faithfully. Powermetrics failure still invalidates the phase; existing thesis data stays
   untouched.
@@ -361,6 +364,8 @@ canonical setup, and a smaller exporter without sacrificing throughput, recovery
 
 - Balanced one-to-four-task allocation matrix, journal recovery, spaced log path, GRES rendering,
   positive job IDs, aggregate process failure, golden script, and `bash -n`.
+- Before/after Slurm-script comparison proving exact resource-request equivalence; the only allowed
+  script delta is correct quoting where the existing path expression is unsafe.
 - Benchmark protocol, timing boundary, measurement, resume, reduction, mismatched-ID, same-origin,
   coverage, powermetrics failure, and atomic publication tests.
 - Exporter suite through its normal regenerated environment, including real XNNPACK delegation and

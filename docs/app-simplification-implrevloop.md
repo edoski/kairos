@@ -1,6 +1,7 @@
 # App simplification implementation-review ledger
 
-Status: implementation authorized on 2026-08-09; Slice 1 green, Slice 2 setup in progress
+Status: both authorized slices independently green; final integration passed, local integration and
+cleanup in progress
 
 Authority: the current `app/` implementation at
 `5a1245908eb0e3150051155394db9dce2215d6be`, the user's 2026-08-09 decisions in this
@@ -216,7 +217,7 @@ continuous watcher, status, snapshot, unwatch, and visual app-header concepts no
 
 ## Slice 2 — Direct fixed selection controls around retained graphs
 
-Status: authorized; implementation dispatch pending after Slice 1 green
+Status: complete; independent `GREEN LIGHT`
 
 ### Execution record
 
@@ -229,6 +230,18 @@ Status: authorized; implementation dispatch pending after Slice 1 green
 - Reserved independent reviewer: `/root/slice2_reviewer`
 - External gates: no real RPC, simulator/device, generated asset, exporter, remote, Slurm, image,
   push, or pull-request work
+- Pre-dispatch branch head: `cbc4baeb49aad106611df524378a8497740248ab`
+- Implementation commit: `30e51539c823d44f890fdb58a5e6c4e709ed51d9`
+  (`refactor(app): simplify selection controls`)
+- Implementer verification: full app tests 43/43; typecheck and strict unused checks passed; Expo
+  Doctor 19/19; clean npm lock check, diff check, Vulture, control/dependency residue audit, shared
+  component count, and three-chart/single-`buckets` audit passed; worktree clean
+- Review range: `cbc4baeb49aad106611df524378a8497740248ab...30e51539c823d44f890fdb58a5e6c4e709ed51d9`
+- Review result: `/root/slice2_reviewer` returned Standards `GREEN LIGHT` with zero findings and
+  Spec `GREEN LIGHT` with zero findings; checkout remained clean
+- Correction rounds: none
+- Unrun as gated: real RPC, simulator/device/visual acceptance, generated assets/exporter, remote,
+  Slurm/image work, push, and pull request
 
 ### Scope
 
@@ -308,6 +321,28 @@ its complete summary, three graphs, run list, and details.
 - The less-decorative shared controls were explicitly authorized on 2026-08-09.
 - No real RPC, model asset, simulator, device, exporter, or remote work is authorized by this
   ledger.
+
+## Final integration record
+
+- Final product head: `30e51539c823d44f890fdb58a5e6c4e709ed51d9`
+- Full app tests: 43/43 across seven files
+- TypeScript: normal typecheck and strict unused-local/parameter check passed
+- Expo Doctor: 19/19 checks passed
+- Dependency lock: `npm ci --ignore-scripts` passed and left `package.json`/lockfile unchanged; npm
+  reported 20 transitive audit advisories (6 moderate, 14 high), with no dependency added by this
+  run
+- Static/status checks: Vulture returned no findings; full-range diff check and worktree status
+  passed
+- Residue: no watcher/status/snapshot/header/live-condition, slider, slider-package,
+  network-picker, or removed-style terms remain in scoped app code, tests, and mobile docs
+- Retained UI: one `NetworkChoices` definition with two callers, one `HorizonChoices` definition
+  with two callers, and all three chart definitions/renders remain exactly once on the same
+  `buckets` collection
+- Full planning-baseline audit: every changed path is confined to `app/`, `README.md`,
+  `docs/KAIROS.md`, and this ledger; no Python core, experiment, deployment, scientific, artifact,
+  or remote path changed
+- Deferred gates: real RPC, simulator/device/visual acceptance, generated model assets/exporter,
+  remote, Slurm/image work, push, and pull request remain unrun
 
 ## Explicitly rejected or superseded candidates
 

@@ -354,8 +354,8 @@ def _load_cell(storage_root: Path, cell: str, resolved: Mapping[int, EvaluateReq
 
 
 def _batch(item: _Horizon, index: int) -> tuple[int, torch.Tensor]:
-    sample = item.dataset[index]
-    return int(sample["origin_block"]), sample["inputs"].unsqueeze(0)
+    batch = item.dataset.batch([index])
+    return int(batch["origin_block"][0]), batch["inputs"]
 
 
 def _infer(model: nn.Module, inputs: torch.Tensor) -> None:

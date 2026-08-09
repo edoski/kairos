@@ -277,12 +277,6 @@ def _fit(
 
     module = _FitModule(association.model_dump(mode="json"))
     definition = module.definition
-    training_loader = _runtime.data_loader(
-        prepared.training, batch_size=_runtime.FIT_BATCH_SIZE, shuffle=True
-    )
-    validation_loader = _runtime.data_loader(
-        prepared.validation, batch_size=_runtime.FIT_BATCH_SIZE, shuffle=False
-    )
     use_bfloat16 = not isinstance(definition.method.model, LstmDefinition)
     best = ModelCheckpoint(
         dirpath=scratch,
@@ -323,6 +317,11 @@ def _fit(
                 enable_version_counter=False,
             ),
         ],
+    )
+    prepared = prepared.to(trainer.strategy.root_device)
+    training_loader = prepared.training.loader(batch_size=_runtime.FIT_BATCH_SIZE, shuffle=True)
+    validation_loader = prepared.validation.loader(
+        batch_size=_runtime.FIT_BATCH_SIZE, shuffle=False
     )
     last_checkpoint = scratch / "last.ckpt"
     trainer.fit(

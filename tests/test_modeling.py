@@ -12,7 +12,6 @@ import pytest
 import torch
 from lightning.pytorch.callbacks import Callback
 from pydantic import ValidationError
-from torch.utils.data import DataLoader
 
 import kairos.modeling as modeling
 from kairos.addresses import (
@@ -65,11 +64,6 @@ _METHOD = Method(
         min_delta=0.0,
     ),
 )
-
-
-@pytest.fixture(autouse=True)
-def _use_single_process_loaders(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(modeling._runtime, "NUM_WORKERS", 0)
 
 
 def _experiment() -> ExperimentSemantics:
@@ -242,8 +236,9 @@ def test_validation_logs_weight_short_batches_in_float64(monkeypatch: pytest.Mon
     )
     torch.manual_seed(89)
     module = modeling._FitModule(association.model_dump(mode="json")).eval()
-    batches = list(DataLoader(prepared.training, batch_size=3, shuffle=False))
-    complete = next(iter(DataLoader(prepared.training, batch_size=4, shuffle=False)))
+    resident = prepared.to(torch.device("cpu"))
+    batches = list(resident.training.loader(batch_size=3, shuffle=False))
+    complete = next(iter(resident.training.loader(batch_size=4, shuffle=False)))
     with torch.no_grad():
         expected = float(
             min_block_fee_loss(
@@ -315,7 +310,9 @@ def test_lstm_trains_loads_and_applies_direct_loss(
     assert result.completed_epochs == 1
 
     application_history = prepare_fit_history(_blocks(), _experiment())
-    batches = list(DataLoader(application_history.training, batch_size=3, shuffle=False))
+    batches = list(
+        application_history.to(torch.device("cpu")).training.loader(batch_size=3, shuffle=False)
+    )
     for batch in batches:
         output = loaded_model(batch["inputs"])
         assert output.action_logits.shape == (batch["inputs"].shape[0], 2)

@@ -94,10 +94,11 @@ class _Dataset:
     def __len__(self) -> int:
         return len(self.origins)
 
-    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+    def batch(self, indexes: list[int]) -> dict[str, torch.Tensor]:
+        index = indexes[0]
         return {
-            "inputs": self.inputs[index : index + 2],
-            "origin_block": torch.tensor(self.origins[index]),
+            "inputs": self.inputs[index : index + 2].unsqueeze(0),
+            "origin_block": torch.tensor([self.origins[index]]),
         }
 
 
@@ -201,9 +202,11 @@ def test_batch_one_is_a_chronological_view() -> None:
     )
     dataset = HistoricalDataset(
         backing,
-        _experiment(2),
-        BlockWindow(first_parent_block=102, last_parent_block=104),
-        TargetState(mean=0.0, standard_deviation=1.0),
+        first_origin_row=2,
+        labels=torch.zeros(3, dtype=torch.int64),
+        targets=torch.zeros(3),
+        context_blocks=2,
+        horizon_blocks=2,
     )
     origin, inputs = benchmark._batch(benchmark._Horizon(nn.Identity(), dataset), 1)
     assert origin == 103

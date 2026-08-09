@@ -10,7 +10,6 @@ import polars as pl
 import torch
 from torch import nn
 
-from . import _runtime
 from .config import BlockWindow
 from .corpus import BlockFrame
 from .min_block_fee import TargetState, decode_action
@@ -62,12 +61,13 @@ def collect_observations(
     predicted_minimum_z = np.empty(count, dtype=np.float64)
     minimum_actions = np.empty(count, dtype=np.int64)
 
-    loader = _runtime.data_loader(dataset, batch_size=batch_size, shuffle=False)
+    dataset = dataset.to(device)
+    loader = dataset.loader(batch_size=batch_size, shuffle=False)
     model.to(device).eval()
     cursor = 0
     with torch.inference_mode():
         for batch in loader:
-            inputs = batch["inputs"].to(device)
+            inputs = batch["inputs"]
             if autocast_dtype is None:
                 output = model(inputs)
             else:
@@ -78,10 +78,10 @@ def collect_observations(
             actions = decode_action(output).cpu().numpy()
             size = actions.size
             destination = slice(cursor, cursor + size)
-            origin_blocks[destination] = batch["origin_block"].numpy()
+            origin_blocks[destination] = batch["origin_block"].cpu().numpy()
             predicted_actions[destination] = actions
             predicted_minimum_z[destination] = output.minimum_fee_z.float().cpu().numpy()
-            minimum_actions[destination] = batch["label"].numpy()
+            minimum_actions[destination] = batch["label"].cpu().numpy()
             cursor += size
 
     predicted_logs = target_state.mean + target_state.standard_deviation * predicted_minimum_z

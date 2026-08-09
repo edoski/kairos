@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -11,7 +12,7 @@ import polars as pl
 import torch
 from numpy.typing import NDArray
 from pydantic import Field
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 
 from .config import BlockWindow, ExperimentSemantics, FeatureName
 from .corpus import BlockFrame
@@ -146,39 +147,71 @@ class _HistoricalBacking:
     inputs: torch.Tensor
     base_fees: torch.Tensor
 
+    def to(self, device: torch.device) -> _HistoricalBacking:
+        if self.inputs.device == device:
+            return self
+        return _HistoricalBacking(
+            first_block=self.first_block,
+            inputs=self.inputs.to(device),
+            base_fees=self.base_fees.to(device),
+        )
 
-class HistoricalDataset(Dataset[_HistoricalItem]):
-    """Lazy fixed-context dataset backed by contiguous CPU row tensors."""
+
+class HistoricalDataset(Dataset[int]):
+    """Device-resident historical rows with batched window gathering."""
 
     def __init__(
         self,
         backing: _HistoricalBacking,
-        experiment: ExperimentSemantics,
-        window: BlockWindow,
-        target_state: TargetState,
+        first_origin_row: int,
+        labels: torch.Tensor,
+        targets: torch.Tensor,
+        *,
+        context_blocks: int,
+        horizon_blocks: int,
     ) -> None:
-        origin_rows = _origin_rows(backing, window)
-        labels, minima = _minimum_outcomes(
-            backing.base_fees.numpy(), origin_rows, horizon_blocks=experiment.horizon_blocks
-        )
         self._backing = backing
-        self._first_origin_row = int(origin_rows[0])
-        self._labels = torch.from_numpy(labels)
-        self._targets = torch.from_numpy(standardize_target(minima, target_state))
-        self._context_blocks = experiment.context_blocks
-        self._horizon_blocks = experiment.horizon_blocks
+        self._first_origin_row = first_origin_row
+        self._labels = labels
+        self._targets = targets
+        self._context_blocks = context_blocks
+        self._horizon_blocks = horizon_blocks
 
     def __len__(self) -> int:
         return len(self._labels)
 
-    def __getitem__(self, index: int) -> _HistoricalItem:
-        origin = self._first_origin_row + index
+    def __getitem__(self, index: int) -> int:
+        return index
+
+    def to(self, device: torch.device) -> HistoricalDataset:
+        return self._to(self._backing.to(device), device)
+
+    def loader(self, *, batch_size: int, shuffle: bool) -> Iterable[_HistoricalItem]:
+        return DataLoader(self, batch_size=batch_size, shuffle=shuffle, collate_fn=self.batch)
+
+    def _to(self, backing: _HistoricalBacking, device: torch.device) -> HistoricalDataset:
+        if backing is self._backing and self._labels.device == device:
+            return self
+        return HistoricalDataset(
+            backing,
+            self._first_origin_row,
+            self._labels.to(device),
+            self._targets.to(device),
+            context_blocks=self._context_blocks,
+            horizon_blocks=self._horizon_blocks,
+        )
+
+    def batch(self, indexes: list[int]) -> _HistoricalItem:
+        positions = torch.tensor(indexes, device=self._labels.device)
+        origins = self._first_origin_row + positions
+        inputs = self._backing.inputs.unfold(0, self._context_blocks, 1).transpose(1, 2)
+        base_fees = self._backing.base_fees.unfold(0, self._horizon_blocks, 1)
         return {
-            "inputs": self._backing.inputs[origin - self._context_blocks + 1 : origin + 1],
-            "label": self._labels[index],
-            "target": self._targets[index],
-            "base_fees": self._backing.base_fees[origin + 1 : origin + 1 + self._horizon_blocks],
-            "origin_block": torch.tensor(self._backing.first_block + origin, dtype=torch.int64),
+            "inputs": inputs[origins - self._context_blocks + 1],
+            "label": self._labels[positions],
+            "target": self._targets[positions],
+            "base_fees": base_fees[origins + 1],
+            "origin_block": self._backing.first_block + origins,
         }
 
 
@@ -188,6 +221,15 @@ class HistoricalPreparation:
     validation: HistoricalDataset
     feature_state: FeatureState
     target_state: TargetState
+
+    def to(self, device: torch.device) -> HistoricalPreparation:
+        backing = self.training._backing.to(device)
+        return HistoricalPreparation(
+            training=self.training._to(backing, device),
+            validation=self.validation._to(backing, device),
+            feature_state=self.feature_state,
+            target_state=self.target_state,
+        )
 
 
 def prepare_fit_history(
@@ -221,8 +263,8 @@ def prepare_fit_history(
     target_state = fit_target_state(training_minima)
 
     return HistoricalPreparation(
-        training=HistoricalDataset(backing, experiment, training_window, target_state),
-        validation=HistoricalDataset(backing, experiment, validation_window, target_state),
+        training=_build_dataset(backing, experiment, training_window, target_state),
+        validation=_build_dataset(backing, experiment, validation_window, target_state),
         feature_state=feature_state,
         target_state=target_state,
     )
@@ -250,7 +292,27 @@ def prepare_historical_window(
         ordered_features=experiment.ordered_features,
         feature_state=feature_state,
     )
-    return HistoricalDataset(backing, experiment, window, target_state)
+    return _build_dataset(backing, experiment, window, target_state)
+
+
+def _build_dataset(
+    backing: _HistoricalBacking,
+    experiment: ExperimentSemantics,
+    window: BlockWindow,
+    target_state: TargetState,
+) -> HistoricalDataset:
+    origin_rows = _origin_rows(backing, window)
+    labels, minima = _minimum_outcomes(
+        backing.base_fees.numpy(), origin_rows, horizon_blocks=experiment.horizon_blocks
+    )
+    return HistoricalDataset(
+        backing,
+        first_origin_row=int(origin_rows[0]),
+        labels=torch.from_numpy(labels),
+        targets=torch.from_numpy(standardize_target(minima, target_state)),
+        context_blocks=experiment.context_blocks,
+        horizon_blocks=experiment.horizon_blocks,
+    )
 
 
 def _build_backing(

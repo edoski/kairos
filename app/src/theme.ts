@@ -11,8 +11,6 @@ export const colors = {
   amberSoft: "#FAD58A",
   red: "#EF4444",
   redSoft: "#FEF2F2",
-  navy: "#071426",
-  predictionLine: "#AFC8FF",
   errorBorder: "#FECACA",
   errorInk: "#B42318",
   overlay: "rgba(7, 20, 38, 0.58)",

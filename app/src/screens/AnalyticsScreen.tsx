@@ -18,10 +18,10 @@ import {
   waitBuckets,
 } from "../analytics";
 import { DetailRow } from "../components/DetailRow";
-import { HorizonSlider } from "../components/HorizonSlider";
-import { NetworkIcon } from "../components/NetworkIcon";
+import { HorizonChoices } from "../components/HorizonChoices";
+import { NetworkChoices } from "../components/NetworkChoices";
 import { Overlay } from "../components/Overlay";
-import { CHAINS, CHAIN_LABELS, type Chain, type Horizon } from "../domain";
+import { CHAIN_LABELS, type Chain, type Horizon } from "../domain";
 import type { InferenceRun } from "../history";
 import { styles } from "../styles";
 import { colors, radii } from "../theme";
@@ -271,55 +271,6 @@ function runSummary(run: InferenceRun): string {
   return `${wait} · ${outcome}`;
 }
 
-function NetworkPicker({
-  selected,
-  onClose,
-  onSelect,
-}: {
-  selected: Chain;
-  onClose: () => void;
-  onSelect: (chain: Chain) => void;
-}) {
-  return (
-    <Overlay animationType="fade" onClose={onClose}>
-      <View style={[styles.dialog, styles.sheet, styles.networkSheet]}>
-        <View style={styles.headerRow}>
-          <Text style={styles.networkSheetTitle}>Select network</Text>
-          <Pressable hitSlop={10} onPress={onClose}>
-            <Ionicons color={colors.muted} name="close" size={25} />
-          </Pressable>
-        </View>
-        <View style={styles.cardRow}>
-          {CHAINS.map((chain) => {
-            const active = chain === selected;
-            return (
-              <Pressable
-                key={chain}
-                onPress={() => onSelect(chain)}
-                style={[
-                  styles.networkCard,
-                  styles.networkOption,
-                  active && styles.networkCardActive,
-                ]}
-              >
-                <NetworkIcon chain={chain} size={26} />
-                <Text
-                  style={[
-                    styles.networkOptionText,
-                    active && styles.networkOptionTextActive,
-                  ]}
-                >
-                  {CHAIN_LABELS[chain]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-    </Overlay>
-  );
-}
-
 function RunDetails({
   run,
   onClose,
@@ -427,7 +378,6 @@ export function AnalyticsScreen({
 }) {
   const [analyticsHorizon, setAnalyticsHorizon] =
     useState<Horizon>(initialHorizon);
-  const [networkPickerOpen, setNetworkPickerOpen] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<
     { status: "idle" | "loading" } | { status: "error"; message: string }
@@ -458,18 +408,14 @@ export function AnalyticsScreen({
         contentContainerStyle={styles.page}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>Analytics</Text>
-          <Pressable
-            onPress={() => setNetworkPickerOpen(true)}
-            style={styles.networkBadge}
-          >
-            <NetworkIcon chain={chain} size={14} />
-            <Text style={styles.networkBadgeText}>
-              {CHAIN_LABELS[chain]}
-            </Text>
-            <Ionicons color={colors.blue} name="chevron-down" size={14} />
-          </Pressable>
+        <Text style={styles.title}>Analytics</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Network</Text>
+          <NetworkChoices
+            chain={chain}
+            disabled={false}
+            onChange={onChainChange}
+          />
         </View>
 
         {loadError && (
@@ -533,12 +479,10 @@ export function AnalyticsScreen({
             <Text style={styles.sectionTitle}>
               Horizon (K = {analyticsHorizon})
             </Text>
-            <View style={[styles.surface, styles.graphSliderCard]}>
-              <HorizonSlider
-                onChange={setAnalyticsHorizon}
-                value={analyticsHorizon}
-              />
-            </View>
+            <HorizonChoices
+              onChange={setAnalyticsHorizon}
+              value={analyticsHorizon}
+            />
           </View>
           <View style={styles.chartCards}>
             <RecommendedWaitChart buckets={buckets} />
@@ -600,16 +544,6 @@ export function AnalyticsScreen({
 
       {selectedRun !== null && (
         <RunDetails onClose={() => setSelectedRunId(null)} run={selectedRun} />
-      )}
-      {networkPickerOpen && (
-        <NetworkPicker
-          onClose={() => setNetworkPickerOpen(false)}
-          onSelect={(nextChain) => {
-            onChainChange(nextChain);
-            setNetworkPickerOpen(false);
-          }}
-          selected={chain}
-        />
       )}
     </>
   );

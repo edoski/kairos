@@ -9,15 +9,10 @@ import {
 
 import { formatGwei } from "../analytics";
 import { DetailRow } from "../components/DetailRow";
-import { HorizonSlider } from "../components/HorizonSlider";
-import { NetworkIcon } from "../components/NetworkIcon";
+import { HorizonChoices } from "../components/HorizonChoices";
+import { NetworkChoices } from "../components/NetworkChoices";
 import { Overlay } from "../components/Overlay";
-import {
-  CHAINS,
-  CHAIN_LABELS,
-  type Chain,
-  type Horizon,
-} from "../domain";
+import { CHAIN_LABELS, type Chain, type Horizon } from "../domain";
 import type { InferenceResult } from "../inference";
 import { styles } from "../styles";
 import { colors } from "../theme";
@@ -37,103 +32,6 @@ type Props = {
   onRun: () => void;
   onRunAgain: () => void;
 };
-
-function NetworkChoices({
-  chain,
-  disabled,
-  onChange,
-}: {
-  chain: Chain;
-  disabled: boolean;
-  onChange: (chain: Chain) => void;
-}) {
-  return (
-    <View style={styles.cardRow}>
-      {CHAINS.map((choice) => {
-        const active = choice === chain;
-        const label = CHAIN_LABELS[choice];
-        return (
-          <Pressable
-            disabled={disabled}
-            key={choice}
-            onPress={() => onChange(choice)}
-            style={[
-              styles.networkCard,
-              styles.inferenceNetworkCard,
-              active && styles.networkCardActive,
-            ]}
-          >
-            {active && (
-              <Ionicons
-                color={colors.blue}
-                name="checkmark-circle"
-                size={19}
-                style={styles.check}
-              />
-            )}
-            <NetworkIcon chain={choice} />
-            <Text numberOfLines={1} style={styles.networkLabel}>
-              {label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function HorizonSelector({
-  disabled,
-  horizon,
-  onChange,
-}: {
-  disabled: boolean;
-  horizon: Horizon;
-  onChange: (horizon: Horizon) => void;
-}) {
-  return (
-    <View style={[styles.surface, styles.windowCard]}>
-      <View style={styles.windowTrack}>
-        <View style={styles.windowHead}>
-          <View style={styles.windowHeadNode}>
-            <Ionicons color={colors.surface} name="cube" size={13} />
-          </View>
-          <Text style={styles.windowHeadLabel}>Head</Text>
-        </View>
-        <Ionicons color={colors.blue} name="arrow-forward" size={15} />
-        <View style={styles.predictionGroup}>
-          <Text style={styles.predictionSpaceLabel}>Prediction space</Text>
-          <View style={styles.predictionSpace}>
-            <View style={styles.predictionChain}>
-              <View style={styles.predictionLine} />
-              {Array.from({ length: horizon }, (_, offset) => (
-                <View
-                  key={offset}
-                  style={styles.predictionBlock}
-                >
-                  <View style={styles.predictionNode}>
-                    <Ionicons
-                      color={colors.blue}
-                      name="cube-outline"
-                      size={15}
-                    />
-                  </View>
-                  <Text style={styles.predictionNodeLabel}>{offset + 1}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-      </View>
-
-      <HorizonSlider
-        disabled={disabled}
-        onChange={onChange}
-        value={horizon}
-      />
-    </View>
-  );
-}
 
 function ErrorDialog({
   message,
@@ -177,10 +75,8 @@ function ErrorDialog({
 }
 
 function Setup({
-  chain,
   horizon,
   state,
-  onChainChange,
   onHorizonChange,
   onRun,
 }: Props) {
@@ -188,20 +84,11 @@ function Setup({
   return (
     <>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Network</Text>
-        <NetworkChoices
-          chain={chain}
-          disabled={loading}
-          onChange={onChainChange}
-        />
-      </View>
-
-      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Horizon (K = {horizon})</Text>
-        <HorizonSelector
+        <HorizonChoices
           disabled={loading}
-          horizon={horizon}
           onChange={onHorizonChange}
+          value={horizon}
         />
       </View>
 
@@ -335,6 +222,14 @@ export function InferenceScreen(props: Props) {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>Inference</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Network</Text>
+          <NetworkChoices
+            chain={props.chain}
+            disabled={props.state.status === "loading"}
+            onChange={props.onChainChange}
+          />
+        </View>
         {props.state.status === "success" ? (
           <Result
             onRunAgain={props.onRunAgain}

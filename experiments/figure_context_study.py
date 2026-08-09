@@ -28,14 +28,9 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
     contexts_by_chain: dict[str, set[int]] = defaultdict(set)
 
     for cell, study_id in manifest.items():
-        try:
-            chain, family, context_label = cell.split(".")
-            context = int(context_label.removeprefix("C"))
-        except ValueError as error:
-            raise ValueError(f"invalid context-study cell: {cell}") from error
+        chain, family, context_label = cell.split(".")
+        context = int(context_label.removeprefix("C"))
         study = load_study(storage_root, study_id)
-        if len(study.trials) != 1:
-            raise ValueError("context Studies must contain exactly one trial")
         if chain not in chains:
             chains.append(chain)
         if family not in families_by_chain[chain]:
@@ -48,11 +43,6 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
         axis = axes[row, 0]
         contexts = sorted(contexts_by_chain[chain])
         for family in families_by_chain[chain]:
-            missing = [
-                context for context in contexts if (chain, family, context) not in objectives
-            ]
-            if missing:
-                raise ValueError(f"{chain}.{family} lacks contexts {missing}")
             color, marker = family_style(family)
             axis.plot(
                 contexts,

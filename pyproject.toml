@@ -7,7 +7,6 @@ name = "kairos"
 version = "0.1.0"
 description = "Learning when to execute blockchain transactions."
 requires-python = ">=3.11,<3.12"
-license = { text = "MIT" }
 authors = [
   { name = "Edoardo" }
 ]

@@ -17,10 +17,7 @@ from kairos.study import load_study
 
 
 def _objective(storage_root: Path, study_id: UUID) -> float:
-    study = load_study(storage_root, study_id)
-    if len(study.trials) != 1:
-        raise ValueError("feature-ablation Studies must contain exactly one trial")
-    return study.trials[0].objective
+    return load_study(storage_root, study_id).trials[0].objective
 
 
 _FEATURE_LABELS = {
@@ -39,7 +36,7 @@ _FEATURE_LABELS = {
 
 def _feature_label(configuration: str) -> str:
     feature = configuration.removeprefix("without_")
-    return _FEATURE_LABELS.get(feature, display_name(feature))
+    return _FEATURE_LABELS[feature]
 
 
 def _family_label(family: str) -> str:
@@ -57,10 +54,7 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
     configurations: list[str] = []
 
     for cell, study_id in manifest.items():
-        try:
-            chain, family, configuration = cell.split(".")
-        except ValueError as error:
-            raise ValueError(f"invalid feature-ablation cell: {cell}") from error
+        chain, family, configuration = cell.split(".")
         if chain not in chains:
             chains.append(chain)
         if family not in families_by_chain[chain]:
@@ -72,17 +66,6 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
         objectives[chain, family, configuration] = _objective(storage_root, study_id)
 
     configurations.sort(key=lambda value: value == "without_exact_forming_base_fee")
-
-    for chain in chains:
-        expected = ("full", *configurations_by_chain[chain])
-        for family in families_by_chain[chain]:
-            missing = [
-                configuration
-                for configuration in expected
-                if (chain, family, configuration) not in objectives
-            ]
-            if missing:
-                raise ValueError(f"{chain}.{family} lacks configurations {missing}")
 
     deltas = np.full(
         (len(chains), len(configurations), max(map(len, families_by_chain.values()))), np.nan
@@ -97,15 +80,12 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
                     )
 
     finite = deltas[np.isfinite(deltas)]
-    if finite.size == 0:
-        raise ValueError("feature-ablation manifest contains no omission cells")
     limit = float(np.max(np.abs(finite)))
     norm = TwoSlopeNorm(vmin=-limit, vcenter=0.0, vmax=limit)
     colormap = mpl.colormaps["RdBu_r"].copy()
     colormap.set_bad("#F2F2F2")
 
     figure, axes = subplots(1, len(chains), height=4.0)
-    image = None
     for column, chain in enumerate(chains):
         axis = axes[0, column]
         families = families_by_chain[chain]
@@ -143,7 +123,6 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
                         fontsize=6,
                     )
 
-    assert image is not None
     colorbar = figure.colorbar(
         image, ax=axes.ravel().tolist(), orientation="horizontal", shrink=0.72, aspect=35, pad=0.08
     )

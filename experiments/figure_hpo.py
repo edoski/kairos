@@ -28,10 +28,7 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
     families_by_chain: dict[str, list[str]] = defaultdict(list)
 
     for cell, study_id in manifest.items():
-        try:
-            chain, family = cell.split(".")
-        except ValueError as error:
-            raise ValueError(f"invalid HPO cell: {cell}") from error
+        chain, family = cell.split(".")
         study = load_study(storage_root, study_id)
         if chain not in chains:
             chains.append(chain)

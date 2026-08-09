@@ -43,11 +43,8 @@ def _load_results(storage_root: Path, experiment_id: UUID) -> _HeldOutResults:
     roster: dict[tuple[str, str], dict[int, UUID]] = defaultdict(dict)
     metrics = {}
     for cell, evaluation_id in manifest.items():
-        try:
-            chain, family, horizon_label = cell.split(".")
-            horizon = int(horizon_label.removeprefix("K"))
-        except ValueError as error:
-            raise ValueError(f"invalid held-out cell: {cell}") from error
+        chain, family, horizon_label = cell.split(".")
+        horizon = int(horizon_label.removeprefix("K"))
         if chain not in chains:
             chains.append(chain)
         if family not in families_by_chain[chain]:
@@ -93,15 +90,10 @@ def _render_horizons(results: _HeldOutResults, output_directory: Path) -> Path:
 
 
 def _render_rolling(storage_root: Path, results: _HeldOutResults, output_directory: Path) -> Path:
-    required = set(ROLLING_HORIZONS)
-    rolling_roster = {}
-    for (chain, family), evaluations in results.roster.items():
-        missing = sorted(required.difference(evaluations))
-        if missing:
-            raise ValueError(f"{chain}.{family} lacks rolling horizons {missing}")
-        rolling_roster[f"{chain}.{family}"] = {
-            horizon: evaluations[horizon] for horizon in ROLLING_HORIZONS
-        }
+    rolling_roster = {
+        f"{chain}.{family}": {horizon: evaluations[horizon] for horizon in ROLLING_HORIZONS}
+        for (chain, family), evaluations in results.roster.items()
+    }
     rows = {
         row["cell"]: row
         for row in reduce_rolling(storage_root, rolling_roster).iter_rows(named=True)

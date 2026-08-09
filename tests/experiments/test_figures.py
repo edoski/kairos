@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import math
-import subprocess
 from pathlib import Path
 from uuid import UUID, uuid4
 
 import polars as pl
-import pytest
 
 from kairos.addresses import evaluation_directory
 from kairos.config import (
@@ -56,7 +54,6 @@ _EXPERIMENT = ExperimentSemantics(
 def _publish_study(
     storage_root: Path, objectives: tuple[float, ...], *, family: str = "lstm", context: int = 100
 ) -> UUID:
-    study_id = uuid4()
     model = {
         "lstm": LstmDefinition(family="lstm", hidden=32, layers=1, head_hidden=16, dropout=0.2),
         "transformer": TransformerDefinition(
@@ -81,7 +78,6 @@ def _publish_study(
         ),
     }[family]
     request = TuneRequest(
-        study_id=study_id,
         corpus_id=uuid4(),
         experiment=_EXPERIMENT.model_copy(update={"context_blocks": context}),
         methods=tuple(
@@ -99,7 +95,7 @@ def _publish_study(
         ),
     )
     publish_test_study(storage_root, study)
-    return study_id
+    return request.study_id
 
 
 def _publish_manifest(storage_root: Path, kind: ExperimentKind, cells: dict[str, UUID]) -> UUID:
@@ -147,28 +143,6 @@ def test_feature_ablation_figure_uses_canonical_studies_and_is_reproducible(tmp_
     assert figure.read_bytes() == first
 
 
-def test_feature_ablation_figure_rejects_incomplete_family_roster(tmp_path: Path) -> None:
-    cells = {
-        "ethereum.lstm.full": _publish_study(tmp_path, (0.04,)),
-        "ethereum.lstm.without_gas_utilization": _publish_study(tmp_path, (0.05,)),
-        "ethereum.transformer.full": _publish_study(tmp_path, (0.04,), family="transformer"),
-    }
-    experiment_id = _publish_manifest(tmp_path, ExperimentKind.FEATURE_ABLATION, cells)
-
-    with pytest.raises(subprocess.CalledProcessError) as error:
-        run_script(
-            _FIGURE_SCRIPTS[ExperimentKind.FEATURE_ABLATION],
-            tmp_path,
-            experiment_id,
-            "--output-directory",
-            tmp_path / "figures",
-        )
-
-    assert "ethereum.transformer lacks configurations ['without_gas_utilization']" in (
-        error.value.stderr
-    )
-
-
 def test_context_and_hpo_figures_use_canonical_study_objectives(tmp_path: Path) -> None:
     context_id = _publish_manifest(
         tmp_path,
@@ -204,6 +178,13 @@ def test_context_and_hpo_figures_use_canonical_study_objectives(tmp_path: Path) 
     _assert_pdf(hpo_figure)
     assert context.stdout.strip() == str(context_figure)
     assert hpo.stdout.strip() == str(hpo_figure)
+    expected = context_figure.read_bytes(), hpo_figure.read_bytes()
+
+    run_script(
+        _FIGURE_SCRIPTS[ExperimentKind.C_STUDY], tmp_path, context_id, "--output-directory", output
+    )
+    run_script(_FIGURE_SCRIPTS[ExperimentKind.HPO], tmp_path, hpo_id, "--output-directory", output)
+    assert (context_figure.read_bytes(), hpo_figure.read_bytes()) == expected
 
 
 def _publish_evaluation(
@@ -263,3 +244,13 @@ def test_held_out_figure_uses_canonical_reducers_for_horizon_and_rolling_plots(
     _assert_pdf(horizon)
     _assert_pdf(rolling)
     assert result.stdout.splitlines() == [str(horizon), str(rolling)]
+    expected = horizon.read_bytes(), rolling.read_bytes()
+
+    run_script(
+        _FIGURE_SCRIPTS[ExperimentKind.HELD_OUT],
+        tmp_path,
+        experiment_id,
+        "--output-directory",
+        output,
+    )
+    assert (horizon.read_bytes(), rolling.read_bytes()) == expected

@@ -36,5 +36,5 @@ def load_experiment_manifest(
     storage_root: Path, kind: ExperimentKind, experiment_id: UUID
 ) -> dict[str, UUID4]:
     return ExperimentManifest.model_validate_json(
-        experiment_manifest_path(storage_root, kind, experiment_id).read_bytes(), strict=True
+        experiment_manifest_path(storage_root, kind, experiment_id).read_bytes()
     ).root

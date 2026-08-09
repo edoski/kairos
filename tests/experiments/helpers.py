@@ -58,7 +58,7 @@ def publish_generated_studies(
     objectives = objectives or {}
     seen: set[UUID] = set()
     for row in rows:
-        request = TuneRequest.model_validate_json(Path(row["request"]).read_bytes(), strict=True)
+        request = TuneRequest.model_validate_json(Path(row["request"]).read_bytes())
         if request.study_id in seen:
             continue
         seen.add(request.study_id)

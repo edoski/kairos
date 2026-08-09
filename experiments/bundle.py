@@ -57,9 +57,7 @@ def _write_tune_cells(
 ) -> None:
     cells = tuple(cells)
     existing = read_cells(bundle) if mode == "a" else []
-    existing_cells = {row["cell"] for row in existing}
-    new_cells = [cell for cell, _ in cells]
-    if len(set(new_cells)) != len(new_cells) or existing_cells & set(new_cells):
+    if mode == "a" and {row["cell"] for row in existing} & {cell for cell, _ in cells}:
         raise ValueError("experiment cells must be new and unique")
 
     request_index = len(dict.fromkeys(row["request"] for row in existing))

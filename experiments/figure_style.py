@@ -63,21 +63,16 @@ def subplots(rows: int, columns: int, *, height: float) -> tuple[Figure, Any]:
 
 
 def family_style(family: str) -> tuple[str, str]:
-    try:
-        return _FAMILY_STYLES[family]
-    except KeyError as error:
-        raise ValueError(f"unsupported model family: {family}") from error
+    return _FAMILY_STYLES[family]
 
 
 def display_name(value: str) -> str:
-    return _DISPLAY_NAMES.get(value, value.replace("_", " ").title())
+    return _DISPLAY_NAMES[value]
 
 
 def add_family_legend(figure: Figure, axis: Axes) -> None:
     handles, labels = axis.get_legend_handles_labels()
-    figure.legend(
-        handles, labels, loc="outside upper center", ncols=max(1, len(labels)), frameon=False
-    )
+    figure.legend(handles, labels, loc="outside upper center", ncols=len(labels), frameon=False)
 
 
 def save_pdf(figure: Figure, path: Path) -> Path:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import product
 from pathlib import Path
 from statistics import fmean
 from typing import NamedTuple
@@ -75,38 +74,12 @@ def selected_context_studies(
     storage_root: Path, experiment_id: UUID, chains: tuple[str, ...]
 ) -> tuple[dict[tuple[str, str], Study], tuple[_ContextSelection, ...]]:
     roster = load_roster(storage_root, _KIND, experiment_id, "study_id")
-    expected = {
-        f"{chain}.{family}.C{context}"
-        for chain, family, context in product(chains, _FAMILIES, _CONTEXTS)
-    }
-    available = {cell for cell in roster if cell.split(".")[0] in chains}
-    if available != expected:
-        raise ValueError("context-study roster is incomplete")
-
     studies = {}
-    chain_sources = {}
-    family_methods = {}
     for cell, study_id in roster.items():
         chain, family, context_label = cell.split(".")
         if chain in chains:
             context = int(context_label.removeprefix("C"))
             study = load_study(storage_root, study_id)
-            if len(study.trials) != 1:
-                raise ValueError("context-study cells require one-trial Studies")
-            if (
-                study.request.methods[0].model.family != family
-                or study.request.experiment.context_blocks != context
-            ):
-                raise ValueError("context-study cell does not match Study request")
-            source = (
-                study.request.corpus_id,
-                study.request.experiment.model_copy(update={"context_blocks": 1}),
-            )
-            if chain_sources.setdefault(chain, source) != source:
-                raise ValueError("context-study chain source identity must match")
-            method = study.request.methods[0]
-            if family_methods.setdefault((chain, family), method) != method:
-                raise ValueError("context-study family Method must match")
             studies[chain, family, context] = study
 
     selected: dict[tuple[str, str], Study] = {}
@@ -148,8 +121,6 @@ def prepare(storage_root: StorageRoot, feature_experiment_id: UUID) -> None:
     for chain in _CHAINS:
         for family in _FAMILIES:
             source = selected[chain, family]
-            if source.request.experiment.context_blocks != 25:
-                raise ValueError("feature-ablation Studies must use C=25")
             method = source.request.methods[0]
             for context in _CONTEXTS:
                 request = (

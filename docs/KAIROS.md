@@ -503,6 +503,9 @@ mean_selected_minus_minimum_base_fee_gwei
 
 All three economic metrics are mean per-origin fractions, not ratios of fee sums. Positive base fees make their denominators defined. Both savings metrics are higher-is-better; `base_fee_savings` remains base-fee-only, while `p50_fee_inclusive_savings` is a retrospective representative-cost proxy using each outcome block's included-transaction P50, not an inclusion guarantee. `base_fee_optimality_gap` is nonnegative and lower is better. Natural-log errors compare dimensionless coordinates relative to `u=1 wei/gas` and lower is better. Accuracy and macro-F1 are unitless and higher is better. Economic values remain fractions for later percentage formatting.
 
+The four Gwei summaries are descriptive within one chain. Native-token value and transaction gas
+use differ, so they are not pooled monetary comparisons across chains.
+
 Immediate and deadline baselines are economic reference policies. Their rows contain only base-fee
 savings, P50 fee-inclusive savings, and base-fee optimality gap. The immediate policy always
 selects `k=0`; the deadline policy always selects `k=K-1`.
@@ -860,12 +863,15 @@ deletes the temporary request files and both TSV files, and publishes the manife
 Before closure, an experiment author's hidden `cells.tsv` is its active cell-to-record roster;
 consumers use it only to locate records that are already canonical. After closure, the manifest
 replaces that roster as authority. `experiments/c_study.py` loads exactly the nine canonical
-feature-ablation winners through this interface, reuses their reference-geometry `C=100` Studies,
-then authors the other 36
-architecture-chain-context Studies for `C={25,50,100,200,400}`, then publishes their canonical
-Study references. `experiments/hpo.py` loads that manifest, selects one context per chain by mean
-validation objective across the three architectures, reports the selected contexts, and authors
-the exact nine architecture-chain Studies with their ordered nine-Method L9 rosters. Each roster
+feature-ablation winners through this interface, reuses their reference-geometry `C=25` Studies,
+and authors the other 108 architecture-chain-context Studies for
+`C={1,2,3,4,5,10,15,20,25,50,100,200,400}`. The completed manifest contains all 117 cells. For
+each chain, selection averages validation Cost over optimum equally across the three architectures
+and chooses the smallest tested context whose mean is at most 105% of that chain's minimum mean;
+the report also shows the unconstrained best context and threshold. `C=1` is the minimum-history
+baseline and `C=2` is the first context with a temporal sequence; the roster is fixed rather than
+adaptively refined after inspection. `experiments/hpo.py` consumes those selections and authors the
+exact nine architecture-chain Studies with their ordered nine-Method L9 rosters. Each roster
 derives its capacity-zero model and nonsearched fit settings from the selected context Study, then
 varies capacity, dropout, learning rate, and weight decay. Transformer and Transformer-LSTM share
 one attention-capacity table; the hybrid adds its fixed recurrent tail. The final selector chooses
@@ -1169,7 +1175,7 @@ Evaluation describes target block base fee per gas over every eligible origin in
 ### Sources
 
 - [EIP-1559 specification](https://eips.ethereum.org/EIPS/eip-1559)
-- [Reference temporal-model repository at the frozen commit](https://github.com/UniBO-PRISMLab/ICDCS-Model-Training/tree/bcf80b92877941e3b05a7dc5138560ffe41df27e)
+- [Frozen predecessor experiment code and datasets](https://github.com/UniBO-PRISMLab/ICDCS-Model-Training/tree/bcf80b92877941e3b05a7dc5138560ffe41df27e)
 - [Hochreiter and Schmidhuber, “Long Short-Term Memory”](https://direct.mit.edu/neco/article/9/8/1735/6109/Long-Short-Term-Memory)
 - [Vaswani et al., “Attention Is All You Need”](https://arxiv.org/abs/1706.03762)
 - [Caruana, “Multitask Learning”](https://doi.org/10.1023/A:1007379606734)

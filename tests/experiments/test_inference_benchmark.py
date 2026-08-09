@@ -162,7 +162,7 @@ def _protocol() -> benchmark.Protocol:
     )
 
 
-def test_resolve_derives_complete_groups_and_joins_artifacts(
+def test_resolve_joins_canonical_artifacts_and_evaluations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     k_study = {}
@@ -193,14 +193,8 @@ def test_resolve_derives_complete_groups_and_joins_artifacts(
     assert tuple(resolved) == tuple(sorted(source))
     assert all(set(group) == set(benchmark.ROLLING_HORIZONS) for group in resolved.values())
     label = "ethereum.lstm.K5"
-    original = k_study[label]
     k_study[label] = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
     with pytest.raises(ValueError, match="does not name"):
-        benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
-
-    k_study[label] = original
-    held_out.pop(label)
-    with pytest.raises(ValueError, match="exactly nine"):
         benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
 
 

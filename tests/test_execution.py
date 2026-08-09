@@ -39,14 +39,12 @@ def _experiment() -> ExperimentSemantics:
 def _request(workflow: Literal["train", "evaluate"]) -> WorkflowRequest:
     if workflow == "evaluate":
         return EvaluateRequest(
-            workflow="evaluate",
             evaluation_id=EVALUATION_ID,
             artifact_id=ARTIFACT_ID,
             corpus_id=CORPUS_ID,
             testing_window=window(300),
         )
     return TrainRequest(
-        workflow="train",
         artifact_id=ARTIFACT_ID,
         source=SelectedStudySource(
             corpus_id=CORPUS_ID, study_id=STUDY_ID, study_result_index=0, experiment=_experiment()
@@ -84,14 +82,14 @@ def test_submit_workflows_sends_golden_single_workflow_script(
             "#SBATCH --cpus-per-task=8\n"
             "#SBATCH --mem=48G\n"
             "#SBATCH --time=17:23:45\n"
-            "#SBATCH --output=/remote/logs/%j.out\n"
+            "#SBATCH --output='/remote/log root/%j.out'\n"
             "#SBATCH --chdir='/remote/storage root'\n"
             "export STORAGE_ROOT='/remote/storage root'\n"
             "pids=()\n"
             "srun --exclusive --exact --nodes=1 --ntasks=1 "
             "--gres=gpu:a100:1 --cpus-per-task=8 --mem=48G "
-            "--output=/remote/logs/${SLURM_JOB_ID}-0.out "
-            "--error=/remote/logs/${SLURM_JOB_ID}-0.out "
+            "--output='/remote/log root'/${SLURM_JOB_ID}-0.out "
+            "--error='/remote/log root'/${SLURM_JOB_ID}-0.out "
             "apptainer run --nv --bind '/remote/storage root' "
             "'/opt/kairos image.sif' remote workflow <<'KAIROS_REQUEST_0' &\n"
             f"{request.model_dump_json()}\n"

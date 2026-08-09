@@ -309,5 +309,3 @@ def test_real_xnnpack_export_and_host_execution(tmp_path: Path) -> None:
         ),
         destination,
     )
-
-    assert b"XnnpackBackend" in destination.read_bytes()

@@ -68,7 +68,8 @@ Profiler](https://developer.apple.com/documentation/xcode/measuring-your-app-s-p
 
    The command requests one-second samples and requires an interactively entered administrator
    password. The benchmark runner should write monotonic phase boundaries and inference counts to
-   a separate log. Discard samples that cross a phase boundary.
+   a separate log. It checks collector health at every phase boundary, outside the measured busy
+   loop. Discard samples that cross a phase boundary.
 4. Run 20 randomized `idle→busy` or `busy→idle` pairs. Give both blocks the same 60–120 second
    duration. In idle blocks, keep the same process, model, tensors, and runtime loaded but perform
    no inference. In busy blocks, perform only batch-1 inference. Insert a fixed washout and require

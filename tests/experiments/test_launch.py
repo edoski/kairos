@@ -36,7 +36,6 @@ def _write_workflow_bundle(root: Path, count: int) -> tuple[Path, list[UUID]]:
     for index in range(count):
         evaluation_id = UUID(f"10000000-0000-4000-8000-{index + 1:012d}")
         request = EvaluateRequest(
-            workflow="evaluate",
             evaluation_id=evaluation_id,
             artifact_id=UUID(f"20000000-0000-4000-8000-{index + 1:012d}"),
             corpus_id=UUID("30000000-0000-4000-8000-000000000001"),

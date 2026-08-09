@@ -29,7 +29,7 @@ def candidates(bundle: Path, tasks_per_job: int = MAX_ALLOCATION_PROCESS_COUNT) 
     rows = read_cells(bundle)
     process_inputs: list[CandidateProcessInput] = []
     for row in rows:
-        request = TuneRequest.model_validate_json(Path(row["request"]).read_bytes(), strict=True)
+        request = TuneRequest.model_validate_json(Path(row["request"]).read_bytes())
         process_inputs.append(
             CandidateProcessInput(request=request, method_index=int(row["method_index"]))
         )
@@ -53,8 +53,7 @@ def workflows(bundle: Path, tasks_per_job: int = MAX_ALLOCATION_PROCESS_COUNT) -
     bundle = bundle.resolve()
     rows = read_cells(bundle)
     process_inputs = [
-        WORKFLOW_REQUEST_ADAPTER.validate_json(Path(row["request"]).read_bytes(), strict=True)
-        for row in rows
+        WORKFLOW_REQUEST_ADAPTER.validate_json(Path(row["request"]).read_bytes()) for row in rows
     ]
     _launch(bundle, rows, process_inputs, submit_workflows, tasks_per_job)
 
@@ -74,8 +73,8 @@ def _launch(
     jobs_exist = jobs_path.exists()
     submitted_rows = _load_submitted_rows(jobs_path) if jobs_exist else set()
     pending = [
-        (index, row, process_input)
-        for index, (row, process_input) in enumerate(zip(rows, process_inputs, strict=True))
+        (index, row, process_inputs[index])
+        for index, row in enumerate(rows)
         if index not in submitted_rows and index not in completed_rows
     ]
     if not pending:

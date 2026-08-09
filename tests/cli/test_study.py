@@ -5,7 +5,6 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from typer.testing import CliRunner
 
 import kairos.cli as cli
 import kairos.execution as execution
@@ -34,7 +33,6 @@ METHOD = Method(
     ),
 )
 REQUEST = TuneRequest(
-    workflow="tune",
     study_id=STUDY_ID,
     corpus_id=CORPUS_ID,
     experiment=ExperimentSemantics(
@@ -58,7 +56,7 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
         cli, "submit_candidates", lambda candidates: calls.append(tuple(candidates)) or 123
     )
 
-    result = CliRunner().invoke(app, ["study", "run", str(request_path), "0"])
+    result = dispatch(app, "study", "run", str(request_path), "0")
 
     assert result.exit_code == 0
     assert result.output == "123\n"
@@ -97,8 +95,8 @@ def test_submit_candidates_scales_three_gpu_allocation_and_preserves_payload_ord
     positions = [script.index(candidate.model_dump_json()) for candidate in candidates]
     assert positions == sorted(positions)
     for slot in range(3):
-        assert f"--output=/remote/logs/${{SLURM_JOB_ID}}-{slot}.out" in script
-        assert f"--error=/remote/logs/${{SLURM_JOB_ID}}-{slot}.out" in script
+        assert f"--output='/remote/log root'/${{SLURM_JOB_ID}}-{slot}.out" in script
+        assert f"--error='/remote/log root'/${{SLURM_JOB_ID}}-{slot}.out" in script
 
 
 def test_remote_candidate_dispatches_input(monkeypatch: pytest.MonkeyPatch) -> None:

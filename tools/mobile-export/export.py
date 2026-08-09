@@ -18,9 +18,9 @@ from executorch.runtime import Runtime
 from pydantic import UUID4, Field, TypeAdapter
 from torch import nn
 
-from kairos.config import CorpusRequest, FeatureName
+from kairos.config import FeatureName
 from kairos.corpus import load_corpus_request
-from kairos.modeling import ArtifactAssociation, load_artifact
+from kairos.modeling import load_artifact
 
 _Chain = Literal["ethereum", "polygon", "avalanche"]
 _Horizon = Annotated[int, Field(ge=2, le=5)]
@@ -66,19 +66,7 @@ def _load_roster(roster_path: Path) -> _Roster:
     return _ROSTER_ADAPTER.validate_json(json.dumps(raw), strict=True)
 
 
-def _feature_contract(association: ArtifactAssociation) -> _FeatureContract:
-    experiment = association.training_definition.experiment
-    names = tuple(experiment.ordered_features)
-    return _FeatureContract(
-        context_blocks=experiment.context_blocks,
-        names=names,
-        means=tuple(association.feature_state.means),
-        standard_deviations=tuple(association.feature_state.standard_deviations),
-    )
-
-
 def _load_cells(storage_root: Path, roster: _Roster) -> dict[str, dict[int, _Cell]]:
-    corpus_requests: dict[UUID, CorpusRequest] = {}
     cells: dict[str, dict[int, _Cell]] = {}
     for chain, chain_id in _CHAINS.items():
         cells[chain] = {}
@@ -92,13 +80,16 @@ def _load_cells(storage_root: Path, roster: _Roster) -> dict[str, dict[int, _Cel
                 raise ValueError(f"{chain} K={horizon} artifact has the wrong horizon")
 
             corpus_id = association.request.source.corpus_id
-            if corpus_id not in corpus_requests:
-                corpus_requests[corpus_id] = load_corpus_request(storage_root, corpus_id)
-            artifact_chain_id = corpus_requests[corpus_id].definition.chain_id
+            artifact_chain_id = load_corpus_request(storage_root, corpus_id).definition.chain_id
             if artifact_chain_id != chain_id:
                 raise ValueError(f"{chain} K={horizon} artifact has the wrong chain")
 
-            features = _feature_contract(association)
+            features = _FeatureContract(
+                context_blocks=experiment.context_blocks,
+                names=tuple(experiment.ordered_features),
+                means=tuple(association.feature_state.means),
+                standard_deviations=tuple(association.feature_state.standard_deviations),
+            )
             if shared_features is None:
                 shared_features = features
             elif features != shared_features:
@@ -178,10 +169,10 @@ def _export_model(cell: _Cell, destination: Path) -> None:
         program.write_to_file(output)
 
     method = Runtime.get().load_program(destination).load_method("forward")
-    for sample, eager in zip(samples, eager_outputs, strict=True):
+    for index, sample in enumerate(samples):
         host = _validated_native_outputs(method.execute((sample,)))
         _assert_parity(
-            eager,
+            eager_outputs[index],
             host,
             target_mean=cell.target_mean,
             target_standard_deviation=cell.target_standard_deviation,
@@ -192,7 +183,7 @@ def _manifest(cells: dict[str, dict[int, _Cell]]) -> dict[str, object]:
     chains: dict[str, object] = {}
     for chain in _CHAINS:
         chain_cells = cells[chain]
-        features = chain_cells[2].features
+        features = chain_cells[_HORIZONS[0]].features
         chains[chain] = {
             "context_blocks": features.context_blocks,
             "features": [

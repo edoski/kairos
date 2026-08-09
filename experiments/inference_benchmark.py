@@ -23,7 +23,7 @@ from torch import nn
 
 from kairos.addresses import evaluation_json_path
 from kairos.config import EvaluateRequest
-from kairos.corpus import BlockFrame, load_corpus_blocks
+from kairos.corpus import load_corpus_blocks
 from kairos.evaluation import ROLLING_HORIZONS
 from kairos.experiments import ExperimentKind, load_experiment_manifest
 from kairos.min_block_fee import MinBlockFeeOutput, decode_action
@@ -33,6 +33,7 @@ from kairos.temporal import HistoricalDataset, prepare_historical_window
 
 _T = TypeVar("_T")
 
+_POWER_SAMPLE_RATE_MS = 1000
 _POWERMETRICS = (
     "sudo",
     "-n",
@@ -40,7 +41,7 @@ _POWERMETRICS = (
     "--samplers",
     "cpu_power,gpu_power,ane_power,thermal",
     "--sample-rate",
-    "1000",
+    str(_POWER_SAMPLE_RATE_MS),
     "--poweravg",
     "0",
     "--format",
@@ -204,17 +205,8 @@ def _capture_power(path: Path, measure: Callable[[Callable[[], None]], _T]) -> _
     return result
 
 
-def _energy_settings(pairs: int, phase_seconds: int, recovery_seconds: int) -> dict[str, int]:
-    return {
-        "pairs": pairs,
-        "phase_seconds": phase_seconds,
-        "recovery_seconds": recovery_seconds,
-        "sample_rate_ms": 1000,
-    }
-
-
 def _run_phases(
-    cell: _Cell, settings: Mapping[str, int], alive: Callable[[], None]
+    cell: _Cell, settings: dict[str, int], alive: Callable[[], None]
 ) -> tuple[_Phase, ...]:
     phases = []
     duration_ns = settings["phase_seconds"] * 1_000_000_000
@@ -229,7 +221,7 @@ def _run_phases(
         time.sleep(settings["phase_seconds"])
         phases.append(_Phase(pair, "idle", start_ns, time.time_ns()))
         alive()
-        phases.append(_active_phase(cell, pair, duration_ns, alive))
+        phases.append(_active_phase(cell, pair, duration_ns))
         alive()
     return tuple(phases)
 
@@ -247,7 +239,7 @@ def _phase_record(phase: _Phase) -> dict[str, float | int | str]:
     return record
 
 
-def _write_energy(path: Path, cell: _Cell, settings: Mapping[str, int]) -> None:
+def _write_energy(path: Path, cell: _Cell, settings: dict[str, int]) -> None:
     path.mkdir()
     phases = _capture_power(
         path / "powermetrics.plist", lambda alive: _run_phases(cell, settings, alive)
@@ -260,7 +252,7 @@ def _write_energy(path: Path, cell: _Cell, settings: Mapping[str, int]) -> None:
         rows.append(_pair_row(samples, idle, active))
     (path / "phases.json").write_text(
         json.dumps(
-            {"settings": dict(settings), "phases": [_phase_record(phase) for phase in phases]},
+            {"settings": settings, "phases": [_phase_record(phase) for phase in phases]},
             sort_keys=True,
         )
     )
@@ -274,33 +266,18 @@ def _resolve(
     held_out = load_experiment_manifest(
         storage_root, ExperimentKind.HELD_OUT, held_out_experiment_id
     )
-    suffixes = {f"K{horizon}" for horizon in ROLLING_HORIZONS}
-    labels = {
-        label
-        for label in k_study.keys() | held_out.keys()
-        if label.rsplit(".", maxsplit=1)[-1] in suffixes
-    }
-    groups = {label.rsplit(".", maxsplit=1)[0] for label in labels}
-    expected = {f"{group}.K{horizon}" for group in groups for horizon in ROLLING_HORIZONS}
-    if (
-        len(groups) != 9
-        or len(labels) != 36
-        or labels != expected
-        or not expected <= k_study.keys()
-        or not expected <= held_out.keys()
-    ):
-        raise ValueError("completed manifests must contain exactly nine rolling-horizon groups")
-
-    resolved: dict[str, dict[int, EvaluateRequest]] = {group: {} for group in sorted(groups)}
-    for label in sorted(expected):
-        evaluation_id = held_out[label]
+    resolved: dict[str, dict[int, EvaluateRequest]] = {}
+    for label, evaluation_id in sorted(held_out.items()):
+        group, horizon_label = label.rsplit(".", maxsplit=1)
+        horizon = int(horizon_label.removeprefix("K"))
+        if horizon not in ROLLING_HORIZONS:
+            continue
         request = EvaluateRequest.model_validate_json(
-            evaluation_json_path(storage_root, evaluation_id).read_bytes(), strict=True
+            evaluation_json_path(storage_root, evaluation_id).read_bytes()
         )
         if request.artifact_id != k_study[label]:
             raise ValueError(f"{label} evaluation does not name its K-study artifact")
-        group, horizon_label = label.rsplit(".", maxsplit=1)
-        resolved[group][int(horizon_label.removeprefix("K"))] = request
+        resolved.setdefault(group, {})[horizon] = request
     return resolved
 
 
@@ -348,7 +325,7 @@ def _ensure_protocol(output: Path, protocol: Protocol) -> None:
     output.mkdir(parents=True, exist_ok=True)
     path = output / "protocol.json"
     if path.exists():
-        if Protocol.model_validate_json(path.read_bytes(), strict=True) != protocol:
+        if Protocol.model_validate_json(path.read_bytes()) != protocol:
             raise ValueError("existing output protocol does not match this invocation")
         return
     if any(output.iterdir()):
@@ -357,19 +334,12 @@ def _ensure_protocol(output: Path, protocol: Protocol) -> None:
 
 
 def _load_cell(storage_root: Path, cell: str, resolved: Mapping[int, EvaluateRequest]) -> _Cell:
-    blocks: dict[UUID4, BlockFrame] = {}
+    corpus = load_corpus_blocks(storage_root, resolved[ROLLING_HORIZONS[0]].corpus_id)
     horizons = {}
     for horizon in reversed(ROLLING_HORIZONS):
         request = resolved[horizon]
         association, model = load_artifact(storage_root, request.artifact_id)
-        model.eval()
         experiment = association.training_definition.experiment
-        if experiment.horizon_blocks != horizon:
-            raise ValueError(f"{cell}.K{horizon} does not address its artifact horizon")
-        corpus = blocks.get(request.corpus_id)
-        if corpus is None:
-            corpus = load_corpus_blocks(storage_root, request.corpus_id)
-            blocks[request.corpus_id] = corpus
         horizons[horizon] = _Horizon(
             model=model,
             dataset=prepare_historical_window(
@@ -404,8 +374,8 @@ def _workload_inputs(
 
 
 def _run_workload(cell: _Cell, horizons: Sequence[int], inputs: Sequence[torch.Tensor]) -> None:
-    for horizon, batch in zip(horizons, inputs, strict=True):
-        _infer(cell.horizons[horizon].model, batch)
+    for index, horizon in enumerate(horizons):
+        _infer(cell.horizons[horizon].model, inputs[index])
 
 
 def _warm(cell: _Cell, iterations: int) -> None:
@@ -455,14 +425,13 @@ def _time_cell(cell: _Cell, sweep: int) -> pl.DataFrame:
     return pl.DataFrame(rows)
 
 
-def _active_phase(cell: _Cell, pair: int, duration_ns: int, alive: Callable[[], None]) -> _Phase:
+def _active_phase(cell: _Cell, pair: int, duration_ns: int) -> _Phase:
     origin_count = len(cell.horizons[ROLLING_HORIZONS[0]].dataset)
     start_ns = time.time_ns()
     start = time.perf_counter_ns()
     deadline = start + duration_ns
     completed = 0
     while time.perf_counter_ns() < deadline:
-        alive()
         index = (pair - 1 + completed) % origin_count
         _, inputs = _workload_inputs(cell, ROLLING_HORIZONS, index)
         _run_workload(cell, ROLLING_HORIZONS, inputs)
@@ -502,15 +471,12 @@ def _run_energy_unit(
     cell_name: str,
     resolved: Mapping[int, EvaluateRequest],
     warmup_iterations: int,
-    settings: Mapping[str, int],
+    settings: dict[str, int],
 ) -> None:
     path = output / "energy" / cell_name
     if path.exists():
-        required = {"powermetrics.plist", "phases.json", "pairs.parquet"}
-        if not required <= {child.name for child in path.iterdir()}:
-            raise ValueError(f"incomplete energy cell: {cell_name}")
         existing = json.loads((path / "phases.json").read_text())
-        if existing["settings"] != dict(settings):
+        if existing["settings"] != settings:
             raise ValueError(f"existing energy settings do not match: {cell_name}")
         return
     cell = _load_cell(storage_root, cell_name, resolved)
@@ -546,7 +512,7 @@ def run_energy(
 ) -> None:
     """Resume and complete one powermetrics energy campaign."""
 
-    protocol = Protocol.model_validate_json((output / "protocol.json").read_bytes(), strict=True)
+    protocol = Protocol.model_validate_json((output / "protocol.json").read_bytes())
     resolved = _resolve(
         storage_root, protocol.k_study_experiment_id, protocol.held_out_experiment_id
     )
@@ -560,7 +526,12 @@ def run_energy(
             protocol.sweeps,
         ),
     )
-    settings = _energy_settings(pairs, phase_seconds, recovery_seconds)
+    settings = {
+        "pairs": pairs,
+        "phase_seconds": phase_seconds,
+        "recovery_seconds": recovery_seconds,
+        "sample_rate_ms": _POWER_SAMPLE_RATE_MS,
+    }
     for cell, requests in resolved.items():
         _run_energy_unit(storage_root, output, cell, requests, protocol.warmup_iterations, settings)
 

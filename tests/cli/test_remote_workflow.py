@@ -31,12 +31,11 @@ def _train_request() -> TrainRequest:
     source = SelectedStudySource(
         corpus_id=CORPUS_ID, study_id=STUDY_ID, study_result_index=2, experiment=_experiment()
     )
-    return TrainRequest(workflow="train", artifact_id=ARTIFACT_ID, source=source)
+    return TrainRequest(artifact_id=ARTIFACT_ID, source=source)
 
 
 def _evaluate_request() -> EvaluateRequest:
     return EvaluateRequest(
-        workflow="evaluate",
         evaluation_id=EVALUATION_ID,
         artifact_id=ARTIFACT_ID,
         corpus_id=CORPUS_ID,

@@ -2,9 +2,8 @@ ssh: research
 image: /scratch.hpc/edoardo.galli3/deployments/kairos-cuda-004f951.sif
 storage_root: /scratch.hpc/edoardo.galli3/kairos
 log_root: /scratch.hpc/edoardo.galli3/logs/kairos
-resources:
-  partition: h100sxm5,h100pcie,a100,l40s,l40
-  gres: gpu:1
-  cpus_per_task: 32
-  memory_gb: 64
-  time_limit: "3-00:00:00"
+partition: h100sxm5,h100pcie,a100,l40s,l40
+gres_name: gpu
+cpus_per_task: 32
+memory_gb: 64
+time_limit: "3-00:00:00"

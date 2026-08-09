@@ -14,13 +14,12 @@ from kairos.config import BlockWindow
 REMOTE_YAML = """ssh: research-alias
 image: /opt/kairos image.sif
 storage_root: /remote/storage root
-log_root: /remote/logs
-resources:
-  partition: thesis-partition
-  gres: gpu:a100:1
-  cpus_per_task: 8
-  memory_gb: 48
-  time_limit: "17:23:45"
+log_root: /remote/log root
+partition: thesis-partition
+gres_name: gpu:a100
+cpus_per_task: 8
+memory_gb: 48
+time_limit: "17:23:45"
 """
 
 

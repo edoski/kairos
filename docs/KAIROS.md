@@ -988,7 +988,7 @@ submit_workflows(requests: Sequence[WorkflowRequest]) -> int
 submit_candidates(candidates: Sequence[CandidateProcessInput]) -> int
 ```
 
-It reads cwd-local `REMOTE.yaml` with this exact strict schema:
+It reads cwd-local `REMOTE.yaml` with this exact strict flat schema:
 
 | Section | Ordered field | Type/rule |
 | --- | --- | --- |
@@ -996,8 +996,8 @@ It reads cwd-local `REMOTE.yaml` with this exact strict schema:
 |  | `image` | nonempty absolute Apptainer image path |
 |  | `storage_root` | nonempty absolute path |
 |  | `log_root` | nonempty absolute path |
-| `resources` | `partition` | nonempty string |
-|  | `gres` | one-GPU GRES string; packed submission scales its final `:1` count |
+|  | `partition` | nonempty string |
+|  | `gres_name` | nonempty count-free GRES name, such as `gpu` or `gpu:a100` |
 |  | `cpus_per_task` | PositiveInt |
 |  | `memory_gb` | PositiveInt, rendered as `--mem=<n>G` |
 |  | `time_limit` | nonempty Slurm time string |

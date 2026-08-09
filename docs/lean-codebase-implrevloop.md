@@ -1,6 +1,6 @@
 # Lean codebase implementation-review ledger
 
-Status: execution in progress; generated-environment preflight and Slices 1-3 green
+Status: all four implementation slices green; final integration in progress
 
 Authority: two codebase-wide audits, initially pinned to
 `6da8bf7e2ba1304f9ac009472c96965f89265838` and re-audited at
@@ -386,7 +386,7 @@ canonical setup, and a smaller exporter without sacrificing throughput, recovery
 
 ## Slice 4 — App native lifecycle and shallow cleanup
 
-Status: approved, not started
+Status: green on first review
 
 ### Scope
 
@@ -565,6 +565,26 @@ not edit product code or review its own changes.
   format, Pyright, configured Vulture, frozen lock, Bash, diff, and worktree checks passed.
   Standards: zero findings. Spec: zero findings. `GREEN LIGHT`.
 - Final slice delta: 16 files, 216 insertions and 252 deletions; net 36 tracked lines removed.
+
+### Slice 4
+
+- Baseline/status: `a38c8bd78cdf086b125fefa6b398bae61fa154c2`, clean `main`; no native
+  regeneration, RPC, device, simulator, remote, or CUDA branch mutation allowed.
+- Implementer: `/root/slice4_app_lifecycle_impl`. Commit:
+  `4764ef6d52060f69df250f38cdf9b8fc75c1bcbf`.
+- Reviewer: `/root/slice4_app_lifecycle_review`, using separate Standards and Spec axes. The first
+  gate returned zero findings on both axes and `GREEN LIGHT`.
+- Lifecycle ownership: the existing native-operation queue now belongs to the module, while each
+  runtime retains its current model, artifact, and disposal promise. App cleanup calls disposal
+  synchronously, which enqueues old deletion before replacement work. A deferred two-runtime test
+  proves old forward, old delete, new load, then new forward.
+- Output-neutral cleanup: feature names are compile-time literals, module-only manifest aliases are
+  private, one-use arithmetic and selection flow are direct, and impossible chart/watch guards plus
+  duplicated test choreography are gone. Styles, accessibility, analytics arithmetic, RPC, history,
+  native tensor/output validation, cache/disposal, races, queues, and retry behavior remain.
+- Final gates: 37 App tests, TypeScript, Expo Doctor 19/19, diff, and worktree checks passed.
+  No device, simulator, visual, RPC, or native-model execution was claimed.
+- Final slice delta: nine files, 89 insertions and 102 deletions; net 13 tracked lines removed.
 
 ## Final completion gate
 

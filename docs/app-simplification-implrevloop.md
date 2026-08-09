@@ -1,6 +1,6 @@
 # App simplification implementation-review ledger
 
-Status: implementation authorized on 2026-08-09; isolated run setup in progress
+Status: implementation authorized on 2026-08-09; Slice 1 green, Slice 2 setup in progress
 
 Authority: the current `app/` implementation at
 `5a1245908eb0e3150051155394db9dce2215d6be`, the user's 2026-08-09 decisions in this
@@ -103,7 +103,7 @@ speculative configuration framework.
 
 ## Slice 1 — Explicit outcome refresh and native lifecycle deletion
 
-Status: authorized; implementation dispatch pending
+Status: complete; independent `GREEN LIGHT`
 
 ### Execution record
 
@@ -116,6 +116,19 @@ Status: authorized; implementation dispatch pending
 - Reserved independent reviewer: `/root/slice1_reviewer`
 - External gates: no real RPC, simulator/device, generated asset, exporter, remote, Slurm, image,
   push, or pull-request work
+- Pre-dispatch branch head: `53b198aaecb09140cf987962ed1b47e941ddc21c`
+- Implementation commit: `fe5c64cf8bb4313bc6a7eea463d1a759296d5270`
+  (`refactor(app): replace block watcher with manual refresh`)
+- Implementer verification: focused tests 28/28; full app tests 43/43; typecheck and strict unused
+  checks passed; Expo Doctor 19/19; clean npm lock check, diff check, Vulture, and scoped residue
+  audit passed; worktree clean
+- Review range: `53b198aaecb09140cf987962ed1b47e941ddc21c...fe5c64cf8bb4313bc6a7eea463d1a759296d5270`
+- Review result: `/root/slice1_reviewer` returned Standards `GREEN LIGHT` with zero findings and
+  Spec `GREEN LIGHT` with zero findings; checkout remained clean
+- Correction rounds: none
+- Orchestrator integration check: clean branch at the implementation commit and app typecheck passed
+- Unrun as gated: real RPC, simulator/device/visual acceptance, generated assets/exporter, remote,
+  Slurm/image work, push, and pull request
 
 ### Scope
 
@@ -203,7 +216,19 @@ continuous watcher, status, snapshot, unwatch, and visual app-header concepts no
 
 ## Slice 2 — Direct fixed selection controls around retained graphs
 
-Status: authorized; queued after Slice 1 is independently green
+Status: authorized; implementation dispatch pending after Slice 1 green
+
+### Execution record
+
+- Immutable slice product baseline: `fe5c64cf8bb4313bc6a7eea463d1a759296d5270`
+- Checkout: clean `codex/app-simplification` at
+  `/Users/edo/dev/python/kairos-app-simplification`
+- Allowed writer scope: Slice 2 app controls, focused tests, package dependency/lock cleanup, and
+  directly exposed dead styles/imports; the implementer must not edit this ledger
+- Assigned implementer: `/root/slice2_implementer`
+- Reserved independent reviewer: `/root/slice2_reviewer`
+- External gates: no real RPC, simulator/device, generated asset, exporter, remote, Slurm, image,
+  push, or pull-request work
 
 ### Scope
 

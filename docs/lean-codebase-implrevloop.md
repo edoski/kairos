@@ -1,6 +1,6 @@
 # Lean codebase implementation-review ledger
 
-Status: execution in progress; generated-environment preflight and Slice 1 green
+Status: execution in progress; generated-environment preflight and Slices 1-2 green
 
 Authority: two codebase-wide audits, initially pinned to
 `6da8bf7e2ba1304f9ac009472c96965f89265838` and re-audited at
@@ -242,7 +242,7 @@ no unused metric or repeated trusted-value ceremony.
 
 ## Slice 2 — Trusted experiment pipeline, figures, tests, and canonical documentation
 
-Status: approved, not started
+Status: green after one correction loop
 
 ### Scope
 
@@ -511,6 +511,31 @@ not edit product code or review its own changes.
   configured Vulture, parity, memory, collision, diff, and worktree checks passed. Standards:
   zero findings. Spec: zero findings. `GREEN LIGHT`.
 - Final slice delta: nine files, 110 insertions and 130 deletions; net 20 tracked lines removed.
+
+### Slice 2
+
+- Baseline/status: `118c52cde831fe209d2751ebda673746893cb170`, clean `main`; no canonical
+  outputs, queued jobs, campaigns, remote state, ignored environments, or CUDA branch mutation
+  allowed.
+- Implementer: `/root/slice2_experiments_docs_impl`. Initial commit:
+  `63da1e170f100b0e5933d65cdedd43f0de5f05de`.
+- Reviewer: `/root/slice2_experiments_docs_review`, using separate Standards and Spec axes. The
+  first gate found two P2 test-ownership gaps: HPO derivation no longer proved every distinctive
+  selected-Study field including seed, and bundle closure no longer proved verifier-failure
+  preservation plus retry.
+- Correction commit: `f18a2bb10e3a575b291bbfc004d39d4044e102f1`, tests only. Compact owner
+  tests now cover the complete distinctive HPO derivation and byte-identical active-bundle
+  preservation before a successful retry; upstream pipeline replay did not return.
+- Final gates: 109 root tests and 35 experiment tests passed; all five generated PDFs remained
+  byte-identical. Exact feature windows, the 117-cell/9-reuse/108-new context protocol and 5% rule,
+  complete context report, HPO L9/capacity/hybrid/nonsearched settings, exact-nine selection,
+  extension collision, 81-cell K roster, held-out windows, strict hydration, bundle publication,
+  and collision behavior passed. Ruff, format, Pyright, configured Vulture, diff, and worktree
+  checks passed. Standards: zero findings. Spec: zero findings. `GREEN LIGHT`.
+- Canonical documentation now owns the live historical protocol facts; the completed 369-line
+  validation ledger and unsupported MIT metadata claim are gone. The frozen predecessor source
+  citation was verified and relabeled accurately.
+- Final slice delta: 18 files, 415 insertions and 1,243 deletions; net 828 tracked lines removed.
 
 ## Final completion gate
 

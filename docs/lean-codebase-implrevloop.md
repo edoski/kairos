@@ -32,6 +32,12 @@ Product code did not change between those pins. This ledger is the slice review 
   fix.
 - Direct minimum-outcome vectorization is approved with its roughly 341 MiB largest-authored-window
   temporary-memory tradeoff; values and first-tie behavior must remain exact.
+- Balanced allocation packing is retained. Sustained and tail GPU occupancy take priority over the
+  line reduction from ordinary chunking.
+- Temporary `jobs.tsv` retains its human-readable `cell` field so failed Slurm rows remain direct
+  to identify and resubmit. The one-owner `_Resources` flattening remains independent.
+- Removing powermetrics liveness polling from the measured active loop is approved. Health checks
+  remain before and after each phase so collector failure still invalidates the measurement.
 - The proposed held-out K-study roster guard is rejected after tracing the authoring chain. HPO
   publication requires nine cells, K-study authoring expands them through its fixed nine horizons,
   and closure verifies every artifact. Held-out should trust that canonical manifest.
@@ -66,10 +72,11 @@ commit. Test-deletion estimates overlap where noted.
 | Reject a known evaluation collision before inference | Roughly neutral; mostly moved code | Yes. The control flow states the real precondition first. | Recommend |
 | Add another late bundle collision refusal | Program delta `0` | No. It duplicates the early check, narrows but does not eliminate the race, and covers implausible concurrent publication of one minted UUID. | Rejected |
 | Trust canonical experiment/figure manifests and remove internal Study, roster, label, and completeness rechecks | Production `-70..95`, tests `-75..85` | Yes. Fixed upstream authors own these facts. | Recommend |
-| Replace balanced allocation packing with ordinary chunks | Production/tests/docs `-35..70` | Yes. It removes an optimization policy and its matrix. | Recommend |
-| Flatten the one-owner remote resource record and remove the duplicated job-journal cell label | Production/config `-3..6`, tests `-8..15` | Yes. One raw record and one journal key own each fact. | Recommend |
+| Retain balanced allocation packing | Neutral | Yes. The existing fewest-allocation policy avoids avoidable singleton tails and protects GPU occupancy. | Approved retention |
+| Flatten the one-owner remote resource record | Production/config `-3..5` | Yes. The behavior-free nested record has one owner and one consumer. | Recommend; retain the job-journal cell label |
 | Quote the Slurm allocation log path | Neutral | No material simplification; fixes one external-adapter defect. | Recommend as correctness work |
-| Remove benchmark liveness polling and canonical-manifest revalidation | Production `-30..45`, tests `-20..35` | Yes. The hot path and campaign setup become direct while the two-ID association guard stays. | Recommend |
+| Remove benchmark liveness polling from the measured active loop | Production/tests `-5..15` | Yes. The measured region contains computation, while phase-boundary health checks remain. | Approved |
+| Remove canonical-manifest revalidation from benchmark setup | Production `-25..35`, tests `-15..25` | Yes. Campaign setup becomes direct while the two-ID association guard stays. | Recommend |
 | Remove dead training-loss metric collection and repeated derived training definitions | Production/tests `-10..20` | Yes. Nothing consumes the metric; one hydrated definition remains. | Recommend |
 | Move bundle mechanics to owner tests and shrink downstream pipeline monoliths | Tests `-105..145` net; estimates overlap | Yes. Tests stop replaying trusted upstream modules while one compact integration smoke stays. | Recommend |
 | Localize app styles | Production `0..+10`; about 300 lines move | No. The current file already has coherent screen blocks; moving them adds namespaces and files. | Rejected |
@@ -93,12 +100,12 @@ expensive work. No new production validation machinery remains in the plan.
 This estimate excludes this temporary ledger and ignored/generated environment state. It counts
 overlapping experiment-test deletions only once.
 
-- Production, configuration, and current durable documentation: roughly 120–190 fewer lines.
-- Tests: roughly 250–330 fewer lines. The main reduction is replacing downstream pipeline
+- Production, configuration, and current durable documentation: roughly 110–180 fewer lines.
+- Tests: roughly 220–300 fewer lines. The main reduction is replacing downstream pipeline
   monoliths and tampering/choreography matrices with owner tests.
 - Completed process-ledger residue: 369 fewer documentation lines after its live facts are checked
   into canonical documentation.
-- Total: roughly **740–890 fewer tracked lines**, with a planning midpoint near **815 fewer lines**.
+- Total: roughly **700–850 fewer tracked lines**, with a planning midpoint near **775 fewer lines**.
 
 The estimate assumes accessibility stays excluded and the MIT metadata claim is removed. Exact
 deltas are recorded per implementation commit; deletion count is not an acceptance criterion.
@@ -332,16 +339,17 @@ Status: proposed, awaiting approval
 
 ### Scope
 
-- Replace balanced `_allocation_sizes()` with ordinary `tasks_per_job` chunks; nine tasks at four
-  per job become `4+4+1`.
-- Keep ADR 0007's one-to-four-process allocation contract and one GPU per exclusive step.
+- Retain balanced `_allocation_sizes()`, ADR 0007's one-to-four-process allocation contract, and
+  one GPU per exclusive step. Nine tasks at capacity four remain `3+3+3`; larger campaigns retain
+  the fewest allocations without avoidable singleton tails.
 - Replace count-bearing `gres` configuration plus `_scaled_gres()` with a count-free `gres_name`;
   render `:1` per step and `:<task_count>` per allocation.
 - Flatten the behavior-free, one-owner `_Resources` record into `_Remote` and remove the matching
   `resources:` level from `REMOTE.yaml` and fixtures. Keep strict raw hydration and every resource
   value configurable.
-- Remove the duplicate human-readable `cell` field from temporary `jobs.tsv`; `cells.tsv[row]`
-  already owns it. Keep `job_id`, `slot`, and `row` for scheduler lookup, logs, and restart.
+- Retain `job_id`, `slot`, `row`, and the human-readable `cell` field in temporary `jobs.tsv`.
+  Although `cells.tsv[row]` can derive the label, the direct field makes failed Slurm rows easier to
+  identify and prune before resubmission.
 - Quote the allocation-level Slurm output path and strengthen the existing fixture with a space.
 - Remove redundant strict call flags whose owning Pydantic records already enforce strict parsing.
 - Remove default workflow discriminator arguments and the lone direct CLI runner from typed test
@@ -352,6 +360,7 @@ Status: proposed, awaiting approval
 
 - No SSH, Slurm, job submission, queue, image reference, resource quantity, request payload, or
   scientific-execution change.
+- No allocation-packing or job-recovery policy change.
 - No generic scheduler abstraction.
 - Do not alter `deploy/Apptainer.def` in this slice. The suggested `kairos --help` smoke is useful
   but does not materially simplify code and would require a separately authorized immutable remote
@@ -359,19 +368,22 @@ Status: proposed, awaiting approval
 
 ### Protected behavior and accepted change
 
-- Packing efficiency may decrease; direct chunking is preferred.
+- Balanced packing and its focused matrix remain because sustained and tail GPU occupancy matter.
+- Submission failure leaves the failed and later groups unrecorded, so rerunning submits them.
+  After a submitted allocation fails remotely, the operator can remove its failed `jobs.tsv` rows
+  and rerun; retained candidate scratch resumes and already-canonical candidate rows are skipped.
 - Generated Bash remains the external protocol and keeps its focused golden test.
 - Strict YAML/env/stdin/subprocess checks and positive job-ID parsing remain.
 
 ### Expected outcome
 
-Remote submission has one direct packing rule and one direct GPU resource name. Scientific work
-inside each Slurm step is unchanged.
+Remote submission keeps its occupancy-aware packing rule and gains one direct GPU resource name.
+Scientific work inside each Slurm step is unchanged.
 
 ### Checks
 
-- One-to-four task allocations, ordinary remainder chunk, spaced log path, GRES rendering, positive
-  job IDs, compact journal resume, aggregate process failure, and `bash -n`.
+- One-to-four balanced task allocations, spaced log path, GRES rendering, positive job IDs,
+  journal recovery, aggregate process failure, and `bash -n`.
 - Focused execution/launch tests, CLI help, full Python suite, and static/dead-code checks.
 
 ### Dependencies and gates
@@ -382,12 +394,12 @@ inside each Slurm step is unchanged.
 
 ## Slice 6 — Honest inference-benchmark hot path
 
-Status: proposed, awaiting approval
+Status: measured-loop polling removal approved; remaining cleanup proposed, awaiting approval
 
 ### Scope
 
-- Remove `process.poll()`/liveness checks from each measured active-loop cascade; retain checks
-  before and after each phase.
+- Approved: remove `process.poll()`/liveness checks from each measured active-loop cascade; retain
+  checks before and after each phase.
 - Remove repeated `model.eval()` where the artifact loader already owns evaluation mode.
 - Trust the canonical K-study and held-out publishers inside benchmark resolution: remove the
   reconstructed nine-group/36-label roster check and the redundant per-artifact horizon assertion.
@@ -555,9 +567,11 @@ remain proposed, awaiting approval
   `ExperimentManifest.model_config` already owns strict parsing.
 - New proposal: remove duplicate action-logit finiteness checking from observation collection;
   `decode_action` remains its owner. Keep the independently required minimum-fee finiteness check.
-- New proposal: remove dead `training_total_loss` logging and its choreography test. Validation
-  loss, validation optimality gap, finite checks, early stopping, and selected-objective evidence
-  remain.
+- New proposal: remove dead `training_total_loss` logging and its choreography test. This metric is
+  the epoch aggregation of the same classification-cross-entropy plus standardized-fee Smooth-L1
+  loss already returned per batch for backpropagation. No logger, progress bar, callback,
+  checkpoint, report, or durable output consumes the epoch copy. Validation loss, validation
+  optimality gap, finite checks, early stopping, and selected-objective evidence remain.
 - New proposal: derive one `TrainingDefinition` per artifact fit instead of rebuilding it through a
   one-call helper and both association/module paths. Preserve seeding before module construction.
 - Remove the redundant Study zip strictness. Reuse the already-loaded first candidate rather than
@@ -620,6 +634,8 @@ scientific value or durable product.
 - No second experiment-bundle collision check. The current early refusal plus atomic rename is
   adequate for a single-operator demo with minted experiment UUIDs.
 - No generic figure CLI helper: it saves repeated entry-point lines by adding a shallow concept.
+- No ordinary allocation chunks or `jobs.tsv` cell-label deletion. Balanced packing and direct
+  failed-row identification protect the user's GPU-throughput and recovery priorities.
 - No app analytics mean rewrite in the conditional mechanical sweep: floating-point order can
   change displayed values.
 - No app style relocation: the current file already has coherent screen sections, while relocation

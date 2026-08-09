@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from typing import Literal
@@ -162,6 +163,18 @@ def test_submit_rejects_relative_remote_image(
     monkeypatch.chdir(tmp_path)
 
     with pytest.raises(ValidationError, match="image must be an absolute path"):
+        submit_workflows((_request("train"),))
+
+
+@pytest.mark.parametrize("gres_name", ("gpu:a100:1", "gpu\n#SBATCH --time=00:01:00"))
+def test_submit_rejects_invalid_gres_name(
+    gres_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    remote_yaml = REMOTE_YAML.replace("gres_name: gpu:a100", f"gres_name: {json.dumps(gres_name)}")
+    write_remote(tmp_path / "REMOTE.yaml", remote_yaml)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(ValidationError, match="gres_name"):
         submit_workflows((_request("train"),))
 
 

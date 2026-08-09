@@ -9,12 +9,15 @@ from pathlib import Path
 from typing import Annotated, Literal, Self
 
 import yaml
-from pydantic import Field, ValidationInfo, field_validator, model_validator
+from pydantic import Field, StringConstraints, ValidationInfo, field_validator, model_validator
 
 from .config import TuneRequest, WorkflowRequest
 from .records import StrictFrozenRecord
 
 _NonEmptyString = Annotated[str, Field(min_length=1)]
+_GresName = Annotated[
+    str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*(?::[A-Za-z0-9][A-Za-z0-9_.-]*)?$")
+]
 _NonNegativeInt = Annotated[int, Field(ge=0)]
 _PositiveInt = Annotated[int, Field(gt=0)]
 MAX_ALLOCATION_PROCESS_COUNT = 4
@@ -26,7 +29,7 @@ class _Remote(StrictFrozenRecord):
     storage_root: _NonEmptyString
     log_root: _NonEmptyString
     partition: _NonEmptyString
-    gres_name: _NonEmptyString
+    gres_name: _GresName
     cpus_per_task: _PositiveInt
     memory_gb: _PositiveInt
     time_limit: _NonEmptyString

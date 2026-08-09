@@ -1,7 +1,7 @@
 # App simplification implementation-review ledger
 
-Status: both authorized slices independently green; final integration passed, local integration and
-cleanup in progress
+Status: complete; both authorized slices independently green, integrated into `main`, and run-owned
+isolation removed
 
 Authority: the current `app/` implementation at
 `5a1245908eb0e3150051155394db9dce2215d6be`, the user's 2026-08-09 decisions in this
@@ -16,8 +16,9 @@ future implementation Spec.
 - Status: clean; `main` matched the local `origin/main` ref before the planning commit
 - Worktrees: one pre-existing `main` worktree at `/Users/edo/dev/python/kairos`
 - Pre-existing branches: `main` and `codex/compact-cuda-execution`
-- Run-owned branch: `codex/app-simplification`
-- Run-owned worktree: `/Users/edo/dev/python/kairos-app-simplification`
+- Run-owned branch: `codex/app-simplification`, removed after fast-forward integration
+- Run-owned worktree: `/Users/edo/dev/python/kairos-app-simplification`, removed cleanly after
+  fast-forward integration
 - Planning commit on `main`: `afda6171084b26a5b391ec292f2347d9e66abcdb`
 - Implementation checkout policy: use the safest repository-native isolation, a run-owned
   `codex/app-simplification` branch at `/Users/edo/dev/python/kairos-app-simplification`; keep the
@@ -343,6 +344,12 @@ its complete summary, three graphs, run list, and details.
   or remote path changed
 - Deferred gates: real RPC, simulator/device/visual acceptance, generated model assets/exporter,
   remote, Slurm/image work, push, and pull request remain unrun
+- Fast-forward integration head: `adee03d05c0d4e1781bbc4ff81eed19c23e0ea13` on `main`
+- Cleanup: removed only the run-owned `codex/app-simplification` branch and
+  `/Users/edo/dev/python/kairos-app-simplification` worktree after their commits were retained on
+  `main`
+- Final checkout shape: one worktree at `/Users/edo/dev/python/kairos` on `main`; branches `main`
+  and the pre-existing `codex/compact-cuda-execution`; clean status before this final ledger record
 
 ## Explicitly rejected or superseded candidates
 

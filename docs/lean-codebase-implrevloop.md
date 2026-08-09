@@ -27,8 +27,11 @@ the Standards sources.
 
 ## User decisions already fixed
 
-- The two high-priority fixes are approved: exact held-out K-study roster authority and
-  process-wide native model-operation serialization.
+- Process-wide native model-operation serialization is approved as the remaining high-priority
+  fix.
+- The proposed held-out K-study roster guard is rejected after tracing the authoring chain. HPO
+  publication requires nine cells, K-study authoring expands them through its fixed nine horizons,
+  and closure verifies every artifact. Held-out should trust that canonical manifest.
 - The small mechanical sweep is approved only where scientific semantics and thesis data outputs
   remain unchanged.
 - Accessibility expansion is rejected. KAIROS is a no-user thesis demo; do not add accessibility
@@ -54,12 +57,12 @@ commit. Test-deletion estimates overlap where noted.
 
 | Change | Expected tracked LOC | Simpler design? | Planning decision |
 | --- | ---: | --- | --- |
-| Exact held-out K roster and fixed `K=200` authority | Production `+10..20`, tests `-20..30` | Yes. One protocol boundary replaces data-dependent scientific geometry. | Approved high priority |
+| Trust canonical K-study authorship and delete the manual partial-manifest test | Tests `-20..30`; production neutral | Yes. Held-out keeps deriving its geometry from its canonical input. | Approved output-neutral cleanup |
 | One module-level native operation queue plus cross-runtime test | Production neutral, tests `+20..35` | Yes. One owner matches one process-global native resource. | Approved high priority |
 | Remove retention-time Study revalidation | Production `-1`, tests neutral | Yes. Publication remains the sole durable authority. | Recommend |
 | Reject a known evaluation collision before inference | Roughly neutral; mostly moved code | Yes. The control flow states the real precondition first. | Recommend |
-| Add the established late bundle collision refusal | Production/tests `+10..25` | No line or concept reduction. It is a required atomic-publication guard. | Recommend as correctness work |
-| Replace inferred experiment/figure axes with direct expected sets and remove internal Study relationship rechecks | Production `+20..40`, tests/docs `-40..80`; likely net decrease | Yes. Validate the scientific roster once, then trust typed Studies. | Recommend; held-out portion already approved |
+| Add another late bundle collision refusal | Program delta `0` | No. It duplicates the early check, narrows but does not eliminate the race, and covers implausible concurrent publication of one minted UUID. | Rejected |
+| Trust canonical experiment/figure manifests and remove internal Study relationship rechecks | Production/tests `-40..80` | Yes. Fixed upstream authors own the roster. | Recommend |
 | Replace balanced allocation packing with ordinary chunks | Production/tests/docs `-35..70` | Yes. It removes an optimization policy and its matrix. | Recommend |
 | Quote the Slurm allocation log path | Neutral | No material simplification; fixes one external-adapter defect. | Recommend as correctness work |
 | Remove benchmark liveness polling from the measured hot loop | Production/tests `-5..15` | Yes. It makes the measured boundary direct. | Recommend |
@@ -73,10 +76,10 @@ commit. Test-deletion estimates overlap where noted.
 | Remove the unsupported MIT metadata claim | Metadata `-1` | Yes, narrowly: the package stops claiming authority not established by a license file or ownership decision. | Approved |
 | Repair the stale research citation and context-study prose | Neutral to small increase | No code simplification. It restores contract accuracy. | Recommend |
 
-Clear line increasers are the native lifecycle test, direct roster checks, and late publication
-test. The native queue and roster checks also make the architecture simpler. Late collision
-refusal, log quoting, dependency declaration, and documentation are correctness or completeness
-work, not leanness claims.
+The only meaningful code addition is the native cross-runtime lifecycle test; production queue
+ownership merely moves. Slurm quoting changes one expression, the sample-rate owner replaces a
+duplicate literal, and the exporter dependency adds one metadata line. No new production
+validation machinery remains in the plan.
 
 ### Estimated net program delta
 
@@ -84,11 +87,10 @@ This estimate excludes this temporary ledger and ignored/generated environment s
 the overlapping 60–100-line bundle-test estimate only once inside the larger experiment-test
 refactor.
 
-- Production, configuration, and durable documentation: roughly 35 fewer to 10 more lines. Direct
-  roster and publication guards offset most production deletions.
+- Production, configuration, and durable documentation: roughly 30–70 fewer lines.
 - Tests: roughly 210–300 fewer lines. The main reduction is replacing downstream pipeline
   monoliths and tampering/choreography matrices with owner tests.
-- Total: roughly **200–330 fewer tracked lines**, with a planning midpoint near **265 fewer lines**.
+- Total: roughly **240–370 fewer tracked lines**, with a planning midpoint near **305 fewer lines**.
 
 The estimate assumes accessibility stays excluded and the MIT metadata claim is removed. Exact
 deltas are recorded per implementation commit; deletion count is not an acceptance criterion.
@@ -137,37 +139,39 @@ Snapshot the protected `tmp/` path first and do not touch it. This is recoverabl
 not a product commit. Record the recreation commands and prove the normal commands work before the
 first slice. Regenerate iOS/Pods state only before native iOS verification.
 
-## Slice 1 — Fixed scientific roster authority
+## Slice 1 — Trust canonical K-study authorship
 
-Status: approved, not started
+Status: approved as output-neutral cleanup, not started
 
 ### Scope
 
-- Require the exact chain × family × horizon K-study roster before held-out authoring.
-- Use the frozen maximum horizon `K=200`; never derive the held-out window from a partial manifest.
+- Keep held-out production code deriving horizons and the maximum horizon from the canonical
+  K-study manifest.
+- Add no exact-roster check or separately hard-coded `K=200` authority.
 - Delete the test that blesses a 72-cell held-out experiment after removing `K=200`.
 
 ### Non-goals
 
-- No chain, family, feature, context, horizon, selection, metric, reducer, plotting, or canonical
-  address change for complete canonical input.
-- No generic cell-label validation framework.
+- No production-code change.
+- No chain, family, feature, context, horizon, selection, window, metric, reducer, plotting, or
+  canonical address change.
 - No alteration of completed canonical objects or live/queued experiment state.
 
 ### Protected behavior and accepted change
 
-- A complete canonical roster must author byte-equivalent or semantically identical manifests,
-  testing windows, tables, and figures.
-- Incomplete or extra fixed rosters now fail instead of silently defining a different experiment.
-- Strict manifest and Study hydration remains.
+- HPO final selection still requires nine cells.
+- K-study authoring still expands those cells through its fixed nine `_HORIZONS` values.
+- K-study closure still verifies every authored artifact before publication.
+- Strict manifest hydration remains.
 
 ### Expected outcome
 
-Held-out scientific geometry is fixed by protocol rather than inferred from available rows.
+Held-out trusts the canonical K-study publisher. The test suite stops manufacturing and supporting
+an impossible partial canonical manifest.
 
 ### Checks
 
-- Exact 81-cell held-out roster and unchanged complete-roster windows.
+- Exact 81-cell authored roster and unchanged testing windows.
 - Existing selection, reducer, and manifest round-trip tests.
 - Focused experiment tests, full Python suite, Ruff, format, Pyright, required Vulture scan, and
   diff check.
@@ -215,15 +219,15 @@ near zero because only queue ownership moves.
 - Independent of Slice 1, but runs second to keep one writer on `main`.
 - Native device/model execution is not claimed unless actually run.
 
-## Slice 3 — Scientific roster boundaries and canonical prose
+## Slice 3 — Trust scientific manifests and repair canonical prose
 
 Status: proposed, awaiting approval
 
 ### Scope
 
-- Add one direct expected-set check at each fixed scientific experiment and figure boundary.
-- Remove `c_study` field-by-field family/context/source/Method revalidation after strict Study
-  loading; retain exact roster validation and the frozen context-selection rule.
+- Add no expected-set checks to experiment stages or figures.
+- Remove `c_study` expected-set and field-by-field family/context/source/Method revalidation after
+  strict manifest and Study loading; retain the frozen context-selection rule.
 - Delete mutation tests that exist only for those upstream-owned relationships.
 - Update `docs/KAIROS.md` to `C=25`, 13 contexts, 117 cells, nine reused Studies, 108 new Studies,
   and the existing 5% chain-mean selection rule.
@@ -234,22 +238,23 @@ Status: proposed, awaiting approval
 - No scientific roster, feature selection, context selection, HPO, window, reducer, figure style,
   or canonical object change.
 - No weakening of strict manifest or Study hydration.
+- Keep HPO `select()`'s exact final roster check because partial per-chain authoring through
+  `prepare --chain` and `extend` is a supported normal workflow.
 
 ### Protected behavior and accepted change
 
 - Complete canonical stage and figure outputs remain identical.
-- Missing or extra fixed cells fail at the stage/figure boundary.
-- Once the roster is complete, typed Study contents are trusted instead of rechecked against the
-  same pipeline's request fields.
+- Fixed upstream authors remain responsible for complete rosters.
+- Typed manifests and Studies are trusted instead of rechecked against the same pipeline's request
+  fields.
 
 ### Expected outcome
 
-Scientific completeness is checked once where each frozen experiment is authored or presented.
-Internal pipeline relationships stop being treated as hostile input.
+Internal scientific pipeline outputs stop being treated as hostile input. The canonical manual
+matches the implemented context protocol.
 
 ### Checks
 
-- Exact Stage 1–4 and figure expected sets.
 - Unchanged complete-roster manifests, selection, tables, and deterministic figures.
 - Focused experiment/figure tests, full Python suite, and static/dead-code checks.
 
@@ -267,21 +272,21 @@ Status: proposed, awaiting approval
 - Remove `_validate_trial()` from `retain_result()`; keep publication-time validation.
 - Reject a pre-existing canonical Evaluation before corpus/artifact loading or inference; retain the
   late pre-rename race guard.
-- Give experiment bundle publication the established late pre-rename collision refusal and error
-  translation without a new publication abstraction or platform-specific rename layer.
 - Delete repository-unused `reduce_artifact_validation()`, its API prose, and its dedicated test
   call. Existing artifact loading and observation reduction remain authoritative.
 
 ### Non-goals
 
-- No weaker raw/disk validation and no removal of early or late publication guards.
+- No weaker raw/disk validation and no removal of existing early or late publication guards.
+- Keep experiment bundle publication's current early collision refusal and atomic rename; add no
+  second check for an implausible same-UUID concurrent publisher.
 - No durable-object layout, request schema, metric, checkpoint, evidence, or scratch policy change.
 - No external compatibility shim for the unused function.
 
 ### Protected behavior and accepted change
 
 - Known Evaluation collisions fail before expensive work and create no scratch.
-- Publication races still preserve scratch and refuse overwrite.
+- Existing publication behavior remains unchanged.
 - Complete successful outputs remain unchanged.
 
 ### Expected outcome
@@ -291,8 +296,9 @@ collisions, and canonical loaders/reducers replace an unused convenience seam.
 
 ### Checks
 
-- Focused Study, artifact, Evaluation, and bundle owner tests.
-- Early collision does no inference or scratch work; late collision still preserves scratch.
+- Focused Study, artifact, and Evaluation tests.
+- Early Evaluation collision does no inference or scratch work; its existing late guard still
+  preserves scratch.
 - Full Python suite and static/dead-code checks.
 
 ### Dependencies and gates
@@ -537,6 +543,10 @@ scientific value or durable product.
 
 ## Explicitly rejected or deferred audit candidates
 
+- No held-out, stage, or figure expected-roster checks. Fixed canonical experiment authors own
+  those rosters; downstream code trusts their manifests.
+- No second experiment-bundle collision check. The current early refusal plus atomic rename is
+  adequate for a single-operator demo with minted experiment UUIDs.
 - No generic figure CLI helper: it saves repeated entry-point lines by adding a shallow concept.
 - No app analytics mean rewrite in the conditional mechanical sweep: floating-point order can
   change displayed values.

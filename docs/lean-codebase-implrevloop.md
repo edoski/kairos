@@ -1,6 +1,6 @@
 # Lean codebase implementation-review ledger
 
-Status: planning only; implementation paused pending approval of the proposed substantial slices
+Status: execution authorized on 2026-08-09; generated-environment preflight in progress
 
 Authority: two codebase-wide audits, initially pinned to
 `6da8bf7e2ba1304f9ac009472c96965f89265838` and re-audited at
@@ -13,13 +13,19 @@ Product code did not change between those pins. This ledger is the slice review 
 - Checkout: `/Users/edo/dev/python/kairos`
 - Branch: `main`
 - Planning baseline: `6da8bf7e2ba1304f9ac009472c96965f89265838`
+- Execution-authorization head: `58aa8b6af8d47952acf5cc079fd02d10bcf71d32`
 - Worktrees: one existing `main` worktree; no run-owned branch or worktree
-- Protected unrelated state: untracked `tmp/`
-- Proposed checkout policy: direct `main`, one writer at a time, no branch or worktree
+- Pre-existing untracked `tmp/` contained only `tmp/pdfs/context-study.png` at 98,870 bytes with
+  SHA-256 `787aac828079939068ea66e5dc8c7c0e7f0d84b248b5fbd026814d0f01ef5932`.
+  The user authorized its removal; preflight moved it recoverably to
+  `/Users/edo/.Trash/kairos-tmp-2026-08-09`.
+- Checkout policy: direct `main`, one writer at a time, no branch or worktree
 - Run-owned planning file: `docs/lean-codebase-implrevloop.md`
-- Authorized in this phase: this planning ledger only
-- Not authorized in this phase: product implementation, ignored-environment recreation, native
-  regeneration, remote jobs, image builds, RPC calls, device runs, pushes, or pull requests
+- Authorized in this phase: all four consolidated slices, ignored Python-environment recreation,
+  proportional verification, independent review/correction loops, execution-ledger updates, and
+  final propagation onto `codex/compact-cuda-execution`
+- Not authorized in this phase: native regeneration, remote jobs, image builds, RPC calls, device
+  runs, pushes, or pull requests
 - Execution protocol after approval: one fresh implementer per slice, then one separate fresh
   reviewer using `code-review`; rejected findings return to the same implementer and reviewer until
   zero-finding `GREEN LIGHT`
@@ -49,8 +55,11 @@ Product code did not change between those pins. This ledger is the slice review 
   semantics, wrappers, or tests.
 - Raw-input, scientific, durable-publication, native-runtime, race, and external-adapter guards
   listed below remain protected.
-- The substantial cleanup set is not yet treated as approved. This ledger separates actual
-  simplification from line-increasing correctness work so it can be approved precisely.
+- The complete four-slice cleanup set is approved for execution. Existing item-specific
+  protections, tradeoffs, rejections, and external gates remain binding.
+- After final `main` integration, update `codex/compact-cuda-execution` onto final `main`, retain
+  only its intended CUDA-specific execution/docs delta, review and verify that delta independently,
+  and return the checkout to `main`. Do not push or build an image.
 - License decision is fixed: remove the unsupported MIT metadata claim and add no license file or
   replacement claim.
 
@@ -167,8 +176,7 @@ first slice. Regenerate iOS/Pods state only before native iOS verification.
 
 ## Slice 1 — Scientific core and durable ownership
 
-Status: direct outcome vectorization and previously scoped output-neutral mechanics approved;
-remaining ownership cleanup proposed, awaiting approval
+Status: approved, not started
 
 ### Scope
 
@@ -234,8 +242,7 @@ no unused metric or repeated trusted-value ceremony.
 
 ## Slice 2 — Trusted experiment pipeline, figures, tests, and canonical documentation
 
-Status: canonical K-study trust cleanup and MIT-claim removal approved; remaining experiment and
-documentation cleanup proposed, awaiting approval
+Status: approved, not started
 
 ### Scope
 
@@ -301,8 +308,7 @@ canonical documentation contains the live scientific contract without completed 
 
 ## Slice 3 — Operational execution, benchmark, and mobile exporter
 
-Status: benchmark measured-loop polling removal approved; balanced packing and recovery retention
-fixed; remaining operational cleanup proposed, awaiting approval
+Status: approved, not started
 
 ### Scope
 
@@ -380,8 +386,7 @@ canonical setup, and a smaller exporter without sacrificing throughput, recovery
 
 ## Slice 4 — App native lifecycle and shallow cleanup
 
-Status: process-wide native serialization approved; remaining output-neutral cleanup proposed,
-awaiting approval
+Status: approved, not started
 
 ### Scope
 
@@ -456,8 +461,8 @@ internal seams and duplicated test choreography without changing rendered or obs
 - No bypass of `BlockFrame.select_range()` or constructor validation through private constructors,
   flags, or `object.__new__`; that would add more machinery than it removes.
 - No Apptainer definition edit without a separately authorized immutable remote build and test.
-- No destructive cleanup of `tmp/`, canonical outputs, queued jobs, remote objects, or previous
-  deployment images.
+- No destructive cleanup of canonical outputs, queued jobs, remote objects, or previous deployment
+  images. The user separately authorized removal of the pre-existing untracked `tmp/`.
 
 ## Per-slice review protocol
 
@@ -489,6 +494,9 @@ After every approved slice is green:
   unrun external checks;
 - inspect the complete range from planning baseline to final head for accidental scientific,
   durable-schema, API, or protected-guard drift;
-- confirm `tmp/` and all unrelated state are untouched;
+- confirm `tmp/` remains absent as authorized and all other unrelated state is untouched;
 - update the final slice/review record, then remove this temporary ledger in its own scoped commit;
+- update `codex/compact-cuda-execution` onto final `main` without merge-history accumulation,
+  preserve only its intended CUDA-specific execution/docs delta, run focused CUDA and full
+  proportional checks, obtain an independent fixed-range review, then return to `main`;
 - do not push or open a pull request without separate authorization.

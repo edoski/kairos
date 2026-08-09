@@ -31,10 +31,14 @@ the Standards sources.
   process-wide native model-operation serialization.
 - The small mechanical sweep is approved only where scientific semantics and thesis data outputs
   remain unchanged.
+- Accessibility expansion is rejected. KAIROS is a no-user thesis demo; do not add accessibility
+  semantics, wrappers, or tests.
 - Raw-input, scientific, durable-publication, native-runtime, race, and external-adapter guards
   listed below remain protected.
 - The substantial cleanup set is not yet treated as approved. This ledger separates actual
   simplification from line-increasing correctness work so it can be approved precisely.
+- License decision is fixed: remove the unsupported MIT metadata claim and add no license file or
+  replacement claim.
 
 ## Design rule
 
@@ -61,19 +65,47 @@ commit. Test-deletion estimates overlap where noted.
 | Remove benchmark liveness polling from the measured hot loop | Production/tests `-5..15` | Yes. It makes the measured boundary direct. | Recommend |
 | Move bundle mechanics to owner tests and shrink downstream pipeline monoliths | Tests `-140..200` net; estimates overlap | Yes. Tests stop replaying trusted upstream modules. | Recommend |
 | Localize app styles | Roughly neutral; code moves | Yes. It shrinks a 109-key shallow global interface. | Recommend |
-| Add local accessibility semantics and focused tests | Production/tests `+25..60` | No LOC reduction. Local ownership avoids a new abstraction. | Recommend as correctness work |
+| Add local accessibility semantics and focused tests | Program delta `0` | No. This expands a no-user demo. | Rejected |
 | Remove shallow app wrappers, type rosters, impossible chart guards, and choreography assertions | Production/tests `-15..35` | Yes. | Approved if output-neutral |
 | Remove redundant strict flags, casts, `zip(strict=True)`, inert checkpoint options, and test ceremony | Production/tests `-35..70` | Yes. | Approved if output-neutral |
 | Delete repository-unused `reduce_artifact_validation()` and its prose/test call | Production/docs/tests `-10..20` | Yes. Existing loaders/reducer own all behavior. | Recommend clean break |
 | Add direct exporter dependency | Metadata `+1` | No. It fixes packaging ownership. | Recommend as completeness work |
-| Resolve the MIT metadata/license mismatch | `+20..25` for a license, or `-1` if the claim is removed | No code simplification. This is a legal/package decision. | User decision required |
+| Remove the unsupported MIT metadata claim | Metadata `-1` | Yes, narrowly: the package stops claiming authority not established by a license file or ownership decision. | Approved |
 | Repair the stale research citation and context-study prose | Neutral to small increase | No code simplification. It restores contract accuracy. | Recommend |
 
-Clear line increasers are the native lifecycle test, direct roster checks, late publication test,
-accessibility semantics/tests, and a possible license file. Of these, the native queue and roster
-checks also make the architecture simpler. Late collision refusal, accessibility, log quoting,
-dependency declaration, licensing, and documentation are correctness or completeness work, not
-leanness claims.
+Clear line increasers are the native lifecycle test, direct roster checks, and late publication
+test. The native queue and roster checks also make the architecture simpler. Late collision
+refusal, log quoting, dependency declaration, and documentation are correctness or completeness
+work, not leanness claims.
+
+### Estimated net program delta
+
+This estimate excludes this temporary ledger and ignored/generated environment state. It counts
+the overlapping 60–100-line bundle-test estimate only once inside the larger experiment-test
+refactor.
+
+- Production, configuration, and durable documentation: roughly 35 fewer to 10 more lines. Direct
+  roster and publication guards offset most production deletions.
+- Tests: roughly 210–300 fewer lines. The main reduction is replacing downstream pipeline
+  monoliths and tampering/choreography matrices with owner tests.
+- Total: roughly **200–330 fewer tracked lines**, with a planning midpoint near **265 fewer lines**.
+
+The estimate assumes accessibility stays excluded and the MIT metadata claim is removed. Exact
+deltas are recorded per implementation commit; deletion count is not an acceptance criterion.
+
+### License recommendation
+
+The [University of Bologna IP regulation](https://normateneo.unibo.it/regolamento-in-materia-di-proprieta-industriale-e-intellettuale-delluniversita-di-bologna)
+treats software as an intangible asset and states that rights to student-created software can
+belong to the University when it is produced within University educational/research activity using
+authorized University structures or resources. KAIROS is a thesis project using University
+research infrastructure, so personal ownership is not safe to assume.
+
+Remove `license = { text = "MIT" }` from `pyproject.toml` for now. Do not add an unlicensed-code
+notice or another license. If the supervisor/KTO later confirms who owns the software and authorizes
+open-source release, MIT is the leanest permissive choice; add the standard MIT text with the
+confirmed rights holder then. If academic citation becomes useful, handle it separately with a
+`CITATION.cff`; MIT itself does not establish a citation request.
 
 ## Protected guards
 
@@ -404,7 +436,7 @@ owner. The suite loses roughly 140–200 lines and several repeated subprocess s
 
 - Runs after Slices 1, 3, 4, and 6 so tests target final owners once.
 
-## Slice 8 — App semantic locality
+## Slice 8 — App style locality and shallow cleanup
 
 Status: proposed, awaiting approval
 
@@ -412,8 +444,6 @@ Status: proposed, awaiting approval
 
 - Move screen/component-specific styles beside their only consumers; retain `theme.ts` and only
   genuinely shared layout styles.
-- Add accessibility roles, selected/disabled state, labels, and values at the component that owns
-  each interaction. Add focused semantic tests, not snapshots.
 - Inline the one-line `runsForSelection` wrapper, replace the runtime-only feature-name roster with
   a direct type union, remove impossible chart-scale guards, and remove inference-test event-log
   choreography.
@@ -422,6 +452,7 @@ Status: proposed, awaiting approval
 
 - No visual redesign, wrapper layer, component merger, memoization, App lifecycle controller, or
   change to nested scrolling.
+- No accessibility semantics or accessibility-specific tests. This is a no-user demo.
 - Do not replace the online mean recurrence in this program. Ordinary summation can change the
   last floating-point bits of displayed analytics and therefore does not meet the output-neutral
   mechanical condition.
@@ -430,16 +461,14 @@ Status: proposed, awaiting approval
 ### Protected behavior and accepted change
 
 - Layout, colors, spacing, copy, navigation, selection, and analytics values stay unchanged.
-- Accessibility adds observable semantic metadata; this is correctness work and increases lines.
 
 ### Expected outcome
 
-Presentation details become local, the global style interface shrinks sharply, and accessibility
-semantics are owned without a new abstraction.
+Presentation details become local and the global style interface shrinks sharply.
 
 ### Checks
 
-- Focused accessibility semantics and unchanged behavior tests.
+- Existing focused behavior tests.
 - App unit suite, TypeScript check, Expo Doctor, and diff check.
 - A simulator/device visual pass is required before this slice can be green because styles move.
 
@@ -465,9 +494,10 @@ Status: approved conditionally, not started
 - Remove inert checkpoint filename configuration, schema-irrelevant fixture rows, and assertions
   that pin Lightning choreography rather than outputs.
 - Apply the output-neutral app removals assigned to Slice 8 if that slice is not approved, without
-  moving styles or adding accessibility behavior.
+  moving styles.
 - Repair the stale research citation.
 - Resolve the exporter direct dependency in Slice 6 or here, but only once.
+- Remove the unsupported MIT metadata claim; add no license file.
 
 ### Explicit exclusions
 
@@ -477,7 +507,7 @@ Status: approved conditionally, not started
 - No removal of any protected guard.
 - No figure CLI helper; four tiny entry points are clearer than another shared abstraction.
 - No Apptainer smoke edit without its external build/test gate.
-- No license change until the user chooses a license file or removal of the MIT metadata claim.
+- No license file or ownership assertion without supervisor/KTO confirmation.
 
 ### Protected behavior
 
@@ -503,14 +533,14 @@ scientific value or durable product.
 ### Dependencies and gates
 
 - Runs last so mechanical edits do not create merge/review noise for semantic slices.
-- MIT resolution remains a user decision and, if chosen, is recorded as completeness work rather
-  than code cleanup.
+- MIT metadata removal is approved and recorded as correctness/completeness work.
 
 ## Explicitly rejected or deferred audit candidates
 
 - No generic figure CLI helper: it saves repeated entry-point lines by adding a shallow concept.
 - No app analytics mean rewrite in the conditional mechanical sweep: floating-point order can
   change displayed values.
+- No accessibility expansion for the no-user demo.
 - No App transition controller, shared process-wide runtime/catalog, accessibility wrapper,
   network-picker variant abstraction, or speculative memoization.
 - No optional validation flags, compatibility readers, legacy aliases, or old-path shims.

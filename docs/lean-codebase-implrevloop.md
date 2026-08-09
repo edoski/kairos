@@ -1,6 +1,6 @@
 # Lean codebase implementation-review ledger
 
-Status: execution authorized on 2026-08-09; generated-environment preflight in progress
+Status: execution in progress; generated-environment preflight and Slice 1 green
 
 Authority: two codebase-wide audits, initially pinned to
 `6da8bf7e2ba1304f9ac009472c96965f89265838` and re-audited at
@@ -13,7 +13,7 @@ Product code did not change between those pins. This ledger is the slice review 
 - Checkout: `/Users/edo/dev/python/kairos`
 - Branch: `main`
 - Planning baseline: `6da8bf7e2ba1304f9ac009472c96965f89265838`
-- Execution-authorization head: `58aa8b6af8d47952acf5cc079fd02d10bcf71d32`
+- Execution-authorization head: `3f386328ec61bf10da7ce1b383f0be5bd187e97a`
 - Worktrees: one existing `main` worktree; no run-owned branch or worktree
 - Pre-existing untracked `tmp/` contained only `tmp/pdfs/context-study.png` at 98,870 bytes with
   SHA-256 `787aac828079939068ea66e5dc8c7c0e7f0d84b248b5fbd026814d0f01ef5932`.
@@ -36,8 +36,8 @@ Product code did not change between those pins. This ledger is the slice review 
 
 - Process-wide native model-operation serialization is approved as the remaining high-priority
   fix.
-- Direct minimum-outcome vectorization is approved with its roughly 341 MiB largest-authored-window
-  temporary-memory tradeoff; values and first-tie behavior must remain exact.
+- Direct minimum-outcome simplification is approved within a roughly 341 MiB
+  largest-authored-window temporary-memory bound; values and first-tie behavior must remain exact.
 - Balanced allocation packing is retained. Sustained and tail GPU occupancy take priority over the
   line reduction from ordinary chunking.
 - Temporary `jobs.tsv` retains its human-readable `cell` field so failed Slurm rows remain direct
@@ -93,7 +93,7 @@ commit. Test-deletion estimates overlap where noted.
 | Localize app styles | Production `0..+10`; about 300 lines move | No. The current file already has coherent screen blocks; moving them adds namespaces and files. | Rejected |
 | Add local accessibility semantics and focused tests | Program delta `0` | No. This expands a no-user demo. | Rejected |
 | Remove shallow app wrappers/constants, unused exports, impossible chart guards, and choreography assertions | Production `-15..25`, tests `-25..40` | Yes. | Approved if output-neutral |
-| Vectorize minimum-outcome calculation in one expression | Production `-7` | Yes. It removes arbitrary chunk policy; peak temporary memory rises to about 341 MiB for the largest authored window. | Approved with resource tradeoff |
+| Reduce minimum outcomes over the scientific action axis | Production roughly neutral | Yes. It removes arbitrary row-chunk policy while keeping temporary memory bounded. | Approved after correction review |
 | Remove redundant strict flags, casts, internal equal-length checks, one-call helpers, inert checkpoint options, and test ceremony | Production/tests `-45..85` | Yes. | Approved if output-neutral |
 | Delete repository-unused `reduce_artifact_validation()` and its prose/test call | Production/docs/tests `-10..20` | Yes. Existing loaders/reducer own all behavior. | Recommend clean break |
 | Delete the completed validation-evidence process ledger after moving its still-live protocol facts into canonical docs | Documentation `-369` | Yes. Git retains implementation history; active contracts belong in `KAIROS.md`, `CONTEXT.md`, and ADRs. | Recommend after contract check |
@@ -176,13 +176,13 @@ first slice. Regenerate iOS/Pods state only before native iOS verification.
 
 ## Slice 1 — Scientific core and durable ownership
 
-Status: approved, not started
+Status: green after one correction loop
 
 ### Scope
 
-- Compute minimum outcomes in one direct matrix expression instead of arbitrary 4,096-row chunks.
-  Preserve exact values and first-tie behavior; accept about 341 MiB temporary peak memory for the
-  largest authored window.
+- Compute minimum outcomes by reducing directly over the scientific action axis instead of
+  arbitrary 4,096-row chunks. Preserve exact values and first-tie behavior while keeping temporary
+  peak memory below the approved roughly 341 MiB bound.
 - Inline the two owner-specific uniqueness checks and remove `_require_unique`. Remove redundant
   internal `np.int64` casts, `zip(strict=True)`, and strict call flags only where typed owners
   already prove dtype, length, or strict hydration.
@@ -482,6 +482,35 @@ For each approved slice, the orchestrator must:
 
 No implementation and review work may overlap on the shared checkout. The root orchestrator does
 not edit product code or review its own changes.
+
+## Execution records
+
+### Generated-environment preflight
+
+- Recreated ignored root and mobile-export environments with `uv sync --frozen` and
+  `uv sync --project tools/mobile-export --frozen`; every launcher now points at the KAIROS path.
+- Exact baseline gates: configured `uv run vulture` clean, root suite 114 passed, and the normal
+  exporter environment 11 passed without a PATH workaround.
+
+### Slice 1
+
+- Baseline/status: `3f386328ec61bf10da7ce1b383f0be5bd187e97a`, clean `main`; no canonical
+  outputs, scratch, remote state, ignored environments, or CUDA branch mutation allowed.
+- Implementer: `/root/slice1_scientific_core_impl`. Initial commit:
+  `07f986ad02e0ee19500c1809942d6ed8fcff2bc6`.
+- Reviewer: `/root/slice1_scientific_core_review`, using separate Standards and Spec axes. The first
+  gate rejected an indexed Study message chain and discovered that the planned full `N x K`
+  matrix estimate had used `K=5`; the authored `K=200` geometry would require roughly 13.3 GiB.
+  A proposed strided view was also rejected after NumPy materialized about 6.8 GiB for `argmin`.
+- Correction commit: `d13813b8f3de374a11cb895b297f9ba2e90a1a7f`. The final action-axis reduction
+  removes arbitrary row chunks, keeps shifted inputs as zero-copy views, and updates only strict
+  improvements. Exact `int64` values and first ties match for 24 requested geometries and explicit
+  ties. At authored `N=4,472,514`, `K=200`, traced temporary allocation was 76.78 MiB and the macOS
+  peak footprint was 299.17 MiB, below the approved roughly 341 MiB temporary bound.
+- Final gates: 115 root tests passed; 47 focused review tests passed; Ruff, format, Pyright,
+  configured Vulture, parity, memory, collision, diff, and worktree checks passed. Standards:
+  zero findings. Spec: zero findings. `GREEN LIGHT`.
+- Final slice delta: nine files, 110 insertions and 130 deletions; net 20 tracked lines removed.
 
 ## Final completion gate
 

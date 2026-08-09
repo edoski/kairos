@@ -30,6 +30,8 @@ Product code did not change between those pins. This ledger is the slice review 
 
 - Process-wide native model-operation serialization is approved as the remaining high-priority
   fix.
+- Direct minimum-outcome vectorization is approved with its roughly 341 MiB largest-authored-window
+  temporary-memory tradeoff; values and first-tie behavior must remain exact.
 - The proposed held-out K-study roster guard is rejected after tracing the authoring chain. HPO
   publication requires nine cells, K-study authoring expands them through its fixed nine horizons,
   and closure verifies every artifact. Held-out should trust that canonical manifest.
@@ -73,7 +75,7 @@ commit. Test-deletion estimates overlap where noted.
 | Localize app styles | Production `0..+10`; about 300 lines move | No. The current file already has coherent screen blocks; moving them adds namespaces and files. | Rejected |
 | Add local accessibility semantics and focused tests | Program delta `0` | No. This expands a no-user demo. | Rejected |
 | Remove shallow app wrappers/constants, unused exports, impossible chart guards, and choreography assertions | Production `-15..25`, tests `-25..40` | Yes. | Approved if output-neutral |
-| Vectorize minimum-outcome calculation in one expression | Production `-7` | Yes. It removes arbitrary chunk policy; peak temporary memory rises to about 341 MiB for the largest authored window. | Recommend with resource tradeoff |
+| Vectorize minimum-outcome calculation in one expression | Production `-7` | Yes. It removes arbitrary chunk policy; peak temporary memory rises to about 341 MiB for the largest authored window. | Approved with resource tradeoff |
 | Remove redundant strict flags, casts, internal equal-length checks, one-call helpers, inert checkpoint options, and test ceremony | Production/tests `-45..85` | Yes. | Approved if output-neutral |
 | Delete repository-unused `reduce_artifact_validation()` and its prose/test call | Production/docs/tests `-10..20` | Yes. Existing loaders/reducer own all behavior. | Recommend clean break |
 | Delete the completed validation-evidence process ledger after moving its still-live protocol facts into canonical docs | Documentation `-369` | Yes. Git retains implementation history; active contracts belong in `KAIROS.md`, `CONTEXT.md`, and ADRs. | Recommend after contract check |
@@ -543,10 +545,10 @@ remain proposed, awaiting approval
 
 - Remove redundant internal `np.int64` casts and `zip(strict=True)` where BlockFrame/Polars already
   own exact column type and equal length.
-- New proposal: compute the minimum-outcome matrix directly instead of chunking it through an
-  arbitrary 4,096-row policy. Preserve exact values and first-tie behavior. Accept about 341 MiB of
-  temporary peak memory for the largest currently authored window; reject this item if
-  proportional full-suite and representative-memory checks show material pressure.
+- Approved: compute the minimum-outcome matrix directly instead of chunking it through an arbitrary
+  4,096-row policy. Preserve exact values and first-tie behavior. Accept about 341 MiB of temporary
+  peak memory for the largest currently authored window; reject the implementation if proportional
+  full-suite and representative-memory checks show unexpected material pressure.
 - New proposal: inline the two owner-specific uniqueness checks and delete the shallow
   `_require_unique` helper.
 - Remove redundant `strict=True` call flags where `StrictFrozenRecord` or

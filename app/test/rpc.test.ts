@@ -4,7 +4,7 @@ import type { Hash } from "viem";
 
 import type { ChainManifest, FeatureName } from "../src/features";
 import { createChainSession } from "../src/rpc";
-import { flushMicrotasks, hashOf } from "./helpers";
+import { hashOf } from "./helpers";
 
 type JsonRpcRequest = {
   id: number;
@@ -143,7 +143,6 @@ function blockBatches(fixture: RpcFixture): bigint[][] {
 }
 
 afterEach(() => {
-  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -207,8 +206,6 @@ describe("createChainSession", () => {
       ["0x3", "0xe", [50, 90]],
     ]);
 
-    intervalSession.dispose();
-    directSession.dispose();
   });
 
   it("rejects a broken parent link in the fetched range", async () => {
@@ -225,7 +222,6 @@ describe("createChainSession", () => {
       "Broken parent link between blocks 10 and 11",
     );
     expect(blockBatches(rpc)).toEqual([[10n, 11n, 12n]]);
-    session.dispose();
   });
 
   it.each([
@@ -274,7 +270,6 @@ describe("createChainSession", () => {
     installRpc({ history });
 
     await expect(session.sync()).rejects.toThrow(message);
-    session.dispose();
   });
 
   it("requires a positive EIP-1559 base fee", async () => {
@@ -291,32 +286,17 @@ describe("createChainSession", () => {
       await expect(session.sync()).rejects.toThrow(
         "RPC returned block 12 without a positive base fee",
       );
-      session.dispose();
     }
   });
 
-  it("forwards Viem watched blocks and unwatches on disposal", async () => {
-    vi.useFakeTimers();
+  it("reads the current head directly once", async () => {
     const rpc = installRpc();
     const session = createChainSession("ethereum", manifestOf(1));
-    const publish = vi.fn();
 
-    session.watchBlocks(publish);
-    await vi.advanceTimersByTimeAsync(0);
-    await flushMicrotasks();
-
-    expect(publish).toHaveBeenCalledWith(
-      expect.objectContaining({
-        number: 12n,
-        baseFeePerGas: 1_000_000_012n,
-      }),
-    );
-    const readsBeforeDisposal = rpc.batches.flat().length;
-
-    session.dispose();
-    await vi.advanceTimersByTimeAsync(10_000);
-    await flushMicrotasks();
-    expect(rpc.batches.flat()).toHaveLength(readsBeforeDisposal);
+    await expect(session.readHead()).resolves.toBe(12n);
+    expect(rpc.batches).toEqual([
+      [expect.objectContaining({ method: "eth_blockNumber" })],
+    ]);
   });
 
   it("reads exact outcome blocks directly", async () => {
@@ -328,6 +308,5 @@ describe("createChainSession", () => {
       selectedBaseFeePerGas: 1_000_000_022n,
     });
     expect(blockBatches(rpc)).toEqual([[20n, 22n]]);
-    session.dispose();
   });
 });

@@ -18,10 +18,7 @@ import {
   type Chain,
   type Horizon,
 } from "../domain";
-import type {
-  ChainSnapshot,
-  InferenceResult,
-} from "../inference";
+import type { InferenceResult } from "../inference";
 import { styles } from "../styles";
 import { colors } from "../theme";
 
@@ -39,7 +36,6 @@ type Props = {
   onHorizonChange: (horizon: Horizon) => void;
   onRun: () => void;
   onRunAgain: () => void;
-  snapshot: ChainSnapshot | null;
 };
 
 function NetworkChoices({
@@ -82,25 +78,6 @@ function NetworkChoices({
           </Pressable>
         );
       })}
-    </View>
-  );
-}
-
-function LiveConditions({ snapshot }: { snapshot: ChainSnapshot | null }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Live conditions</Text>
-      <View style={[styles.surface, styles.clippedCard]}>
-        <DetailRow
-          label="Latest block"
-          value={snapshot?.head_block.toLocaleString() ?? "—"}
-        />
-        <DetailRow
-          label="Current base fee"
-          last
-          value={snapshot ? formatGwei(snapshot.current_base_fee_per_gas) : "—"}
-        />
-      </View>
     </View>
   );
 }
@@ -202,7 +179,6 @@ function ErrorDialog({
 function Setup({
   chain,
   horizon,
-  snapshot,
   state,
   onChainChange,
   onHorizonChange,
@@ -219,8 +195,6 @@ function Setup({
           onChange={onChainChange}
         />
       </View>
-
-      <LiveConditions snapshot={snapshot} />
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Horizon (K = {horizon})</Text>

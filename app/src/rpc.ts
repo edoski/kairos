@@ -22,15 +22,11 @@ export type ChainOutcome = {
 
 export type ChainSession = {
   sync(): Promise<PreparedChainContext>;
+  readHead(): Promise<bigint>;
   readOutcome(
     immediateBlock: bigint,
     selectedBlock: bigint,
   ): Promise<ChainOutcome>;
-  watchBlocks(
-    onBlock: (block: BlockRow) => void,
-    onError?: (error: unknown) => void,
-  ): void;
-  dispose(): void;
 };
 
 const CHAIN_DEFINITIONS = {
@@ -58,7 +54,6 @@ export function createChainSession(
   });
   const predecessorOffset = Number(needsPredecessor(manifest));
   const needsFeeHistory = usesPriorityFees(manifest);
-  let unwatch: (() => void) | undefined;
 
   function blockRow(
     block: GetBlockReturnType<typeof definition, false, "latest">,
@@ -159,6 +154,10 @@ export function createChainSession(
     return { blocks, priorityFeeRewards };
   }
 
+  function readHead(): Promise<bigint> {
+    return client.getBlockNumber();
+  }
+
   async function readOutcome(
     immediateBlock: bigint,
     selectedBlock: bigint,
@@ -173,26 +172,9 @@ export function createChainSession(
     };
   }
 
-  function watchBlocks(
-    onBlock: (block: BlockRow) => void,
-    onError?: (error: unknown) => void,
-  ): void {
-    unwatch = client.watchBlocks({
-      emitOnBegin: true,
-      onBlock: (block) => onBlock(blockRow(block)),
-      onError,
-    });
-  }
-
-  function dispose(): void {
-    unwatch?.();
-    unwatch = undefined;
-  }
-
   return {
     sync,
+    readHead,
     readOutcome,
-    watchBlocks,
-    dispose,
   };
 }

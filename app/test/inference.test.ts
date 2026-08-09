@@ -64,6 +64,7 @@ function session(
 ): ChainSession {
   return {
     sync: vi.fn(sync),
+    readHead: vi.fn(async () => 10n),
     readOutcome: vi.fn(
       async (
         _immediateBlock: bigint,
@@ -73,8 +74,6 @@ function session(
         selectedBaseFeePerGas: 18n,
       }),
     ),
-    watchBlocks: vi.fn(),
-    dispose: vi.fn(),
   };
 }
 
@@ -207,6 +206,25 @@ describe("InferenceEngine", () => {
     await engine.dispose();
   });
 
+  it("reads the current head once and converts it through a safe integer", async () => {
+    const chainSession = session();
+    const engine = createTestEngine({ session: chainSession });
+
+    await expect(engine.currentHead()).resolves.toBe(10);
+    expect(chainSession.readHead).toHaveBeenCalledOnce();
+
+    vi.mocked(chainSession.readHead).mockResolvedValueOnce(
+      BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+    );
+    await expect(engine.currentHead()).rejects.toMatchObject({
+      message: "Could not read the selected chain.",
+      cause: expect.objectContaining({
+        message: "head block exceeds the safe integer range",
+      }),
+    });
+    await engine.dispose();
+  });
+
   it("passes exact outcome blocks and converts RPC fees through safe integers", async () => {
     const chainSession = session();
     const engine = createTestEngine({ session: chainSession });
@@ -227,16 +245,11 @@ describe("InferenceEngine", () => {
     await engine.dispose();
   });
 
-  it("disposes the model when session disposal fails", async () => {
-    const chainSession = session();
-    vi.mocked(chainSession.dispose).mockImplementation(() => {
-      throw new Error("unwatch failed");
-    });
+  it("disposes the model runtime", async () => {
     const model = runtime();
-    const engine = createTestEngine({ model, session: chainSession });
+    const engine = createTestEngine({ model });
 
-    await expect(engine.dispose()).rejects.toThrow("unwatch failed");
-    expect(chainSession.dispose).toHaveBeenCalledOnce();
+    await engine.dispose();
     expect(model.dispose).toHaveBeenCalledOnce();
   });
 });

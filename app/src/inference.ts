@@ -20,21 +20,13 @@ export type InferenceResult = {
   predicted_minimum_base_fee_per_gas: number;
 };
 
-export type ChainSnapshot = {
-  head_block: number;
-  current_base_fee_per_gas: number;
-};
-
 export type InferenceOutcome = {
   immediate_base_fee_per_gas: number;
   selected_base_fee_per_gas: number;
 };
 
 export type InferenceEngine = {
-  watchBlocks(
-    onSnapshot: (snapshot: ChainSnapshot) => void,
-    onError?: (error: unknown) => void,
-  ): void;
+  currentHead(): Promise<number>;
   run(K: Horizon): Promise<InferenceResult>;
   resolveOutcome(
     immediateBlock: number,
@@ -95,19 +87,10 @@ export function createInferenceEngine(
     });
   }
 
-  function watchBlocks(
-    onSnapshot: (snapshot: ChainSnapshot) => void,
-    onError?: (error: unknown) => void,
-  ): void {
-    session.watchBlocks((block) => {
-      onSnapshot({
-        head_block: safeBigInt(block.number, "head block"),
-        current_base_fee_per_gas: safeBigInt(
-          block.baseFeePerGas,
-          "current base fee",
-        ),
-      });
-    }, onError);
+  async function currentHead(): Promise<number> {
+    return attempt("Could not read the selected chain.", async () =>
+      safeBigInt(await session.readHead(), "head block"),
+    );
   }
 
   async function resolveOutcome(
@@ -129,16 +112,10 @@ export function createInferenceEngine(
     };
   }
 
-  async function dispose(): Promise<void> {
-    try {
-      session.dispose();
-    } finally {
-      await model.dispose();
-    }
-  }
+  const dispose = () => model.dispose();
 
   return {
-    watchBlocks,
+    currentHead,
     run,
     resolveOutcome,
     dispose,

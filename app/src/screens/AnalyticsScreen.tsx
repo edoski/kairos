@@ -1,6 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type PropsWithChildren, type ReactNode, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { BarChart as GiftedBarChart } from "react-native-gifted-charts";
 
 import {
@@ -410,23 +416,41 @@ export function AnalyticsScreen({
   initialHorizon,
   loadError,
   onChainChange,
+  onRefresh,
 }: {
   runs: readonly InferenceRun[];
   chain: Chain;
   initialHorizon: Horizon;
   loadError: string | null;
   onChainChange: (chain: Chain) => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [analyticsHorizon, setAnalyticsHorizon] =
     useState<Horizon>(initialHorizon);
   const [networkPickerOpen, setNetworkPickerOpen] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [refreshState, setRefreshState] = useState<
+    { status: "idle" | "loading" } | { status: "error"; message: string }
+  >({ status: "idle" });
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? null;
   const graphRuns = runs.filter(
     (run) => run.chain === chain && run.K === analyticsHorizon,
   );
   const buckets = waitBuckets(graphRuns, analyticsHorizon);
   const summary = summarizeRuns(graphRuns);
+
+  async function refreshOutcomes(): Promise<void> {
+    setRefreshState({ status: "loading" });
+    try {
+      await onRefresh();
+      setRefreshState({ status: "idle" });
+    } catch (error) {
+      setRefreshState({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   return (
     <>
@@ -451,6 +475,34 @@ export function AnalyticsScreen({
         {loadError && (
           <View style={styles.storageError}>
             <Text style={styles.storageErrorText}>{loadError}</Text>
+          </View>
+        )}
+
+        <Pressable
+          disabled={refreshState.status === "loading"}
+          onPress={() => void refreshOutcomes()}
+          style={[
+            styles.button,
+            styles.refreshButton,
+            refreshState.status === "loading" && styles.buttonDisabled,
+          ]}
+        >
+          {refreshState.status === "loading" ? (
+            <ActivityIndicator color={colors.surface} />
+          ) : (
+            <Ionicons color={colors.surface} name="refresh" size={18} />
+          )}
+          <Text style={styles.buttonText}>
+            {refreshState.status === "loading"
+              ? "Refreshing…"
+              : "Refresh outcomes"}
+          </Text>
+        </Pressable>
+        {refreshState.status === "error" && (
+          <View style={styles.storageError}>
+            <Text style={styles.storageErrorText}>
+              {refreshState.message}
+            </Text>
           </View>
         )}
 

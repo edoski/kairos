@@ -84,4 +84,30 @@ describe("history", () => {
     expect(retried[0].outcome).toBeDefined();
     expect(retried[1]).toBe(resolved[1]);
   });
+
+  it("retains order and identity for ineligible and unchanged runs", async () => {
+    const future = inferenceRun({
+      id: "future",
+      head_block: 20,
+      target_block: 25,
+    });
+    const otherChain = inferenceRun({ id: "polygon", chain: "polygon" });
+    const complete = inferenceRun({
+      id: "complete",
+      outcome: outcome(),
+    });
+    const resolve = vi.fn();
+
+    const runs = [future, otherChain, complete];
+    const retained = await resolvePendingRuns(
+      runs,
+      "ethereum",
+      24,
+      resolve,
+    );
+
+    expect(retained).toEqual(runs);
+    retained.forEach((run, index) => expect(run).toBe(runs[index]));
+    expect(resolve).not.toHaveBeenCalled();
+  });
 });

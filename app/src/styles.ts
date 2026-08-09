@@ -98,6 +98,7 @@ export const styles = StyleSheet.create({
     padding: 12,
   },
   storageErrorText: { color: colors.errorInk, fontSize: 12 },
+  refreshButton: { minHeight: 46, paddingHorizontal: 14 },
   summaryCard: {
     alignItems: "center",
     borderRadius: radii.medium,

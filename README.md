@@ -51,7 +51,9 @@ The [CLI reference](docs/KAIROS.md#cli) defines the exact command contracts.
 
 The private Expo 55 app in `app` reads the selected EVM chain directly, prepares features in
 TypeScript, runs a bundled ExecuTorch model on device, and keeps history and resolved outcomes in
-local storage. It has no KAIROS inference server or fallback.
+local storage. Analytics resolves eligible pending outcomes only when the user presses **Refresh
+outcomes**; failed or future outcomes remain persisted and retryable. The app has no KAIROS
+inference server or fallback.
 
 The app requires a generated model bundle. Once the twelve final artifact UUIDs exist, create the
 strict three-chain by four-horizon `MOBILE.yaml` roster and export all assets atomically:

@@ -2,10 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-import {
-  AppHeader,
-  type RpcStatus,
-} from "./src/components/AppHeader";
 import { BottomTabs, type AppTab } from "./src/components/BottomTabs";
 import type { Chain, Horizon } from "./src/domain";
 import {
@@ -17,7 +13,6 @@ import {
 } from "./src/history";
 import {
   createInferenceEngine,
-  type ChainSnapshot,
   type InferenceEngine,
 } from "./src/inference";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
@@ -49,8 +44,6 @@ export default function App() {
   const [inference, setInference] = useState<InferenceState>({
     status: "idle",
   });
-  const [rpcStatus, setRpcStatus] = useState<RpcStatus>("checking");
-  const [snapshot, setSnapshot] = useState<ChainSnapshot | null>(null);
   const [runs, setRuns] = useState<InferenceRun[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const activeEngine = useRef<ActiveEngine | null>(null);
@@ -88,21 +81,6 @@ export default function App() {
     });
   }
 
-  function resolveOutcomes(engine: ActiveEngine, headBlock: number): void {
-    void commitRuns(
-      (current) =>
-        resolvePendingRuns(
-          current,
-          engine.chain,
-          headBlock,
-          engine.engine.resolveOutcome,
-        ),
-      () => activeEngine.current === engine,
-    ).catch(() => {
-      // Pending chain outcomes remain retryable on the next successful poll.
-    });
-  }
-
   useEffect(() => {
     void enqueueOrderedUpdate(async () => {
       try {
@@ -125,21 +103,6 @@ export default function App() {
       engine,
     };
     activeEngine.current = current;
-    setRpcStatus("checking");
-    const onStatus = (status: RpcStatus) => {
-      if (activeEngine.current !== current) return;
-      setRpcStatus(status);
-      if (status === "offline") setSnapshot(null);
-    };
-    engine.watchBlocks(
-      (nextSnapshot) => {
-        if (activeEngine.current !== current) return;
-        onStatus("live");
-        setSnapshot(nextSnapshot);
-        resolveOutcomes(current, nextSnapshot.head_block);
-      },
-      () => onStatus("offline"),
-    );
 
     return () => {
       if (activeEngine.current === current) {
@@ -169,8 +132,6 @@ export default function App() {
       setInference({ status: "idle" });
       if (chainChanged) {
         activeEngine.current = null;
-        setRpcStatus("checking");
-        setSnapshot(null);
       }
       setSelection(intended);
     });
@@ -178,6 +139,29 @@ export default function App() {
 
   function selectChain(chain: Chain): void {
     select({ ...selectionState.current.intended, chain });
+  }
+
+  async function refreshOutcomes(): Promise<void> {
+    const selected = selectionState.current.applied;
+    const current = activeEngine.current;
+    if (current === null || current.chain !== selected.chain) {
+      throw new Error("Could not connect to the selected chain.");
+    }
+    const isCurrent = () =>
+      activeEngine.current === current &&
+      selectionState.current.applied === selected;
+    const headBlock = await current.engine.currentHead();
+    if (!isCurrent()) return;
+    await commitRuns(
+      (storedRuns) =>
+        resolvePendingRuns(
+          storedRuns,
+          current.chain,
+          headBlock,
+          current.engine.resolveOutcome,
+        ),
+      isCurrent,
+    );
   }
 
   async function runInference() {
@@ -221,11 +205,8 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar backgroundColor={colors.navy} barStyle="light-content" />
-      <View style={styles.app}>
-        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
-          <AppHeader status={rpcStatus} />
-        </SafeAreaView>
+      <StatusBar backgroundColor={colors.background} barStyle="dark-content" />
+      <SafeAreaView edges={["top"]} style={styles.app}>
         <View style={styles.content}>
           {tab === "inference" ? (
             <InferenceScreen
@@ -237,7 +218,6 @@ export default function App() {
               }
               onRun={() => void runInference()}
               onRunAgain={() => setInference({ status: "idle" })}
-              snapshot={snapshot}
               state={inference}
             />
           ) : (
@@ -246,6 +226,7 @@ export default function App() {
               initialHorizon={selection.horizon}
               loadError={loadError}
               onChainChange={selectChain}
+              onRefresh={refreshOutcomes}
               runs={runs}
             />
           )}
@@ -253,14 +234,13 @@ export default function App() {
         <SafeAreaView edges={["bottom"]} style={styles.tabSafeArea}>
           <BottomTabs onSelect={setTab} selected={tab} />
         </SafeAreaView>
-      </View>
+      </SafeAreaView>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   app: { backgroundColor: colors.background, flex: 1 },
-  headerSafeArea: { backgroundColor: colors.navy },
   content: { flex: 1 },
   tabSafeArea: { backgroundColor: colors.surface },
 });

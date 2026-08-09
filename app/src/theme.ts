@@ -8,8 +8,6 @@ export const colors = {
   blueSoft: "#EAF1FF",
   teal: "#14B8A6",
   tealSoft: "#E7F9F6",
-  green: "#22C55E",
-  amber: "#F59E0B",
   amberSoft: "#FAD58A",
   red: "#EF4444",
   redSoft: "#FEF2F2",

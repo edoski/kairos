@@ -288,6 +288,13 @@ def _origin_rows(backing: _HistoricalBacking, window: BlockWindow) -> _IntVector
 def _minimum_outcomes(
     base_fees: _IntVector, origin_rows: _IntVector, *, horizon_blocks: int
 ) -> tuple[_IntVector, _IntVector]:
-    offsets = np.arange(1, horizon_blocks + 1, dtype=np.int64)
-    outcomes = base_fees[origin_rows[:, None] + offsets]
-    return outcomes.argmin(axis=1), outcomes.min(axis=1)
+    first_outcome = origin_rows[0] + 1
+    stop = first_outcome + origin_rows.size
+    labels = np.zeros(origin_rows.size, dtype=np.int64)
+    minima = base_fees[first_outcome:stop].copy()
+    for action in range(1, horizon_blocks):
+        outcomes = base_fees[first_outcome + action : stop + action]
+        improved = outcomes < minima
+        labels[improved] = action
+        np.copyto(minima, outcomes, where=improved)
+    return labels, minima

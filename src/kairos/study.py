@@ -45,8 +45,8 @@ class Study(StrictFrozenRecord):
     def validate_trials(self) -> Self:
         if len(self.trials) != len(self.request.methods):
             raise ValueError("trials must align with request methods")
-        for index, result in enumerate(self.trials):
-            if result.completed_epochs > self.request.methods[index].fit.max_epochs:
+        for method, result in zip(self.request.methods, self.trials):  # noqa: B905
+            if result.completed_epochs > method.fit.max_epochs:
                 raise ValueError("completed_epochs must not exceed method.fit.max_epochs")
         return self
 

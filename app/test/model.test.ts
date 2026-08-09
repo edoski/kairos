@@ -85,6 +85,51 @@ describe("model runtime", () => {
     expect(module.delete).toHaveBeenCalledOnce();
   });
 
+  it("serializes native work across runtime replacement", async () => {
+    const forward = deferred<NativeTensor[]>();
+    const events: string[] = [];
+    const oldModule = native(async () => {
+      events.push("old forward");
+      return forward.promise;
+    });
+    oldModule.delete.mockImplementation(() => events.push("old delete"));
+    const newModule = native(async () => {
+      events.push("new forward");
+      return [output([0, 1], [1, 2]), output([0.25], [1])];
+    });
+    newModule.load.mockImplementation(async () => {
+      events.push("new load");
+    });
+    const oldRuntime = createModelRuntime(() => oldModule);
+    const newRuntime = createModelRuntime(() => newModule);
+
+    const oldRun = oldRuntime.execute(
+      modelSelection(2),
+      new Float32Array([1, 2]),
+    );
+    await vi.waitFor(() => expect(oldModule.forward).toHaveBeenCalledOnce());
+    const oldDisposal = oldRuntime.dispose();
+    const newRun = newRuntime.execute(
+      modelSelection(2),
+      new Float32Array([1, 2]),
+    );
+    await flushMicrotasks();
+    expect(events).toEqual(["old forward"]);
+
+    forward.resolve([
+      output([0, 1], [1, 2]),
+      output([0.25], [1]),
+    ]);
+    await Promise.all([oldRun, oldDisposal, newRun]);
+    expect(events).toEqual([
+      "old forward",
+      "old delete",
+      "new load",
+      "new forward",
+    ]);
+    await newRuntime.dispose();
+  });
+
   it("serializes replacement and disposal while preserving copied outputs", async () => {
     const forward = deferred<NativeTensor[]>();
     const events: string[] = [];

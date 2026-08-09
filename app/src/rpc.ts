@@ -177,7 +177,6 @@ export function createChainSession(
     onBlock: (block: BlockRow) => void,
     onError?: (error: unknown) => void,
   ): void {
-    unwatch?.();
     unwatch = client.watchBlocks({
       emitOnBegin: true,
       onBlock: (block) => onBlock(blockRow(block)),

@@ -1,23 +1,20 @@
 import type { BlockRow } from "./domain";
 
-export const FEATURE_NAMES = [
-  "log_base_fee_per_gas",
-  "gas_utilization",
-  "log_exact_forming_base_fee_per_gas",
-  "log_gas_limit",
-  "log1p_tx_count",
-  "log1p_effective_priority_fee_per_gas_p50",
-  "log1p_effective_priority_fee_per_gas_p90",
-  "block_interval_seconds",
-  "hour_sin",
-  "hour_cos",
-  "dow_sin",
-  "dow_cos",
-] as const;
+export type FeatureName =
+  | "log_base_fee_per_gas"
+  | "gas_utilization"
+  | "log_exact_forming_base_fee_per_gas"
+  | "log_gas_limit"
+  | "log1p_tx_count"
+  | "log1p_effective_priority_fee_per_gas_p50"
+  | "log1p_effective_priority_fee_per_gas_p90"
+  | "block_interval_seconds"
+  | "hour_sin"
+  | "hour_cos"
+  | "dow_sin"
+  | "dow_cos";
 
-export type FeatureName = (typeof FEATURE_NAMES)[number];
-
-export type FeatureManifest = {
+type FeatureManifest = {
   name: FeatureName;
   mean: number;
   standard_deviation: number;
@@ -28,26 +25,19 @@ export type ChainManifest = {
   features: readonly FeatureManifest[];
 };
 
-const P50_PRIORITY_FEE_FEATURE =
-  "log1p_effective_priority_fee_per_gas_p50" satisfies FeatureName;
-const P90_PRIORITY_FEE_FEATURE =
-  "log1p_effective_priority_fee_per_gas_p90" satisfies FeatureName;
-const INTERVAL_FEATURE =
-  "block_interval_seconds" satisfies FeatureName;
-
 export type PriorityFeeRewards = readonly [p50: bigint, p90: bigint];
 
 export function needsPredecessor(manifest: ChainManifest): boolean {
   return manifest.features.some(
-    (feature) => feature.name === INTERVAL_FEATURE,
+    (feature) => feature.name === "block_interval_seconds",
   );
 }
 
 export function usesPriorityFees(manifest: ChainManifest): boolean {
   return manifest.features.some(
     (feature) =>
-      feature.name === P50_PRIORITY_FEE_FEATURE ||
-      feature.name === P90_PRIORITY_FEE_FEATURE,
+      feature.name === "log1p_effective_priority_fee_per_gas_p50" ||
+      feature.name === "log1p_effective_priority_fee_per_gas_p90",
   );
 }
 
@@ -93,18 +83,18 @@ function rawFeature(
     case "log_base_fee_per_gas":
       return positiveLog(block.baseFeePerGas);
     case "gas_utilization":
-      return gasUtilization(block);
+      return Number(block.gasUsed) / Number(block.gasLimit);
     case "log_exact_forming_base_fee_per_gas":
       return positiveLog(formingChildBaseFee(block));
     case "log_gas_limit":
       return positiveLog(block.gasLimit);
     case "log1p_tx_count":
       return Math.log1p(block.transactionCount);
-    case P50_PRIORITY_FEE_FEATURE:
+    case "log1p_effective_priority_fee_per_gas_p50":
       return Math.log1p(Number(priorityFeeRewards![0]));
-    case P90_PRIORITY_FEE_FEATURE:
+    case "log1p_effective_priority_fee_per_gas_p90":
       return Math.log1p(Number(priorityFeeRewards![1]));
-    case INTERVAL_FEATURE: {
+    case "block_interval_seconds": {
       return Number(block.timestamp - predecessor.timestamp);
     }
     case "hour_sin":
@@ -120,10 +110,6 @@ function rawFeature(
 
 function positiveLog(value: bigint): number {
   return Math.log(Number(value));
-}
-
-function gasUtilization(block: BlockRow): number {
-  return Number(block.gasUsed) / Number(block.gasLimit);
 }
 
 function formingChildBaseFee(block: BlockRow): bigint {

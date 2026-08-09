@@ -1,4 +1,4 @@
-import type { Chain, Horizon } from "./domain";
+import type { Horizon } from "./domain";
 import type { InferenceRun } from "./history";
 
 export type WaitBucket = {
@@ -17,14 +17,6 @@ const RUN_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   month: "short",
 });
 const GWEI = 1_000_000_000;
-
-export function runsForSelection(
-  runs: readonly InferenceRun[],
-  chain: Chain,
-  horizon: Horizon,
-): InferenceRun[] {
-  return runs.filter((run) => run.chain === chain && run.K === horizon);
-}
 
 export function summarizeRuns(runs: readonly InferenceRun[]) {
   const realized = runs.flatMap((run) => {

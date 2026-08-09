@@ -7,7 +7,6 @@ import {
   formatGwei,
   formatRunDate,
   realizedSavingsPercent,
-  runsForSelection,
   summarizeRuns,
   type WaitBucket,
   waitBuckets,
@@ -66,7 +65,7 @@ const AXIS_PROPS = {
 
 function niceStep(range: number): number {
   const rough = range / 3;
-  const magnitude = 10 ** Math.floor(Math.log10(Math.max(rough, 1e-9)));
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
   const normalized = rough / magnitude;
   const multiplier =
     normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
@@ -90,8 +89,7 @@ function chartScale(values: readonly number[]) {
     negativeStepValue: step,
     noOfSections: positiveSections,
     noOfSectionsBelowXAxis: negativeSections,
-    stepHeight:
-      CHART_HEIGHT / Math.max(positiveSections + negativeSections, 1),
+    stepHeight: CHART_HEIGHT / (positiveSections + negativeSections),
     stepValue: step,
   };
 }
@@ -424,7 +422,9 @@ export function AnalyticsScreen({
   const [networkPickerOpen, setNetworkPickerOpen] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? null;
-  const graphRuns = runsForSelection(runs, chain, analyticsHorizon);
+  const graphRuns = runs.filter(
+    (run) => run.chain === chain && run.K === analyticsHorizon,
+  );
   const buckets = waitBuckets(graphRuns, analyticsHorizon);
   const summary = summarizeRuns(graphRuns);
 

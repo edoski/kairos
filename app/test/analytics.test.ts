@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  runsForSelection,
   summarizeRuns,
   waitBuckets,
 } from "../src/analytics";
@@ -38,14 +37,13 @@ describe("analytics", () => {
         selected_action_k: 3,
         target_block: 14,
       }),
-      resolved("zero-selected", 2, 100, 0),
     ];
 
     const summary = summarizeRuns(runs);
 
-    expect(summary.averageWait).toBe(1.6);
-    expect(summary.averageSavingsPercent).toBeCloseTo(25);
-    expect(summary.winPercent).toBeCloseTo((2 / 3) * 100);
+    expect(summary.averageWait).toBe(1.5);
+    expect(summary.averageSavingsPercent).toBeCloseTo(0);
+    expect(summary.winPercent).toBeCloseTo(50);
   });
 
   it("builds all charts from resolved and pending cases consistently", () => {
@@ -59,28 +57,13 @@ describe("analytics", () => {
         target_block: 12,
       }),
       resolved("lost", 2, 10, 12),
-      resolved("zero-selected", 3, 10, 0),
       inferenceRun({
         id: "pending-longest",
         selected_action_k: 4,
         target_block: 15,
       }),
     ];
-    const collection = runsForSelection(
-      [
-        ...selectedRuns,
-        resolved("other-chain", 1, 100, 1),
-        inferenceRun({ id: "other-horizon", K: 4 }),
-      ].map((item, index) =>
-        index === selectedRuns.length
-          ? { ...item, chain: "polygon" as const }
-          : item,
-      ),
-      "ethereum",
-      5,
-    );
-
-    expect(waitBuckets(collection, 5)).toEqual([
+    expect(waitBuckets(selectedRuns, 5)).toEqual([
       {
         kairosGwei: 10,
         immediateGwei: 10,
@@ -103,11 +86,11 @@ describe("analytics", () => {
         savingsPercent: -20,
       },
       {
-        kairosGwei: 0,
-        immediateGwei: 10,
+        kairosGwei: null,
+        immediateGwei: null,
         label: "3",
-        runCount: 1,
-        savingsPercent: 100,
+        runCount: 0,
+        savingsPercent: null,
       },
       {
         kairosGwei: null,

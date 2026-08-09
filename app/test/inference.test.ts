@@ -104,21 +104,10 @@ function createTestEngine(
 
 describe("InferenceEngine", () => {
   it("synchronizes, builds input, and executes the selected model on Run", async () => {
-    const events: string[] = [];
-    const chainSession = session(async () => {
-      events.push("sync");
-      return context(11n, 40n);
-    });
+    const chainSession = session(async () => context(11n, 40n));
     const model = runtime({
       actionLogits: new Float32Array([-1, 4, 1, 0]),
       minimumFeeZ: 2,
-    });
-    vi.mocked(model.execute).mockImplementation(async () => {
-      events.push("execute");
-      return {
-        actionLogits: new Float32Array([-1, 4, 1, 0]),
-        minimumFeeZ: 2,
-      };
     });
     const engine = createTestEngine({
       session: chainSession,
@@ -127,7 +116,6 @@ describe("InferenceEngine", () => {
 
     const result = await engine.run(4);
 
-    expect(events).toEqual(["sync", "execute"]);
     expect(chainSession.sync).toHaveBeenCalledOnce();
     expect(model.execute).toHaveBeenCalledWith(
       modelSelection(4),

@@ -39,14 +39,7 @@ describe("history", () => {
     expect(first).toEqual({
       id: expect.any(String),
       ran_at: expect.any(String),
-      chain: "ethereum",
-      K: 5,
-      artifact_id: "artifact-5",
-      head_block: 100,
-      head_hash: "0xhead",
-      selected_action_k: 2,
-      target_block: 103,
-      predicted_minimum_base_fee_per_gas: 10_000_000_000,
+      ...result,
     });
     expect(first.id).not.toBe(second.id);
     expect(retained).toEqual(existing);

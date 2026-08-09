@@ -375,7 +375,8 @@ else:
 
 ### Historical tensors and targets
 
-One lazy historical item has:
+`HistoricalDataset.__getitem__()` returns one integer index. The loader's device-side collate
+function turns a batch of these indices into a tensor mapping. One row within that mapping has:
 
 | Value | Shape | Dtype | Meaning |
 | --- | --- | --- | --- |
@@ -385,7 +386,7 @@ One lazy historical item has:
 | `base_fees` | `[K]` | int64 | `[B_i(0), ..., B_i(K-1)]`. |
 | `origin_block` | scalar | int64 | Closed parent `h_i`. |
 
-Collation produces `[B,C,F]`, `[B]`, `[B]`, `[B,K]`, and `[B]`.
+The complete collated mapping has shapes `[B,C,F]`, `[B]`, `[B]`, `[B,K]`, and `[B]`.
 
 For origin `i`, the positive Int64 outcome vector is
 `[B_i(0), ..., B_i(K-1)]`. The [canonical notation](#decision-and-target-notation) defines its
@@ -555,10 +556,11 @@ Temporal preparation has two direct paths: historical fixed-block examples and l
 
 `prepare_fit_history(blocks, experiment)` validates complete context/outcome support, fits state from training support only, and returns training and validation `HistoricalDataset` values with `FeatureState` and `TargetState`. `prepare_historical_window(blocks, experiment, window, *, feature_state, target_state)` prepares an exact testing window with persisted state after complete validation outcomes.
 
-Preparation keeps the first backing block, contiguous CPU float32 feature rows, and int64 base
-fees. Each dataset stores its first origin row and sample count plus int64 `k_i*` labels and
-float32 `z_i` targets. `HistoricalDataset.__getitem__()` derives the origin row and block, then
-slices one `[C,F]` input and `[K]` outcome on demand.
+Preparation keeps the first backing block, contiguous float32 feature rows, and int64 base fees.
+Each dataset stores its first origin row and sample count plus int64 `k_i*` labels and float32
+`z_i` targets. Historical execution moves that compact state to the execution device once. Each
+dataset item is an integer index; device-side loader collation derives origin rows and blocks,
+gathers batched `[C,F]` inputs and `[K]` outcomes, and yields their tensor mapping.
 
 The ordered feature tuple is request authority. Raw features are assembled in that order as Float64; training-support population state uses `ddof=0`, rejects constants, and transforms to finite C-contiguous float32. Outcomes remain positive int64 `B_i(k)` values. The [scientific contract](#causal-features) owns formulas, causality, target construction, and complete-outcome role boundaries.
 
@@ -1049,10 +1051,11 @@ real-artifact acceptance boundary.
 
 The internal installed-executable profile fits LSTMs in `32-true`, Transformers in BF16 mixed
 precision, and Transformer-LSTMs in BF16 with their recurrent layer in float32. It also fixes fit
-and selected-validation batch size 64 and held-out evaluation batch size 512; four persistent
-pinned-memory loader workers with prefetch factor 2; `high` float32 matrix-multiplication precision,
-which owns CUDA matmul TF32; and
-a separate cuDNN TF32 flag for float32 operations. Each fit calls `seed_everything(seed)` once.
+and selected-validation batch size 64 and held-out evaluation batch size 512. Historical backing,
+labels, and targets move to the execution device once; zero-worker loaders shuffle indices and
+collate complete batches on that device. `high` float32 matrix-multiplication precision owns CUDA
+matmul TF32, and a separate cuDNN flag enables TF32 for float32 operations. Each fit calls
+`seed_everything(seed)` once.
 Lightning owns deterministic
 setup through `Trainer(deterministic=True)` and norm clipping through the configured
 `gradient_clip_norm`; shuffled loading uses the seeded global Torch RNG. These are code facts, not

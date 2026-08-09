@@ -2,10 +2,11 @@
 
 Status: planning only; implementation paused pending approval of the proposed substantial slices
 
-Authority: the codebase-wide audit pinned to
-`6da8bf7e2ba1304f9ac009472c96965f89265838` and the user's 2026-08-09 annotations.
-This ledger is the slice review Spec. `AGENTS.md`, `docs/CONTEXT.md`, ADR 0006, and ADR 0007 are
-the Standards sources.
+Authority: two codebase-wide audits, initially pinned to
+`6da8bf7e2ba1304f9ac009472c96965f89265838` and re-audited at
+`1c3745fddb93e85ff5d84e596ccf78f47ff9113b`, plus the user's 2026-08-09 annotations.
+Product code did not change between those pins. This ledger is the slice review Spec. `AGENTS.md`,
+`docs/CONTEXT.md`, ADR 0006, and ADR 0007 are the Standards sources.
 
 ## Pre-run state
 
@@ -62,35 +63,40 @@ commit. Test-deletion estimates overlap where noted.
 | Remove retention-time Study revalidation | Production `-1`, tests neutral | Yes. Publication remains the sole durable authority. | Recommend |
 | Reject a known evaluation collision before inference | Roughly neutral; mostly moved code | Yes. The control flow states the real precondition first. | Recommend |
 | Add another late bundle collision refusal | Program delta `0` | No. It duplicates the early check, narrows but does not eliminate the race, and covers implausible concurrent publication of one minted UUID. | Rejected |
-| Trust canonical experiment/figure manifests and remove internal Study relationship rechecks | Production/tests `-40..80` | Yes. Fixed upstream authors own the roster. | Recommend |
+| Trust canonical experiment/figure manifests and remove internal Study, roster, label, and completeness rechecks | Production `-70..95`, tests `-75..85` | Yes. Fixed upstream authors own these facts. | Recommend |
 | Replace balanced allocation packing with ordinary chunks | Production/tests/docs `-35..70` | Yes. It removes an optimization policy and its matrix. | Recommend |
+| Flatten the one-owner remote resource record and remove the duplicated job-journal cell label | Production/config `-3..6`, tests `-8..15` | Yes. One raw record and one journal key own each fact. | Recommend |
 | Quote the Slurm allocation log path | Neutral | No material simplification; fixes one external-adapter defect. | Recommend as correctness work |
-| Remove benchmark liveness polling from the measured hot loop | Production/tests `-5..15` | Yes. It makes the measured boundary direct. | Recommend |
-| Move bundle mechanics to owner tests and shrink downstream pipeline monoliths | Tests `-140..200` net; estimates overlap | Yes. Tests stop replaying trusted upstream modules. | Recommend |
-| Localize app styles | Roughly neutral; code moves | Yes. It shrinks a 109-key shallow global interface. | Recommend |
+| Remove benchmark liveness polling and canonical-manifest revalidation | Production `-30..45`, tests `-20..35` | Yes. The hot path and campaign setup become direct while the two-ID association guard stays. | Recommend |
+| Remove dead training-loss metric collection and repeated derived training definitions | Production/tests `-10..20` | Yes. Nothing consumes the metric; one hydrated definition remains. | Recommend |
+| Move bundle mechanics to owner tests and shrink downstream pipeline monoliths | Tests `-105..145` net; estimates overlap | Yes. Tests stop replaying trusted upstream modules while one compact integration smoke stays. | Recommend |
+| Localize app styles | Production `0..+10`; about 300 lines move | No. The current file already has coherent screen blocks; moving them adds namespaces and files. | Rejected |
 | Add local accessibility semantics and focused tests | Program delta `0` | No. This expands a no-user demo. | Rejected |
-| Remove shallow app wrappers, type rosters, impossible chart guards, and choreography assertions | Production/tests `-15..35` | Yes. | Approved if output-neutral |
-| Remove redundant strict flags, casts, `zip(strict=True)`, inert checkpoint options, and test ceremony | Production/tests `-35..70` | Yes. | Approved if output-neutral |
+| Remove shallow app wrappers/constants, unused exports, impossible chart guards, and choreography assertions | Production `-15..25`, tests `-25..40` | Yes. | Approved if output-neutral |
+| Vectorize minimum-outcome calculation in one expression | Production `-7` | Yes. It removes arbitrary chunk policy; peak temporary memory rises to about 341 MiB for the largest authored window. | Recommend with resource tradeoff |
+| Remove redundant strict flags, casts, internal equal-length checks, one-call helpers, inert checkpoint options, and test ceremony | Production/tests `-45..85` | Yes. | Approved if output-neutral |
 | Delete repository-unused `reduce_artifact_validation()` and its prose/test call | Production/docs/tests `-10..20` | Yes. Existing loaders/reducer own all behavior. | Recommend clean break |
-| Add direct exporter dependency | Metadata `+1` | No. It fixes packaging ownership. | Recommend as completeness work |
+| Delete the completed validation-evidence process ledger after moving its still-live protocol facts into canonical docs | Documentation `-369` | Yes. Git retains implementation history; active contracts belong in `KAIROS.md`, `CONTEXT.md`, and ADRs. | Recommend after contract check |
+| Add direct exporter dependency | Metadata/lock roughly `+3` | No. It fixes packaging ownership. | Recommend as completeness work |
 | Remove the unsupported MIT metadata claim | Metadata `-1` | Yes, narrowly: the package stops claiming authority not established by a license file or ownership decision. | Approved |
 | Repair the stale research citation and context-study prose | Neutral to small increase | No code simplification. It restores contract accuracy. | Recommend |
 
-The only meaningful code addition is the native cross-runtime lifecycle test; production queue
-ownership merely moves. Slurm quoting changes one expression, the sample-rate owner replaces a
-duplicate literal, and the exporter dependency adds one metadata line. No new production
-validation machinery remains in the plan.
+The meaningful additions are the native cross-runtime lifecycle test, a split early/late Evaluation
+collision test, and exporter dependency metadata/lock entries. Production queue ownership merely
+moves. The Evaluation preflight adds about two production lines to put a real precondition before
+expensive work. No new production validation machinery remains in the plan.
 
 ### Estimated net program delta
 
 This estimate excludes this temporary ledger and ignored/generated environment state. It counts
-the overlapping 60–100-line bundle-test estimate only once inside the larger experiment-test
-refactor.
+overlapping experiment-test deletions only once.
 
-- Production, configuration, and durable documentation: roughly 30–70 fewer lines.
-- Tests: roughly 210–300 fewer lines. The main reduction is replacing downstream pipeline
+- Production, configuration, and current durable documentation: roughly 120–190 fewer lines.
+- Tests: roughly 250–330 fewer lines. The main reduction is replacing downstream pipeline
   monoliths and tampering/choreography matrices with owner tests.
-- Total: roughly **240–370 fewer tracked lines**, with a planning midpoint near **305 fewer lines**.
+- Completed process-ledger residue: 369 fewer documentation lines after its live facts are checked
+  into canonical documentation.
+- Total: roughly **740–890 fewer tracked lines**, with a planning midpoint near **815 fewer lines**.
 
 The estimate assumes accessibility stays excluded and the MIT metadata claim is removed. Exact
 deltas are recorded per implementation commit; deletion count is not an acceptance criterion.
@@ -227,7 +233,15 @@ Status: proposed, awaiting approval
 
 - Add no expected-set checks to experiment stages or figures.
 - Remove `c_study` expected-set and field-by-field family/context/source/Method revalidation after
-  strict manifest and Study loading; retain the frozen context-selection rule.
+  strict manifest and Study loading, including the second `C=25` assertion; retain the frozen
+  context-selection rule.
+- In all four figure scripts, remove curated cell-parse errors, one-trial rechecks, inferred
+  completeness checks, and impossible empty/loop-result guards. Project canonical labels and
+  rolling horizons directly. Keep every plotting calculation and valid-data branch.
+- Direct-index canonical family/display/feature style tables instead of providing fallbacks for
+  labels the fixed publishers cannot emit.
+- In fresh tune-cell authoring, trust each fixed producer to emit unique new labels. Retain the
+  intersection check when HPO `extend` appends to an existing active bundle.
 - Delete mutation tests that exist only for those upstream-owned relationships.
 - Update `docs/KAIROS.md` to `C=25`, 13 contexts, 117 cells, nine reused Studies, 108 new Studies,
   and the existing 5% chain-mean selection rule.
@@ -247,6 +261,8 @@ Status: proposed, awaiting approval
 - Fixed upstream authors remain responsible for complete rosters.
 - Typed manifests and Studies are trusted instead of rechecked against the same pipeline's request
   fields.
+- Manually edited or partially manufactured canonical manifests may fail later with ordinary
+  lookup/loader errors rather than tailored messages.
 
 ### Expected outcome
 
@@ -256,6 +272,7 @@ matches the implemented context protocol.
 ### Checks
 
 - Unchanged complete-roster manifests, selection, tables, and deterministic figures.
+- Byte-compare deterministic vector PDFs from a small canonical fixture before and after.
 - Focused experiment/figure tests, full Python suite, and static/dead-code checks.
 
 ### Dependencies and gates
@@ -273,7 +290,8 @@ Status: proposed, awaiting approval
 - Reject a pre-existing canonical Evaluation before corpus/artifact loading or inference; retain the
   late pre-rename race guard.
 - Delete repository-unused `reduce_artifact_validation()`, its API prose, and its dedicated test
-  call. Existing artifact loading and observation reduction remain authoritative.
+  call. Inline the artifact-result loader if that deletion leaves it with one caller. Existing
+  artifact loading and observation reduction remain authoritative.
 
 ### Non-goals
 
@@ -317,8 +335,15 @@ Status: proposed, awaiting approval
 - Keep ADR 0007's one-to-four-process allocation contract and one GPU per exclusive step.
 - Replace count-bearing `gres` configuration plus `_scaled_gres()` with a count-free `gres_name`;
   render `:1` per step and `:<task_count>` per allocation.
+- Flatten the behavior-free, one-owner `_Resources` record into `_Remote` and remove the matching
+  `resources:` level from `REMOTE.yaml` and fixtures. Keep strict raw hydration and every resource
+  value configurable.
+- Remove the duplicate human-readable `cell` field from temporary `jobs.tsv`; `cells.tsv[row]`
+  already owns it. Keep `job_id`, `slot`, and `row` for scheduler lookup, logs, and restart.
 - Quote the allocation-level Slurm output path and strengthen the existing fixture with a space.
 - Remove redundant strict call flags whose owning Pydantic records already enforce strict parsing.
+- Remove default workflow discriminator arguments and the lone direct CLI runner from typed test
+  fixtures where shared helpers/defaults already own them.
 - Update only the affected operator documentation and golden script.
 
 ### Non-goals
@@ -344,7 +369,7 @@ inside each Slurm step is unchanged.
 ### Checks
 
 - One-to-four task allocations, ordinary remainder chunk, spaced log path, GRES rendering, positive
-  job IDs, aggregate process failure, and `bash -n`.
+  job IDs, compact journal resume, aggregate process failure, and `bash -n`.
 - Focused execution/launch tests, CLI help, full Python suite, and static/dead-code checks.
 
 ### Dependencies and gates
@@ -362,11 +387,24 @@ Status: proposed, awaiting approval
 - Remove `process.poll()`/liveness checks from each measured active-loop cascade; retain checks
   before and after each phase.
 - Remove repeated `model.eval()` where the artifact loader already owns evaluation mode.
-- Keep the powermetrics sample rate in one owner and remove the exporter corpus-request cache;
-  repeated reads are acceptable and produce the same bundle.
+- Trust the canonical K-study and held-out publishers inside benchmark resolution: remove the
+  reconstructed nine-group/36-label roster check and the redundant per-artifact horizon assertion.
+  Retain the artifact/evaluation join because the operator supplies two independent experiment
+  IDs.
+- Load one benchmark Corpus per canonical architecture/chain group instead of supporting
+  impossible mixed-Corpus horizons.
+- Keep the powermetrics sample rate in one owner. Inline the one-call energy-settings builder, use
+  one concrete internal dictionary type, and remove defensive copies.
+- Trust atomic energy publication on resume instead of rescanning the three-file inventory. Keep
+  settings equality because settings are raw operator input and are not in `protocol.json`.
+- Remove the exporter Corpus-request cache; repeated small request reads are acceptable and produce
+  the same bundle.
+- Inline the exporter's one-call feature-contract copier without removing `_FeatureContract`, which
+  still owns cross-horizon equality, example geometry, and manifest data.
 - Remove only Pydantic call-site strict flags demonstrably duplicated by a
   `StrictFrozenRecord` configuration. Retain roster TypeAdapter strictness, Torch export strictness,
-  and equal-length checks at external/native boundaries.
+  and equal-length checks at external/native boundaries. Remove internal `zip(strict=True)` only
+  where both sequences were constructed from the same local sequence.
 - Replace derived first-horizon indexing with the existing horizon constant.
 - Remove tests that require zero-copy storage identity or freeze transition-era protocol field
   order; retain values, shapes, chronology, protocol round-trip/mismatch, and resume behavior.
@@ -384,6 +422,8 @@ Status: proposed, awaiting approval
 - Removing poll overhead intentionally changes future measured latency/energy values by measuring
   the declared model-compute loop more faithfully. It does not rewrite thesis data.
 - Powermetrics process health still fails the phase outside the measured inner loop.
+- Same-origin and coverage checks remain because they define the measured rolling scientific
+  quantity.
 - Native exporter boundary validation and XNNPACK parity remain.
 
 ### Expected outcome
@@ -395,6 +435,8 @@ assert observable data, not storage implementation.
 
 - Focused benchmark protocol, measurement, resume, reduction, and exporter tests.
 - A small timing-boundary test proves liveness polling is outside the measured loop.
+- Mismatched K-study/held-out IDs still fail; manually truncated canonical manifests no longer get
+  a dedicated failure mode.
 - Exporter test passes through its normal regenerated environment without a PATH workaround.
 - Full Python suite and static/dead-code checks.
 
@@ -409,12 +451,15 @@ Status: proposed, awaiting approval
 
 ### Scope
 
-- Add focused owner-level tests for `publish_bundle`, `close_bundle`, and shared reporting.
+- Add focused owner-level tests for `publish_bundle` and `close_bundle`; cover shared reporting once
+  through one public stage command instead of a separate generic reporting matrix.
 - Build minimal canonical upstream manifests/Studies directly in downstream stage tests.
 - Retain one compact whole-pipeline smoke test.
 - Delete repeated serialization dumps, publication choreography, and upstream pipeline replay.
-- Make shared fixture creation fail on accidental identifier collisions instead of silently
-  returning.
+- Use exclusive fixture creation directly; do not add old-fixture comparison machinery merely to
+  diagnose an accidental identifier collision.
+- Delete manual-corruption matrices for context Studies, partial closed feature/K-study manifests,
+  benchmark horizon labels, and other states that fixed canonical publishers cannot emit.
 
 ### Non-goals
 
@@ -431,7 +476,8 @@ Status: proposed, awaiting approval
 ### Expected outcome
 
 Downstream tests trust typed upstream boundaries. Generic bundle behavior is tested once at its
-owner. The suite loses roughly 140–200 lines and several repeated subprocess stages.
+owner. The suite loses roughly 105–145 non-overlapping lines here, plus impossible-state tests
+assigned to their product slices, and several repeated subprocess stages.
 
 ### Checks
 
@@ -442,22 +488,27 @@ owner. The suite loses roughly 140–200 lines and several repeated subprocess s
 
 - Runs after Slices 1, 3, 4, and 6 so tests target final owners once.
 
-## Slice 8 — App style locality and shallow cleanup
+## Slice 8 — App shallow cleanup
 
 Status: proposed, awaiting approval
 
 ### Scope
 
-- Move screen/component-specific styles beside their only consumers; retain `theme.ts` and only
-  genuinely shared layout styles.
 - Inline the one-line `runsForSelection` wrapper, replace the runtime-only feature-name roster with
-  a direct type union, remove impossible chart-scale guards, and remove inference-test event-log
-  choreography.
+  a direct type union, and inline the small feature-name constants and one-use gas-utilization
+  helper.
+- Make the repository-internal feature/target/mobile manifest aliases module-private; inline only a
+  one-use alias if the containing interface stays clearer.
+- Remove impossible chart-scale guards and unsupported same-engine block-watch replacement cleanup.
+- Remove inference-test event-log choreography, duplicated result-field reconstruction in the
+  history test, and analytics fixtures that inject impossible zero selected fees.
 
 ### Non-goals
 
-- No visual redesign, wrapper layer, component merger, memoization, App lifecycle controller, or
-  change to nested scrolling.
+- No style movement, visual redesign, wrapper layer, component merger, memoization, App lifecycle
+  controller, or change to nested scrolling. `styles.ts` already groups shared, analytics, and
+  inference declarations into coherent contiguous blocks; moving about 300 lines would add files
+  or namespaces without behavioral leverage.
 - No accessibility semantics or accessibility-specific tests. This is a no-user demo.
 - Do not replace the online mean recurrence in this program. Ordinary summation can change the
   last floating-point bits of displayed analytics and therefore does not meet the output-neutral
@@ -470,38 +521,55 @@ Status: proposed, awaiting approval
 
 ### Expected outcome
 
-Presentation details become local and the global style interface shrinks sharply.
+Small internal seams and duplicated test structures disappear. The already-coherent presentation
+layout stays untouched.
 
 ### Checks
 
 - Existing focused behavior tests.
 - App unit suite, TypeScript check, Expo Doctor, and diff check.
-- A simulator/device visual pass is required before this slice can be green because styles move.
 
 ### Dependencies and gates
 
 - Runs after Slice 2 to avoid revisiting the same app tests twice.
-- If no simulator/device is available, stop this slice at the external visual gate; do not claim
-  green from static tests alone.
+- No simulator/device visual gate is introduced because styles and rendered behavior do not move.
 
 ## Slice 9 — Output-neutral mechanical sweep and repository surface
 
-Status: approved conditionally, not started
+Status: previously scoped mechanical items approved conditionally; second-audit additions below
+remain proposed, awaiting approval
 
 ### Scope
 
 - Remove redundant internal `np.int64` casts and `zip(strict=True)` where BlockFrame/Polars already
   own exact column type and equal length.
+- New proposal: compute the minimum-outcome matrix directly instead of chunking it through an
+  arbitrary 4,096-row policy. Preserve exact values and first-tie behavior. Accept about 341 MiB of
+  temporary peak memory for the largest currently authored window; reject this item if
+  proportional full-suite and representative-memory checks show material pressure.
+- New proposal: inline the two owner-specific uniqueness checks and delete the shallow
+  `_require_unique` helper.
 - Remove redundant `strict=True` call flags where `StrictFrozenRecord` or
   `ExperimentManifest.model_config` already owns strict parsing.
-- Rename the ambiguous internal observation override and mark repository-private observation
-  helpers private.
-- Remove the redundant Study zip strictness and make candidate reload flow uniform.
+- New proposal: remove duplicate action-logit finiteness checking from observation collection;
+  `decode_action` remains its owner. Keep the independently required minimum-fee finiteness check.
+- New proposal: remove dead `training_total_loss` logging and its choreography test. Validation
+  loss, validation optimality gap, finite checks, early stopping, and selected-objective evidence
+  remain.
+- New proposal: derive one `TrainingDefinition` per artifact fit instead of rebuilding it through a
+  one-call helper and both association/module paths. Preserve seeding before module construction.
+- Remove the redundant Study zip strictness. Reuse the already-loaded first candidate rather than
+  performing a uniform extra disk hydration.
 - Remove inert checkpoint filename configuration, schema-irrelevant fixture rows, and assertions
   that pin Lightning choreography rather than outputs.
+- New proposal: delete the exporter raw-byte XNNPACK substring assertion after the real
+  program-delegation and host-execution gates.
 - Apply the output-neutral app removals assigned to Slice 8 if that slice is not approved, without
   moving styles.
 - Repair the stale research citation.
+- New proposal: after Slice 3 moves every still-live protocol fact into canonical docs, delete the
+  completed 369-line `docs/research/validation-evidence-implrevloop.md`. Git history remains the
+  record of its implementation/review loop and superseded operational detail.
 - Resolve the exporter direct dependency in Slice 6 or here, but only once.
 - Remove the unsupported MIT metadata claim; add no license file.
 
@@ -512,6 +580,8 @@ Status: approved conditionally, not started
   roster, window, feature value, prediction, action, metric, checkpoint, plot, or report change.
 - No removal of any protected guard.
 - No figure CLI helper; four tiny entry points are clearer than another shared abstraction.
+- No private-helper rename sweep; underscore-only churn does not simplify behavior.
+- No uniform first-candidate reload; one extra strict disk hydration is less direct.
 - No Apptainer smoke edit without its external build/test gate.
 - No license file or ownership assertion without supervisor/KTO confirmation.
 
@@ -550,12 +620,20 @@ scientific value or durable product.
 - No generic figure CLI helper: it saves repeated entry-point lines by adding a shallow concept.
 - No app analytics mean rewrite in the conditional mechanical sweep: floating-point order can
   change displayed values.
+- No app style relocation: the current file already has coherent screen sections, while relocation
+  adds files/namespaces and a visual verification gate for near-zero line reduction.
 - No accessibility expansion for the no-user demo.
 - No App transition controller, shared process-wide runtime/catalog, accessibility wrapper,
   network-picker variant abstraction, or speculative memoization.
 - No optional validation flags, compatibility readers, legacy aliases, or old-path shims.
 - No removal of `StrictFrozenRecord`, address helpers, observation reducers, execution interfaces,
   rolling reducers, artifact association, full-state resume, or atomic-publication guards.
+- No removal of benchmark same-origin/coverage checks or the two-experiment artifact/evaluation
+  join; those own the measured scientific quantity and raw operator pairing respectively.
+- No removal of mobile-export roster, chain, horizon, shared-feature, native-output, delegation, or
+  parity checks; `MOBILE.yaml` is raw operator input and export is a native boundary.
+- No bypass of `BlockFrame.select_range()` or constructor validation through private constructors,
+  flags, or `object.__new__`; that would add more machinery than it removes.
 - No Apptainer definition edit without a separately authorized immutable remote build and test.
 - No destructive cleanup of `tmp/`, canonical outputs, queued jobs, remote objects, or previous
   deployment images.

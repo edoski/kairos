@@ -1,6 +1,6 @@
 # Lean codebase implementation-review ledger
 
-Status: execution in progress; generated-environment preflight and Slices 1-2 green
+Status: execution in progress; generated-environment preflight and Slices 1-3 green
 
 Authority: two codebase-wide audits, initially pinned to
 `6da8bf7e2ba1304f9ac009472c96965f89265838` and re-audited at
@@ -308,7 +308,7 @@ canonical documentation contains the live scientific contract without completed 
 
 ## Slice 3 — Operational execution, benchmark, and mobile exporter
 
-Status: approved, not started
+Status: green after two correction loops
 
 ### Scope
 
@@ -536,6 +536,35 @@ not edit product code or review its own changes.
   validation ledger and unsupported MIT metadata claim are gone. The frozen predecessor source
   citation was verified and relabeled accurately.
 - Final slice delta: 18 files, 415 insertions and 1,243 deletions; net 828 tracked lines removed.
+
+### Slice 3
+
+- Baseline/status: `5ffd8ae0b1ee8e9138c5efe8bbabaa422f2f499a`, clean `main`; no scheduler,
+  login-node, powermetrics campaign, canonical output, device, image, remote, or CUDA branch mutation
+  allowed.
+- Implementer: `/root/slice3_operations_exporter_impl`. Initial commit:
+  `ea947430d0383d01049f1a61af231f236ef851b2`.
+- Reviewer: `/root/slice3_operations_exporter_review`, using separate Standards and Spec axes. The
+  first gate found that raw `gres_name` still accepted count-bearing values. Correction
+  `b97c6093ef21052699eb92e0fb3b4568f24f0a02` added a declarative count-free constraint, and the
+  second gate found its remaining ambiguous generic count form `gpu:1`. Correction
+  `5ce02906c9526351b7774904357aa90927a6e2bc` rejects numeric-only suffixes while retaining real
+  numeric-containing types such as `a100` and `2g.10gb`.
+- Final Slurm gates: balanced packing remained exact, including `9/4 -> 3+3+3` and
+  `45/4 -> 9x4+3x3`. For task counts one through four, generic and typed configurations retained
+  identical allocation count, partition, tasks, total GRES, exclusive one-GPU steps, CPUs, memory,
+  and time. Plain-path scripts stayed byte-identical; spaced-path scripts changed only by correct
+  full-path quoting and passed `bash -n`. Recovery retained `job_id`, `slot`, `row`, and `cell` and
+  successfully pruned/resubmitted a failed row.
+- Final benchmark/exporter gates: polling is absent only inside measured cascades, with collector
+  health checks at every phase boundary. Scientific joins, same-origin, coverage, resume, settings,
+  reducers, and atomic publication passed. The normal frozen exporter environment passed all 11
+  real XNNPACK delegation and host-execution tests with direct Pydantic ownership and no PATH
+  workaround.
+- Final checks: 112 root tests, 40 operational tests, and 11 exporter tests passed; CLI help, Ruff,
+  format, Pyright, configured Vulture, frozen lock, Bash, diff, and worktree checks passed.
+  Standards: zero findings. Spec: zero findings. `GREEN LIGHT`.
+- Final slice delta: 16 files, 216 insertions and 252 deletions; net 36 tracked lines removed.
 
 ## Final completion gate
 

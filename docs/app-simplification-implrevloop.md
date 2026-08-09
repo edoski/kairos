@@ -12,11 +12,12 @@ future implementation Spec.
 - Checkout: `/Users/edo/dev/python/kairos`
 - Branch: `main`
 - Immutable planning baseline: `5a1245908eb0e3150051155394db9dce2215d6be`
-- Status: clean; `main` is 22 commits ahead of `origin/main`
+- Status: clean; `main` matched the local `origin/main` ref before the planning commit
 - Worktrees: one pre-existing `main` worktree at `/Users/edo/dev/python/kairos`
 - Pre-existing branches: `main` and `codex/compact-cuda-execution`
-- Run-owned branches/worktrees: none yet
-- Planning mutation: this ledger only
+- Run-owned branch: `codex/app-simplification`
+- Run-owned worktree: `/Users/edo/dev/python/kairos-app-simplification`
+- Planning commit on `main`: `afda6171084b26a5b391ec292f2347d9e66abcdb`
 - Implementation checkout policy: use the safest repository-native isolation, a run-owned
   `codex/app-simplification` branch at `/Users/edo/dev/python/kairos-app-simplification`; keep the
   pre-existing `main` checkout and branches intact until final fast-forward integration
@@ -102,7 +103,19 @@ speculative configuration framework.
 
 ## Slice 1 — Explicit outcome refresh and native lifecycle deletion
 
-Status: authorized; queued after isolated run setup
+Status: authorized; implementation dispatch pending
+
+### Execution record
+
+- Immutable slice product baseline: `afda6171084b26a5b391ec292f2347d9e66abcdb`
+- Checkout: clean `codex/app-simplification` at
+  `/Users/edo/dev/python/kairos-app-simplification`
+- Allowed writer scope: Slice 1 app code, focused tests, README, and `docs/KAIROS.md`; the
+  implementer must not edit this ledger
+- Assigned implementer: `/root/slice1_implementer`
+- Reserved independent reviewer: `/root/slice1_reviewer`
+- External gates: no real RPC, simulator/device, generated asset, exporter, remote, Slurm, image,
+  push, or pull-request work
 
 ### Scope
 

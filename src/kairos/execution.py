@@ -16,7 +16,10 @@ from .records import StrictFrozenRecord
 
 _NonEmptyString = Annotated[str, Field(min_length=1)]
 _GresName = Annotated[
-    str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*(?::[A-Za-z0-9][A-Za-z0-9_.-]*)?$")
+    str,
+    StringConstraints(
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*(?::(?:[A-Za-z][A-Za-z0-9_.-]*|[0-9]+[A-Za-z_.-][A-Za-z0-9_.-]*))?$"
+    ),
 ]
 _NonNegativeInt = Annotated[int, Field(ge=0)]
 _PositiveInt = Annotated[int, Field(gt=0)]

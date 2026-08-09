@@ -166,7 +166,7 @@ def test_submit_rejects_relative_remote_image(
         submit_workflows((_request("train"),))
 
 
-@pytest.mark.parametrize("gres_name", ("gpu:a100:1", "gpu\n#SBATCH --time=00:01:00"))
+@pytest.mark.parametrize("gres_name", ("gpu:1", "gpu:a100:1", "gpu\n#SBATCH --time=00:01:00"))
 def test_submit_rejects_invalid_gres_name(
     gres_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

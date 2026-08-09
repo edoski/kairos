@@ -30,6 +30,10 @@ ROLLING_HORIZONS = (5, 4, 3, 2)
 def evaluate(request: EvaluateRequest, storage_root: Path) -> None:
     """Publish canonical observations for one exact artifact/window request."""
 
+    canonical = evaluation_directory(storage_root, request.evaluation_id)
+    if canonical.exists():
+        raise FileExistsError(canonical)
+
     scratch = storage_root / "evaluations" / f".{request.evaluation_id}"
     scratch.mkdir(parents=True)
 
@@ -60,7 +64,6 @@ def evaluate(request: EvaluateRequest, storage_root: Path) -> None:
     (scratch / "evaluation.json").write_text(request.model_dump_json(), encoding="utf-8")
     observations.write_parquet(scratch / "observations.parquet")
 
-    canonical = evaluation_directory(storage_root, request.evaluation_id)
     if canonical.exists():
         raise FileExistsError(canonical)
     scratch.rename(canonical)

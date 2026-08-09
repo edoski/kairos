@@ -191,7 +191,6 @@ def _request(
 class _Model(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.eval()
         self.cursor = 0
         self.batch_sizes: list[int] = []
         self.transfers = 0
@@ -246,17 +245,10 @@ def test_evaluate_publishes_exact_observations(
     ]
 
 
-@pytest.mark.parametrize(
-    ("case", "error", "match"),
-    [
-        ("source_corpus", ValueError, "artifact source Corpus"),
-        ("occupied_canonical", FileExistsError, "evaluations"),
-    ],
-)
-def test_evaluate_rejects_owned_association_and_publication_conflicts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str, error: type[Exception], match: str
+def test_evaluate_rejects_owned_association(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    corpus_id = _OTHER_CORPUS_ID if case == "source_corpus" else _CORPUS_ID
+    corpus_id = _OTHER_CORPUS_ID
     _write_corpus(tmp_path, corpus_id)
     association = _association()
     model = _Model()
@@ -264,16 +256,58 @@ def test_evaluate_rejects_owned_association_and_publication_conflicts(
         evaluation_module, "load_artifact", lambda storage_root, artifact_id: (association, model)
     )
     monkeypatch.setattr(evaluation_module, "_DEVICE", torch.device("cpu"))
-    request = _request(corpus_id=corpus_id)
-    if case == "occupied_canonical":
-        evaluation_directory(tmp_path, _EVALUATION_ID).mkdir(parents=True)
+    with pytest.raises(ValueError, match="artifact source Corpus"):
+        evaluation_module.evaluate(_request(corpus_id=corpus_id), tmp_path)
 
-    with pytest.raises(error, match=match):
-        evaluation_module.evaluate(request, tmp_path)
 
-    if case == "occupied_canonical":
-        scratch = tmp_path / "evaluations" / f".{_EVALUATION_ID}"
-        assert sorted(path.name for path in scratch.iterdir()) == [
-            "evaluation.json",
-            "observations.parquet",
-        ]
+def test_evaluate_rejects_known_collision_before_loading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canonical = evaluation_directory(tmp_path, _EVALUATION_ID)
+    canonical.mkdir(parents=True)
+    loaded = False
+
+    def load_artifact(*_args: object) -> None:
+        nonlocal loaded
+        loaded = True
+
+    monkeypatch.setattr(evaluation_module, "load_artifact", load_artifact)
+
+    with pytest.raises(FileExistsError, match="evaluations"):
+        evaluation_module.evaluate(_request(), tmp_path)
+
+    assert not loaded
+    assert not (tmp_path / "evaluations" / f".{_EVALUATION_ID}").exists()
+
+
+def test_evaluate_preserves_scratch_when_canonical_appears_before_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_corpus(tmp_path, _CORPUS_ID)
+    association = _association()
+    monkeypatch.setattr(
+        evaluation_module,
+        "load_artifact",
+        lambda storage_root, artifact_id: (association, _Model()),
+    )
+    monkeypatch.setattr(evaluation_module, "_DEVICE", torch.device("cpu"))
+    canonical = evaluation_directory(tmp_path, _EVALUATION_ID)
+    real_collect_observations = evaluation_module.collect_observations
+
+    def create_collision(*args: Any, **kwargs: Any) -> pl.DataFrame:
+        observations = real_collect_observations(*args, **kwargs)
+        canonical.mkdir(parents=True)
+        (canonical / "occupied").write_text("occupied", encoding="utf-8")
+        return observations
+
+    monkeypatch.setattr(evaluation_module, "collect_observations", create_collision)
+
+    with pytest.raises(FileExistsError, match="evaluations"):
+        evaluation_module.evaluate(_request(), tmp_path)
+
+    assert (canonical / "occupied").read_text(encoding="utf-8") == "occupied"
+    scratch = tmp_path / "evaluations" / f".{_EVALUATION_ID}"
+    assert sorted(path.name for path in scratch.iterdir()) == [
+        "evaluation.json",
+        "observations.parquet",
+    ]

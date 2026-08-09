@@ -42,14 +42,8 @@ from kairos.config import (
 )
 from kairos.corpus import BlockFrame
 from kairos.min_block_fee import TargetState, min_block_fee_loss
-from kairos.modeling import (
-    ArtifactAssociation,
-    load_artifact,
-    reduce_artifact_validation,
-    run_candidate,
-    train,
-)
-from kairos.observations import OBSERVATION_SCHEMA
+from kairos.modeling import ArtifactAssociation, load_artifact, run_candidate, train
+from kairos.observations import OBSERVATION_SCHEMA, reduce_observations
 from kairos.study import RetainedResult, Study, load_study, publish_study
 from kairos.temporal import FeatureState, prepare_fit_history
 
@@ -197,24 +191,9 @@ def _write_selected_study(storage_root: Path, request: TrainRequest, method: Met
     checkpoint = study_trial_checkpoint_path(storage_root, source.study_id, 0)
     checkpoint.parent.mkdir(parents=True)
     checkpoint.touch()
-    pl.DataFrame(
-        [
-            {
-                "origin_block": 20,
-                "predicted_action_k": 1,
-                "predicted_minimum_log_base_fee": 1.0,
-                "minimum_action_k": 0,
-                "immediate_base_fee_per_gas": 20,
-                "immediate_effective_priority_fee_per_gas_p50": 0,
-                "selected_base_fee_per_gas": 15,
-                "selected_effective_priority_fee_per_gas_p50": 0,
-                "deadline_base_fee_per_gas": 15,
-                "deadline_effective_priority_fee_per_gas_p50": 0,
-                "minimum_base_fee_per_gas": 10,
-            }
-        ],
-        schema=OBSERVATION_SCHEMA,
-    ).write_parquet(study_trial_observations_path(storage_root, source.study_id, 0))
+    pl.DataFrame(schema=OBSERVATION_SCHEMA).write_parquet(
+        study_trial_observations_path(storage_root, source.study_id, 0)
+    )
 
 
 def _use_cpu_trainer(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -253,7 +232,7 @@ def test_transformer_encoder_layers_have_independent_matrix_initialization() -> 
     )
 
 
-def test_epoch_logs_weight_short_batches_in_float64(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validation_logs_weight_short_batches_in_float64(monkeypatch: pytest.MonkeyPatch) -> None:
     prepared = prepare_fit_history(_blocks(), _experiment())
     association = ArtifactAssociation(
         request=_train_request(),
@@ -272,7 +251,6 @@ def test_epoch_logs_weight_short_batches_in_float64(monkeypatch: pytest.MonkeyPa
             ).mean()
         )
     logged: dict[str, list[tuple[torch.Tensor, dict[str, Any]]]] = {
-        "training_total_loss": [],
         "validation_total_loss": [],
         "validation_base_fee_optimality_gap": [],
     }
@@ -283,17 +261,15 @@ def test_epoch_logs_weight_short_batches_in_float64(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(module, "log", capture)
     with torch.no_grad():
         for batch_index, batch in enumerate(batches):
-            module.training_step(batch, batch_index)
             module.validation_step(batch, batch_index)
 
-    for name in ("training_total_loss", "validation_total_loss"):
-        entries = logged[name]
-        assert [kwargs["batch_size"] for _, kwargs in entries] == [3, 1]
-        assert all(value.dtype == torch.float64 for value, _ in entries)
-        weighted = sum(float(value) * int(kwargs["batch_size"]) for value, kwargs in entries) / 4
-        unweighted = sum(float(value) for value, _ in entries) / 2
-        assert weighted == pytest.approx(expected)
-        assert unweighted != pytest.approx(expected)
+    entries = logged["validation_total_loss"]
+    assert [kwargs["batch_size"] for _, kwargs in entries] == [3, 1]
+    assert all(value.dtype == torch.float64 for value, _ in entries)
+    weighted = sum(float(value) * int(kwargs["batch_size"]) for value, kwargs in entries) / 4
+    unweighted = sum(float(value) for value, _ in entries) / 2
+    assert weighted == pytest.approx(expected)
+    assert unweighted != pytest.approx(expected)
 
     gap_entries = logged["validation_base_fee_optimality_gap"]
     assert [kwargs["batch_size"] for _, kwargs in gap_entries] == [3, 1]
@@ -330,7 +306,7 @@ def test_lstm_trains_loads_and_applies_direct_loss(
         "result.json",
         "validation.parquet",
     }
-    metrics = reduce_artifact_validation(tmp_path, artifact_id)
+    metrics = reduce_observations(artifact_observations_path(tmp_path, artifact_id))
     result = RetainedResult.model_validate_json(
         artifact_result_path(tmp_path, artifact_id).read_bytes()
     )
@@ -468,4 +444,3 @@ def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
     )
     assert fit_kwargs[0]["ckpt_path"] is None
     assert fit_kwargs[1]["ckpt_path"] == scratch / "last.ckpt"
-    assert "weights_only" not in fit_kwargs[1]

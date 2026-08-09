@@ -1058,7 +1058,6 @@ Validation reductions are direct views over completed fit evidence:
 
 ```python
 reduce_study(storage_root: Path, study_id: UUID) -> polars.DataFrame
-reduce_artifact_validation(storage_root: Path, artifact_id: UUID) -> polars.DataFrame
 ```
 
 Public exports from `kairos.evaluation`:

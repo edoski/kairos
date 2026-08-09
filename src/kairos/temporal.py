@@ -87,7 +87,7 @@ def _feature_values(
         case "log1p_effective_priority_fee_per_gas_p90":
             return np.log1p(_float_column(blocks, "effective_priority_fee_per_gas_p90"))
         case "block_interval_seconds":
-            timestamps = blocks["timestamp"].to_numpy().astype(np.int64, copy=False)
+            timestamps = blocks["timestamp"].to_numpy()
             intervals = np.diff(timestamps)
             return intervals.astype(np.float64, copy=False)
         case "hour_sin":
@@ -101,21 +101,21 @@ def _feature_values(
 
 
 def _hour_angles(blocks: pl.DataFrame) -> NDArray[np.float64]:
-    timestamps = blocks["timestamp"].to_numpy().astype(np.int64, copy=False)
+    timestamps = blocks["timestamp"].to_numpy()
     hours = (timestamps // 3_600) % 24
     return 2.0 * math.pi * hours.astype(np.float64, copy=False) / 24.0
 
 
 def _day_of_week_angles(blocks: pl.DataFrame) -> NDArray[np.float64]:
-    timestamps = blocks["timestamp"].to_numpy().astype(np.int64, copy=False)
+    timestamps = blocks["timestamp"].to_numpy()
     days = (timestamps // 86_400 + 4) % 7
     return 2.0 * math.pi * days.astype(np.float64, copy=False) / 7.0
 
 
 def _forming_base_fee_logs(blocks: pl.DataFrame) -> NDArray[np.float64]:
-    columns = [blocks[name].to_list() for name in ("base_fee_per_gas", "gas_used", "gas_limit")]
+    rows = blocks.select("base_fee_per_gas", "gas_used", "gas_limit").iter_rows()
     return np.fromiter(
-        (math.log(_forming_child_base_fee(*row)) for row in zip(*columns, strict=True)),
+        (math.log(_forming_child_base_fee(*row)) for row in rows),
         dtype=np.float64,
         count=blocks.height,
     )
@@ -136,7 +136,6 @@ def _float_column(blocks: pl.DataFrame, name: str) -> NDArray[np.float64]:
     return blocks[name].to_numpy().astype(np.float64, copy=False)
 
 
-_OUTCOME_CHUNK_SIZE = 4_096
 _HistoricalItem = dict[str, torch.Tensor]
 _IntVector = NDArray[np.int64]
 
@@ -289,12 +288,6 @@ def _origin_rows(backing: _HistoricalBacking, window: BlockWindow) -> _IntVector
 def _minimum_outcomes(
     base_fees: _IntVector, origin_rows: _IntVector, *, horizon_blocks: int
 ) -> tuple[_IntVector, _IntVector]:
-    labels = np.empty(origin_rows.size, dtype=np.int64)
-    minima = np.empty(origin_rows.size, dtype=np.int64)
     offsets = np.arange(1, horizon_blocks + 1, dtype=np.int64)
-    for start in range(0, origin_rows.size, _OUTCOME_CHUNK_SIZE):
-        stop = min(start + _OUTCOME_CHUNK_SIZE, origin_rows.size)
-        outcomes = base_fees[origin_rows[start:stop, None] + offsets]
-        labels[start:stop] = outcomes.argmin(axis=1)
-        minima[start:stop] = outcomes.min(axis=1)
-    return labels, minima
+    outcomes = base_fees[origin_rows[:, None] + offsets]
+    return outcomes.argmin(axis=1), outcomes.min(axis=1)

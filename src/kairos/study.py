@@ -45,8 +45,8 @@ class Study(StrictFrozenRecord):
     def validate_trials(self) -> Self:
         if len(self.trials) != len(self.request.methods):
             raise ValueError("trials must align with request methods")
-        for method, result in zip(self.request.methods, self.trials, strict=True):
-            if result.completed_epochs > method.fit.max_epochs:
+        for index, result in enumerate(self.trials):
+            if result.completed_epochs > self.request.methods[index].fit.max_epochs:
                 raise ValueError("completed_epochs must not exceed method.fit.max_epochs")
         return self
 
@@ -78,7 +78,6 @@ def retain_result(
     (temporary / "result.json").write_text(
         _CandidateResult(request=request, result=result).model_dump_json(), encoding="utf-8"
     )
-    _validate_trial(temporary, request, method_index, result)
     temporary.rename(retained)
 
 

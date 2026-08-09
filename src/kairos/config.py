@@ -37,11 +37,6 @@ def _validate_transformer_dimensions(model_width: int, attention_heads: int) -> 
         raise ValueError("model_width must be divisible by attention_heads")
 
 
-def _require_unique(label: str, values: tuple[object, ...]) -> None:
-    if len(set(values)) != len(values):
-        raise ValueError(f"{label} must not contain duplicates")
-
-
 class CorpusDefinition(StrictFrozenRecord):
     chain_id: int
     first_block: int
@@ -78,7 +73,8 @@ class ExperimentSemantics(StrictFrozenRecord):
             >= self.validation_window.first_parent_block
         ):
             raise ValueError("validation_window must follow complete training outcomes")
-        _require_unique("ordered_features", self.ordered_features)
+        if len(set(self.ordered_features)) != len(self.ordered_features):
+            raise ValueError("ordered_features must not contain duplicates")
         return self
 
 
@@ -172,7 +168,8 @@ class TuneRequest(StrictFrozenRecord):
 
     @model_validator(mode="after")
     def validate_methods(self) -> Self:
-        _require_unique("methods", self.methods)
+        if len(set(self.methods)) != len(self.methods):
+            raise ValueError("methods must not contain duplicates")
         if len({method.model.family for method in self.methods}) != 1:
             raise ValueError("methods must use one model family")
         return self

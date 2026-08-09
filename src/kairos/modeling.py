@@ -36,12 +36,7 @@ from .config import (
 )
 from .corpus import BlockFrame, load_corpus_blocks
 from .min_block_fee import MinBlockFeeOutput, TargetState, decode_action, min_block_fee_loss
-from .observations import (
-    collect_observations,
-    reduce_observation_frame,
-    reduce_observations,
-    validate_observations,
-)
+from .observations import collect_observations, reduce_observation_frame, validate_observations
 from .records import StrictFrozenRecord
 from .study import RetainedResult, candidate_scratch_directory, load_selected_method, retain_result
 from .temporal import FeatureState, HistoricalPreparation, prepare_fit_history
@@ -61,9 +56,7 @@ class ArtifactAssociation(StrictFrozenRecord):
 
     @model_validator(mode="after")
     def validate_association(self) -> Self:
-        if len(self.feature_state.means) != len(
-            self.training_definition.experiment.ordered_features
-        ):
+        if len(self.feature_state.means) != len(self.request.source.experiment.ordered_features):
             raise ValueError("feature state width must match the ordered features")
         return self
 
@@ -74,13 +67,7 @@ _ASSOCIATION_ADAPTER = TypeAdapter(_Association)
 
 def _hydrate_association(raw: object) -> _Association:
     encoded = json.dumps(raw, allow_nan=False)
-    return _ASSOCIATION_ADAPTER.validate_json(encoded, strict=True)
-
-
-def _training_definition(association: _Association) -> TrainingDefinition:
-    if isinstance(association, ArtifactAssociation):
-        return association.training_definition
-    return association
+    return _ASSOCIATION_ADAPTER.validate_json(encoded)
 
 
 class _Heads(nn.Module):
@@ -210,7 +197,11 @@ class _FitModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(logger=False)
         self.association = _hydrate_association(association)
-        self.definition = _training_definition(self.association)
+        self.definition = (
+            self.association.training_definition
+            if isinstance(self.association, ArtifactAssociation)
+            else self.association
+        )
 
         experiment = self.definition.experiment
         model = self.definition.method.model
@@ -244,7 +235,6 @@ class _FitModule(pl.LightningModule):
         loss_by_origin = min_block_fee_loss(
             self(batch["inputs"]), label=batch["label"], target=batch["target"]
         )
-        self._log_epoch("training_total_loss", loss_by_origin)
         return loss_by_origin.mean()
 
     def validation_step(self, batch: Mapping[str, torch.Tensor], batch_idx: int) -> None:
@@ -280,13 +270,13 @@ class _FitModule(pl.LightningModule):
 def _fit(
     association: _Association, prepared: HistoricalPreparation, blocks: BlockFrame, scratch: Path
 ) -> tuple[Path, plr.DataFrame, RetainedResult]:
-    definition = _training_definition(association)
     scratch.mkdir(parents=True, exist_ok=True)
     _runtime.configure_torch()
-    fit = definition.method.fit
+    fit = association.method.fit
     pl.seed_everything(fit.seed)
 
     module = _FitModule(association.model_dump(mode="json"))
+    definition = module.definition
     training_loader = _runtime.data_loader(
         prepared.training, batch_size=_runtime.FIT_BATCH_SIZE, shuffle=True
     )
@@ -330,7 +320,6 @@ def _fit(
                 filename="last",
                 save_weights_only=False,
                 save_on_train_epoch_end=True,
-                auto_insert_metric_name=False,
                 enable_version_counter=False,
             ),
         ],
@@ -423,15 +412,6 @@ def run_candidate(storage_root: Path, request: TuneRequest, method_index: int) -
     shutil.rmtree(candidate_scratch)
 
 
-def reduce_artifact_validation(storage_root: Path, artifact_id: UUID) -> plr.DataFrame:
-    load_artifact(storage_root, artifact_id)
-    result = _load_artifact_result(storage_root, artifact_id)
-    metrics = reduce_observations(artifact_observations_path(storage_root, artifact_id))
-    if result.objective != metrics["base_fee_optimality_gap"][0]:
-        raise ValueError("artifact objective must equal validation observations")
-    return metrics
-
-
 def load_artifact(storage_root: Path, artifact_id: UUID) -> tuple[ArtifactAssociation, nn.Module]:
     module = _FitModule.load_from_checkpoint(
         artifact_checkpoint_path(storage_root, artifact_id),
@@ -444,15 +424,11 @@ def load_artifact(storage_root: Path, artifact_id: UUID) -> tuple[ArtifactAssoci
         raise ValueError("canonical artifact must contain a TrainRequest association")
     if association.request.artifact_id != artifact_id:
         raise ValueError("embedded artifact ID does not match the requested artifact")
-    result = _load_artifact_result(storage_root, artifact_id)
+    result = RetainedResult.model_validate_json(
+        artifact_result_path(storage_root, artifact_id).read_bytes()
+    )
     if result.completed_epochs > association.method.fit.max_epochs:
         raise ValueError("completed_epochs must not exceed artifact Method fit.max_epochs")
     validate_observations(artifact_observations_path(storage_root, artifact_id))
     module.model.eval()
     return association, module.model
-
-
-def _load_artifact_result(storage_root: Path, artifact_id: UUID) -> RetainedResult:
-    return RetainedResult.model_validate_json(
-        artifact_result_path(storage_root, artifact_id).read_bytes()
-    )

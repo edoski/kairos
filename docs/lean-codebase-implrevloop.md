@@ -38,6 +38,8 @@ Product code did not change between those pins. This ledger is the slice review 
   to identify and resubmit. The one-owner `_Resources` flattening remains independent.
 - Removing powermetrics liveness polling from the measured active loop is approved. Health checks
   remain before and after each phase so collector failure still invalidates the measurement.
+- The implementation sequence is consolidated from nine narrow slices into four larger ownership
+  slices. No accepted, proposed, protected, rejected, or externally gated item is dropped.
 - The proposed held-out K-study roster guard is rejected after tracing the authoring chain. HPO
   publication requires nine cells, K-study authoring expands them through its fixed nine horizons,
   and closure verifies every artifact. Held-out should trust that canonical manifest.
@@ -154,478 +156,274 @@ Snapshot the protected `tmp/` path first and do not touch it. This is recoverabl
 not a product commit. Record the recreation commands and prove the normal commands work before the
 first slice. Regenerate iOS/Pods state only before native iOS verification.
 
-## Slice 1 — Trust canonical K-study authorship
+## Consolidation map
 
-Status: approved as output-neutral cleanup, not started
+| Previous slices | Consolidated owner |
+| --- | --- |
+| 4 plus core/modeling parts of 9 | Slice 1 — scientific core and durable ownership |
+| 1, 3, and 7 plus experiment/docs parts of 9 | Slice 2 — experiment pipeline, figures, tests, and canonical documentation |
+| 5 and 6 plus execution/exporter parts of 9 | Slice 3 — operational execution, benchmark, and mobile exporter |
+| 2 and 8 plus app parts of 9 | Slice 4 — App native lifecycle and shallow cleanup |
+
+## Slice 1 — Scientific core and durable ownership
+
+Status: direct outcome vectorization and previously scoped output-neutral mechanics approved;
+remaining ownership cleanup proposed, awaiting approval
 
 ### Scope
 
-- Keep held-out production code deriving horizons and the maximum horizon from the canonical
-  K-study manifest.
-- Add no exact-roster check or separately hard-coded `K=200` authority.
-- Delete the test that blesses a 72-cell held-out experiment after removing `K=200`.
+- Compute minimum outcomes in one direct matrix expression instead of arbitrary 4,096-row chunks.
+  Preserve exact values and first-tie behavior; accept about 341 MiB temporary peak memory for the
+  largest authored window.
+- Inline the two owner-specific uniqueness checks and remove `_require_unique`. Remove redundant
+  internal `np.int64` casts, `zip(strict=True)`, and strict call flags only where typed owners
+  already prove dtype, length, or strict hydration.
+- Let `decode_action` own action-logit finiteness; observation collection keeps its independent
+  minimum-fee finiteness check. Remove the test-side `self.eval()` setup that currently makes the
+  production-owned evaluation-mode assertion vacuous.
+- Remove unused `training_total_loss` epoch logging while keeping the identical per-batch
+  classification-plus-regression loss for backpropagation. Keep validation loss, validation
+  optimality gap, finite checks, early stopping, and selected-objective evidence.
+- Derive one `TrainingDefinition` per artifact fit, preserving seeding before module construction.
+  Remove inert `auto_insert_metric_name=False` from the literal `last` checkpoint,
+  schema-irrelevant fixture rows, and assertions that pin Lightning choreography instead of results.
+- Remove retention-time `_validate_trial()` and redundant Study zip strictness; reuse the already
+  loaded first candidate. Publication remains the durable trial-validation owner.
+- Reject a known Evaluation collision before loading/inference while retaining its late race guard.
+- Delete repository-unused `reduce_artifact_validation()`, its API prose/test call, and any helper
+  left with one caller, including `_load_artifact_result` if applicable. Canonical artifact loading
+  and observation reduction remain authoritative.
 
 ### Non-goals
 
-- No production-code change.
-- No chain, family, feature, context, horizon, selection, window, metric, reducer, plotting, or
-  canonical address change.
-- No alteration of completed canonical objects or live/queued experiment state.
+- No schema, dtype, feature, target, loss, prediction, action, metric, checkpoint, evidence,
+  association, scratch, or durable-object layout change.
+- No bypass of `BlockFrame.select_range()` or constructor validation through flags, private
+  constructors, or `object.__new__`.
+- No private-helper rename sweep, uniform extra candidate reload, compatibility wrapper, or second
+  experiment-bundle collision check.
+- No removal of raw/disk, causal, numerical, publication, resume, or selected-evidence guards.
 
 ### Protected behavior and accepted change
 
-- HPO final selection still requires nine cells.
-- K-study authoring still expands those cells through its fixed nine `_HORIZONS` values.
-- K-study closure still verifies every authored artifact before publication.
-- Strict manifest hydration remains.
+- Scientific and thesis-facing values remain identical. Minimum-outcome parity includes first ties.
+- The training objective still drives the same gradients; only its unused epoch copy disappears.
+- Known Evaluation collisions fail before expensive work and create no scratch. Late races still
+  preserve scratch.
+- Publication still validates exact requests, trials, checkpoints, observations, and objectives.
 
 ### Expected outcome
 
-Held-out trusts the canonical K-study publisher. The test suite stops manufacturing and supporting
-an impossible partial canonical manifest.
+The Python scientific core has one owner for each invariant, one derived training definition, and
+no unused metric or repeated trusted-value ceremony.
 
 ### Checks
 
-- Exact 81-cell authored roster and unchanged testing windows.
-- Existing selection, reducer, and manifest round-trip tests.
-- Focused experiment tests, full Python suite, Ruff, format, Pyright, required Vulture scan, and
-  diff check.
+- Capture small temporary fixtures for temporal outputs, observation reduction, Study selection,
+  checkpoint naming, and artifact loading; compare before and after without adding permanent goldens.
+- Representative memory check for the largest authored outcome geometry.
+- Focused temporal, configuration, modeling, Study, artifact, and Evaluation tests.
+- Early and late Evaluation collision behavior, interruption/resume, and objective/evidence parity.
+- Full Python suite, Ruff, format, Pyright, configured Vulture with manual classification, and diff
+  check. Any scientific-output difference rejects the individual cleanup.
 
 ### Dependencies and gates
 
-- Depends only on generated-environment preflight.
-- No remote campaign may be launched, altered, closed, or replaced.
+- Runs after generated-environment preflight.
+- No Corpus, Study, artifact, Evaluation, experiment, scratch, or remote state may be mutated.
 
-## Slice 2 — Process-wide native model serialization
+## Slice 2 — Trusted experiment pipeline, figures, tests, and canonical documentation
 
-Status: approved, not started
-
-### Scope
-
-- Move the native-operation serial queue in `app/src/model.ts` from runtime-instance ownership to
-  module ownership.
-- Keep each runtime's current artifact/model and disposal promise local.
-- Add one deferred two-runtime test proving old forward → old delete → new load/forward.
-
-### Non-goals
-
-- No App transition controller, revision system, lease, observer, or compatibility layer.
-- No shared process-wide ModelRuntime or artifact catalog.
-- No change to history, selection, RPC, feature, inference, or UI behavior.
-
-### Protected behavior
-
-- Rejection-safe queue continuation, copied native outputs, tensor validation, artifact caching,
-  final disposal, and per-engine ownership remain.
-
-### Expected outcome
-
-Chain replacement cannot overlap old native work with the new engine. The production delta stays
-near zero because only queue ownership moves.
-
-### Checks
-
-- Existing model/inference/engine lifecycle and App race tests.
-- New two-runtime deferred lifecycle test.
-- App unit suite, TypeScript check, Expo Doctor, and diff check.
-
-### Dependencies and gates
-
-- Independent of Slice 1, but runs second to keep one writer on `main`.
-- Native device/model execution is not claimed unless actually run.
-
-## Slice 3 — Trust scientific manifests and repair canonical prose
-
-Status: proposed, awaiting approval
+Status: canonical K-study trust cleanup and MIT-claim removal approved; remaining experiment and
+documentation cleanup proposed, awaiting approval
 
 ### Scope
 
-- Add no expected-set checks to experiment stages or figures.
-- Remove `c_study` expected-set and field-by-field family/context/source/Method revalidation after
-  strict manifest and Study loading, including the second `C=25` assertion; retain the frozen
-  context-selection rule.
-- In all four figure scripts, remove curated cell-parse errors, one-trial rechecks, inferred
-  completeness checks, and impossible empty/loop-result guards. Project canonical labels and
-  rolling horizons directly. Keep every plotting calculation and valid-data branch.
-- Direct-index canonical family/display/feature style tables instead of providing fallbacks for
-  labels the fixed publishers cannot emit.
-- In fresh tune-cell authoring, trust each fixed producer to emit unique new labels. Retain the
-  intersection check when HPO `extend` appends to an existing active bundle.
-- Delete mutation tests that exist only for those upstream-owned relationships.
-- Update `docs/KAIROS.md` to `C=25`, 13 contexts, 117 cells, nine reused Studies, 108 new Studies,
-  and the existing 5% chain-mean selection rule.
-
-### Non-goals
-
-- No generic cell-label framework or shared validator abstraction.
-- No scientific roster, feature selection, context selection, HPO, window, reducer, figure style,
-  or canonical object change.
-- No weakening of strict manifest or Study hydration.
-- Keep HPO `select()`'s exact final roster check because partial per-chain authoring through
-  `prepare --chain` and `extend` is a supported normal workflow.
-
-### Protected behavior and accepted change
-
-- Complete canonical stage and figure outputs remain identical.
-- Fixed upstream authors remain responsible for complete rosters.
-- Typed manifests and Studies are trusted instead of rechecked against the same pipeline's request
-  fields.
-- Manually edited or partially manufactured canonical manifests may fail later with ordinary
-  lookup/loader errors rather than tailored messages.
-
-### Expected outcome
-
-Internal scientific pipeline outputs stop being treated as hostile input. The canonical manual
-matches the implemented context protocol.
-
-### Checks
-
-- Unchanged complete-roster manifests, selection, tables, and deterministic figures.
-- Byte-compare deterministic vector PDFs from a small canonical fixture before and after.
-- Focused experiment/figure tests, full Python suite, and static/dead-code checks.
-
-### Dependencies and gates
-
-- Runs after Slice 1 so held-out authority has its final shape.
-- No experiment authoring, launch, closure, or canonical output mutation is authorized.
-
-## Slice 4 — Durable publication and validation ownership
-
-Status: proposed, awaiting approval
-
-### Scope
-
-- Remove `_validate_trial()` from `retain_result()`; keep publication-time validation.
-- Reject a pre-existing canonical Evaluation before corpus/artifact loading or inference; retain the
-  late pre-rename race guard.
-- Delete repository-unused `reduce_artifact_validation()`, its API prose, and its dedicated test
-  call. Inline the artifact-result loader if that deletion leaves it with one caller. Existing
-  artifact loading and observation reduction remain authoritative.
-
-### Non-goals
-
-- No weaker raw/disk validation and no removal of existing early or late publication guards.
-- Keep experiment bundle publication's current early collision refusal and atomic rename; add no
-  second check for an implausible same-UUID concurrent publisher.
-- No durable-object layout, request schema, metric, checkpoint, evidence, or scratch policy change.
-- No external compatibility shim for the unused function.
-
-### Protected behavior and accepted change
-
-- Known Evaluation collisions fail before expensive work and create no scratch.
-- Existing publication behavior remains unchanged.
-- Complete successful outputs remain unchanged.
-
-### Expected outcome
-
-Each fact has one validation owner: publication validates retained trials, preflight rejects known
-collisions, and canonical loaders/reducers replace an unused convenience seam.
-
-### Checks
-
-- Focused Study, artifact, and Evaluation tests.
-- Early Evaluation collision does no inference or scratch work; its existing late guard still
-  preserves scratch.
-- Full Python suite and static/dead-code checks.
-
-### Dependencies and gates
-
-- Runs after Slice 3 so experiment boundary ownership is already fixed.
-- Clean-break deletion assumes repository consumers define the supported surface.
-
-## Slice 5 — Direct remote execution
-
-Status: proposed, awaiting approval
-
-### Scope
-
-- Retain balanced `_allocation_sizes()`, ADR 0007's one-to-four-process allocation contract, and
-  one GPU per exclusive step. Nine tasks at capacity four remain `3+3+3`; larger campaigns retain
-  the fewest allocations without avoidable singleton tails.
-- Replace count-bearing `gres` configuration plus `_scaled_gres()` with a count-free `gres_name`;
-  render `:1` per step and `:<task_count>` per allocation.
-- Flatten the behavior-free, one-owner `_Resources` record into `_Remote` and remove the matching
-  `resources:` level from `REMOTE.yaml` and fixtures. Keep strict raw hydration and every resource
-  value configurable.
-- Retain `job_id`, `slot`, `row`, and the human-readable `cell` field in temporary `jobs.tsv`.
-  Although `cells.tsv[row]` can derive the label, the direct field makes failed Slurm rows easier to
-  identify and prune before resubmission.
-- Quote the allocation-level Slurm output path and strengthen the existing fixture with a space.
-- Remove redundant strict call flags whose owning Pydantic records already enforce strict parsing.
-- Remove default workflow discriminator arguments and the lone direct CLI runner from typed test
-  fixtures where shared helpers/defaults already own them.
-- Update only the affected operator documentation and golden script.
-
-### Non-goals
-
-- No SSH, Slurm, job submission, queue, image reference, resource quantity, request payload, or
-  scientific-execution change.
-- No allocation-packing or job-recovery policy change.
-- No generic scheduler abstraction.
-- Do not alter `deploy/Apptainer.def` in this slice. The suggested `kairos --help` smoke is useful
-  but does not materially simplify code and would require a separately authorized immutable remote
-  image build/test gate.
-
-### Protected behavior and accepted change
-
-- Balanced packing and its focused matrix remain because sustained and tail GPU occupancy matter.
-- Submission failure leaves the failed and later groups unrecorded, so rerunning submits them.
-  After a submitted allocation fails remotely, the operator can remove its failed `jobs.tsv` rows
-  and rerun; retained candidate scratch resumes and already-canonical candidate rows are skipped.
-- Generated Bash remains the external protocol and keeps its focused golden test.
-- Strict YAML/env/stdin/subprocess checks and positive job-ID parsing remain.
-
-### Expected outcome
-
-Remote submission keeps its occupancy-aware packing rule and gains one direct GPU resource name.
-Scientific work inside each Slurm step is unchanged.
-
-### Checks
-
-- One-to-four balanced task allocations, spaced log path, GRES rendering, positive job IDs,
-  journal recovery, aggregate process failure, and `bash -n`.
-- Focused execution/launch tests, CLI help, full Python suite, and static/dead-code checks.
-
-### Dependencies and gates
-
-- No external scheduler or login-node access is required or authorized.
-- Any future Apptainer definition edit is a separate slice requiring the documented `sbuild`
-  immutable build and `apptainer test` procedure plus explicit remote authorization.
-
-## Slice 6 — Honest inference-benchmark hot path
-
-Status: measured-loop polling removal approved; remaining cleanup proposed, awaiting approval
-
-### Scope
-
-- Approved: remove `process.poll()`/liveness checks from each measured active-loop cascade; retain
-  checks before and after each phase.
-- Remove repeated `model.eval()` where the artifact loader already owns evaluation mode.
-- Trust the canonical K-study and held-out publishers inside benchmark resolution: remove the
-  reconstructed nine-group/36-label roster check and the redundant per-artifact horizon assertion.
-  Retain the artifact/evaluation join because the operator supplies two independent experiment
-  IDs.
-- Load one benchmark Corpus per canonical architecture/chain group instead of supporting
-  impossible mixed-Corpus horizons.
-- Keep the powermetrics sample rate in one owner. Inline the one-call energy-settings builder, use
-  one concrete internal dictionary type, and remove defensive copies.
-- Trust atomic energy publication on resume instead of rescanning the three-file inventory. Keep
-  settings equality because settings are raw operator input and are not in `protocol.json`.
-- Remove the exporter Corpus-request cache; repeated small request reads are acceptable and produce
-  the same bundle.
-- Inline the exporter's one-call feature-contract copier without removing `_FeatureContract`, which
-  still owns cross-horizon equality, example geometry, and manifest data.
-- Remove only Pydantic call-site strict flags demonstrably duplicated by a
-  `StrictFrozenRecord` configuration. Retain roster TypeAdapter strictness, Torch export strictness,
-  and equal-length checks at external/native boundaries. Remove internal `zip(strict=True)` only
-  where both sequences were constructed from the same local sequence.
-- Replace derived first-horizon indexing with the existing horizon constant.
-- Remove tests that require zero-copy storage identity or freeze transition-era protocol field
-  order; retain values, shapes, chronology, protocol round-trip/mismatch, and resume behavior.
-- Declare Pydantic directly in the mobile exporter because it imports it directly.
-
-### Non-goals
-
-- No timing statistic, energy equation, rolling policy, batch size, warmup, phase duration, output
-  schema, artifact selection, or exporter validation change.
-- No benchmark database, measurement abstraction, or compatibility layer.
-- No change to existing benchmark output directories.
-
-### Protected behavior and accepted change
-
-- Removing poll overhead intentionally changes future measured latency/energy values by measuring
-  the declared model-compute loop more faithfully. It does not rewrite thesis data.
-- Powermetrics process health still fails the phase outside the measured inner loop.
-- Same-origin and coverage checks remain because they define the measured rolling scientific
-  quantity.
-- Native exporter boundary validation and XNNPACK parity remain.
-
-### Expected outcome
-
-The active loop contains only view selection, four forwards/decodes, and minimal counting. Tests
-assert observable data, not storage implementation.
-
-### Checks
-
-- Focused benchmark protocol, measurement, resume, reduction, and exporter tests.
-- A small timing-boundary test proves liveness polling is outside the measured loop.
-- Mismatched K-study/held-out IDs still fail; manually truncated canonical manifests no longer get
-  a dedicated failure mode.
-- Exporter test passes through its normal regenerated environment without a PATH workaround.
-- Full Python suite and static/dead-code checks.
-
-### Dependencies and gates
-
-- No live powermetrics campaign, thesis result regeneration, model export, or device run is part of
-  this slice.
-
-## Slice 7 — Deep experiment tests
-
-Status: proposed, awaiting approval
-
-### Scope
-
-- Add focused owner-level tests for `publish_bundle` and `close_bundle`; cover shared reporting once
-  through one public stage command instead of a separate generic reporting matrix.
-- Build minimal canonical upstream manifests/Studies directly in downstream stage tests.
-- Retain one compact whole-pipeline smoke test.
-- Delete repeated serialization dumps, publication choreography, and upstream pipeline replay.
-- Use exclusive fixture creation directly; do not add old-fixture comparison machinery merely to
-  diagnose an accidental identifier collision.
+- Keep held-out deriving horizons and maximum horizon from the canonical K-study manifest. Add no
+  hard-coded roster or separate `K=200` authority; delete the manufactured 72-cell test.
+- Remove `c_study` expected-set and family/context/source/Method revalidation, including its second
+  `C=25` assertion. Keep the frozen context-selection rule.
+- In all four figure scripts, remove curated label-parse errors, one-trial rechecks, inferred
+  completeness checks, impossible empty/loop-result guards, and fallbacks for canonical style and
+  feature labels. Keep every plotting calculation and valid-data branch.
+- Trust fixed producers to emit unique fresh tune-cell labels. Keep the intersection check used by
+  normal HPO `extend` against an existing active bundle.
+- Move generic `publish_bundle` and `close_bundle` behavior to focused owner tests. Cover reporting
+  once through a public stage command, build minimal typed upstream fixtures directly, retain one
+  compact whole-pipeline smoke, and delete repeated serialization/publication choreography and
+  upstream replay.
 - Delete manual-corruption matrices for context Studies, partial closed feature/K-study manifests,
-  benchmark horizon labels, and other states that fixed canonical publishers cannot emit.
+  benchmark horizon labels, and other states fixed canonical publishers cannot emit. Keep roster,
+  selection, window, reducer, collision, resume, and deterministic-figure assertions at their owner.
+- Remove redundant experiment strict flags and test constructor ceremony where record
+  configuration/defaults already own them.
+- Correct `docs/KAIROS.md` to `C=25`, 13 contexts, 117 cells, nine reused Studies, 108 new Studies,
+  and the 5% chain-mean rule; repair the stale research citation.
+- After every still-live fact is present in canonical docs, delete the completed 369-line
+  validation-evidence process ledger. Remove the unsupported MIT metadata claim and add no license.
 
 ### Non-goals
 
-- No product behavior change.
-- No deletion of scientific roster, selection, window, reducer, collision, resume, or deterministic
-  figure assertions from their owning modules.
-- No production extraction solely to shorten tests.
-
-### Protected behavior
-
-- Exact fixed rosters, scientific windows, atomic no-clobber publication, interruption/resume,
-  canonical reductions, and one end-to-end path remain covered.
-
-### Expected outcome
-
-Downstream tests trust typed upstream boundaries. Generic bundle behavior is tested once at its
-owner. The suite loses roughly 105–145 non-overlapping lines here, plus impossible-state tests
-assigned to their product slices, and several repeated subprocess stages.
-
-### Checks
-
-- Run affected tests before and after and record test count, coverage ownership, and elapsed time.
-- Full Python suite and static/dead-code checks.
-
-### Dependencies and gates
-
-- Runs after Slices 1, 3, 4, and 6 so tests target final owners once.
-
-## Slice 8 — App shallow cleanup
-
-Status: proposed, awaiting approval
-
-### Scope
-
-- Inline the one-line `runsForSelection` wrapper, replace the runtime-only feature-name roster with
-  a direct type union, and inline the small feature-name constants and one-use gas-utilization
-  helper.
-- Make the repository-internal feature/target/mobile manifest aliases module-private; inline only a
-  one-use alias if the containing interface stays clearer.
-- Remove impossible chart-scale guards and unsupported same-engine block-watch replacement cleanup.
-- Remove inference-test event-log choreography, duplicated result-field reconstruction in the
-  history test, and analytics fixtures that inject impossible zero selected fees.
-
-### Non-goals
-
-- No style movement, visual redesign, wrapper layer, component merger, memoization, App lifecycle
-  controller, or change to nested scrolling. `styles.ts` already groups shared, analytics, and
-  inference declarations into coherent contiguous blocks; moving about 300 lines would add files
-  or namespaces without behavioral leverage.
-- No accessibility semantics or accessibility-specific tests. This is a no-user demo.
-- Do not replace the online mean recurrence in this program. Ordinary summation can change the
-  last floating-point bits of displayed analytics and therefore does not meet the output-neutral
-  mechanical condition.
-- No removal of race, retry, RPC, bigint, feature, native tensor, or queue guards.
+- No scientific roster, feature/context/HPO selection, window, reducer, figure appearance,
+  canonical object, or report-value change.
+- No generic cell-label validator, shared figure CLI helper, or production extraction solely to
+  shorten tests.
+- Keep HPO `select()`'s exact nine-cell final check because partial `prepare --chain`/`extend`
+  authoring is supported. Keep strict manifest/Study hydration and canonical closure verification.
+- No experiment authoring, launch, closure, output replacement, or license/ownership assertion.
 
 ### Protected behavior and accepted change
 
-- Layout, colors, spacing, copy, navigation, selection, and analytics values stay unchanged.
+- Exact fixed rosters, windows, selections, atomic publication, interruption/resume, reductions,
+  deterministic figures, and one end-to-end path remain covered.
+- Complete canonical manifests, tables, reports, and figures remain identical. Manually edited
+  canonical objects may fail later with ordinary lookup/loader errors instead of tailored messages.
+- Git retains implementation history after the completed process ledger is removed.
 
 ### Expected outcome
 
-Small internal seams and duplicated test structures disappear. The already-coherent presentation
-layout stays untouched.
+Experiments and figures trust canonical upstream publishers, tests verify behavior at its owner, and
+canonical documentation contains the live scientific contract without completed process residue.
 
 ### Checks
 
-- Existing focused behavior tests.
+- Exact 81-cell K-study roster, held-out windows, 117-cell context protocol, HPO selection, and
+  manifest round trips.
+- Byte-compare deterministic vector PDFs from a small canonical fixture.
+- Record affected test count, coverage ownership, and elapsed time before and after.
+- Focused experiment, bundle, figure, reducer, and documentation checks; full Python suite plus
+  Ruff, format, Pyright, configured Vulture, and diff check.
+
+### Dependencies and gates
+
+- Runs after Slice 1 so tests and experiment consumers target final core owners.
+- No canonical outputs, queued jobs, live campaigns, or remote objects may be altered.
+
+## Slice 3 — Operational execution, benchmark, and mobile exporter
+
+Status: benchmark measured-loop polling removal approved; balanced packing and recovery retention
+fixed; remaining operational cleanup proposed, awaiting approval
+
+### Scope
+
+- Retain balanced `_allocation_sizes()`, one-to-four processes, one GPU per exclusive step, and the
+  fewest allocations without avoidable singleton tails. Retain `job_id`, `slot`, `row`, and `cell`
+  in `jobs.tsv` for direct failed-row diagnosis and resubmission.
+- Replace count-bearing `gres` plus `_scaled_gres()` with count-free `gres_name`; render `:1` per
+  step and `:<task_count>` per allocation. Flatten the behavior-free `_Resources` record into
+  `_Remote` while keeping every raw resource value configurable and strictly hydrated.
+- Quote the allocation-level Slurm output path. Remove duplicated strict flags, default workflow
+  discriminator arguments, and the lone direct CLI runner from typed fixtures.
+- Remove `process.poll()` liveness checks from each measured active-loop cascade while retaining
+  collector checks before and after every phase.
+- Trust canonical benchmark publishers: remove reconstructed nine-group/36-label and artifact
+  horizon revalidation, load one Corpus per canonical architecture/chain group, and keep the
+  two-experiment artifact/evaluation join plus same-origin and coverage checks.
+- Remove repeated `model.eval()`. Give powermetrics `sample_rate_ms` and energy settings one owner;
+  use one concrete internal settings dictionary without defensive copies. Trust atomic energy
+  publication instead of rescanning its file inventory; keep raw settings equality on resume.
+- Remove benchmark tests for storage-pointer identity and transition-era protocol field order while
+  retaining values, shapes, chronology, protocol round-trip/mismatch, and resume behavior.
+- Replace derived first-horizon indexing with the existing horizon constant.
+- Remove the exporter Corpus-request cache and inline its one-call feature-contract copier while
+  retaining `_FeatureContract`. Remove internal equal-length ceremony only for locally paired
+  sequences; keep raw roster TypeAdapter, Torch export, manifest-width, native-output, delegation,
+  parity, chain, horizon, and shared-feature gates.
+- Delete the raw-byte XNNPACK substring assertion after real delegation inspection and host
+  execution. Declare Pydantic directly in the exporter and regenerate its lock once.
+- Update affected operator documentation and the golden Slurm script.
+
+### Non-goals
+
+- No allocation-packing, job-recovery, SSH, scheduler, queue, resource quantity, request payload,
+  scientific-execution, timing statistic, energy equation, rolling policy, batch, warmup, duration,
+  output schema, artifact selection, or existing-output change.
+- No generic scheduler, benchmark database, measurement abstraction, or compatibility layer.
+- No `deploy/Apptainer.def` edit. Any future change requires explicit remote authorization, an
+  immutable `sbuild`, and `apptainer test`.
+
+### Protected behavior and accepted change
+
+- Balanced packing preserves sustained and tail GPU occupancy. Submission failures leave later
+  groups pending; failed submitted rows can be pruned and resubmitted with candidate scratch intact.
+- Poll removal intentionally makes future latency/energy values measure the declared computation
+  more faithfully. Powermetrics failure still invalidates the phase; existing thesis data stays
+  untouched.
+- Strict YAML/env/stdin/subprocess/job-ID parsing, generated Bash behavior, benchmark scientific
+  quantity, atomic resume/publication, and native exporter parity remain.
+
+### Expected outcome
+
+Operational Python has direct GPU resource ownership, an interference-free measured loop, trusted
+canonical setup, and a smaller exporter without sacrificing throughput, recovery, or native gates.
+
+### Checks
+
+- Balanced one-to-four-task allocation matrix, journal recovery, spaced log path, GRES rendering,
+  positive job IDs, aggregate process failure, golden script, and `bash -n`.
+- Benchmark protocol, timing boundary, measurement, resume, reduction, mismatched-ID, same-origin,
+  coverage, powermetrics failure, and atomic publication tests.
+- Exporter suite through its normal regenerated environment, including real XNNPACK delegation and
+  host execution; no PATH workaround.
+- CLI help, full Python suite, Ruff, format, Pyright, configured Vulture, lock/diff checks.
+
+### Dependencies and gates
+
+- Runs after Slice 2 so benchmark and exporter tests consume the final canonical experiment shape.
+- No scheduler/login-node access, live powermetrics campaign, thesis result regeneration, model
+  export, device run, image build, or external submission is authorized.
+
+## Slice 4 — App native lifecycle and shallow cleanup
+
+Status: process-wide native serialization approved; remaining output-neutral cleanup proposed,
+awaiting approval
+
+### Scope
+
+- Move the native-operation serial queue in `app/src/model.ts` from runtime-instance to module
+  ownership. Keep each runtime's current model/artifact and disposal promise local. Add one deferred
+  two-runtime test proving old forward → old delete → new load/forward.
+- Inline `runsForSelection`, replace runtime `FEATURE_NAMES` with a direct union, and inline the
+  small priority-fee/`block_interval_seconds` constants and one-use gas-utilization helper.
+- Make repository-internal feature/target/mobile manifest aliases module-private; inline a one-use
+  alias only when the containing interface stays clearer.
+- Remove impossible chart-scale guards and unsupported same-engine block-watch replacement cleanup.
+- Remove inference event-log choreography, duplicated history result reconstruction, impossible
+  `selected_base_fee_per_gas=0` analytics fixtures, and other output-neutral app test ceremony
+  already listed in this ledger.
+
+### Non-goals
+
+- No App transition controller, revision/lease/observer system, shared runtime/catalog,
+  compatibility layer, visual redesign, style movement, component merger, memoization, or nested
+  scrolling change.
+- No accessibility semantics or tests. No app analytics mean rewrite.
+- No removal of RPC/bigint, finite-feature, native tensor/output, artifact cache/disposal, race,
+  retry, history/selection queue, stale-currentness, or rejection-safe continuation guards.
+
+### Protected behavior and accepted change
+
+- Layout, colors, spacing, copy, navigation, selection, analytics values, RPC behavior, and history
+  remain unchanged.
+- Rejection-safe serialization, copied native outputs, tensor validation, caching, final disposal,
+  and per-engine ownership remain.
+
+### Expected outcome
+
+Chain replacement cannot overlap old native work with a new engine, and the App loses shallow
+internal seams and duplicated test choreography without changing rendered or observable behavior.
+
+### Checks
+
+- Existing model, inference, engine lifecycle, history, analytics, and App race tests.
+- New cross-runtime deferred lifecycle test.
 - App unit suite, TypeScript check, Expo Doctor, and diff check.
 
 ### Dependencies and gates
 
-- Runs after Slice 2 to avoid revisiting the same app tests twice.
-- No simulator/device visual gate is introduced because styles and rendered behavior do not move.
-
-## Slice 9 — Output-neutral mechanical sweep and repository surface
-
-Status: previously scoped mechanical items approved conditionally; second-audit additions below
-remain proposed, awaiting approval
-
-### Scope
-
-- Remove redundant internal `np.int64` casts and `zip(strict=True)` where BlockFrame/Polars already
-  own exact column type and equal length.
-- Approved: compute the minimum-outcome matrix directly instead of chunking it through an arbitrary
-  4,096-row policy. Preserve exact values and first-tie behavior. Accept about 341 MiB of temporary
-  peak memory for the largest currently authored window; reject the implementation if proportional
-  full-suite and representative-memory checks show unexpected material pressure.
-- New proposal: inline the two owner-specific uniqueness checks and delete the shallow
-  `_require_unique` helper.
-- Remove redundant `strict=True` call flags where `StrictFrozenRecord` or
-  `ExperimentManifest.model_config` already owns strict parsing.
-- New proposal: remove duplicate action-logit finiteness checking from observation collection;
-  `decode_action` remains its owner. Keep the independently required minimum-fee finiteness check.
-- New proposal: remove dead `training_total_loss` logging and its choreography test. This metric is
-  the epoch aggregation of the same classification-cross-entropy plus standardized-fee Smooth-L1
-  loss already returned per batch for backpropagation. No logger, progress bar, callback,
-  checkpoint, report, or durable output consumes the epoch copy. Validation loss, validation
-  optimality gap, finite checks, early stopping, and selected-objective evidence remain.
-- New proposal: derive one `TrainingDefinition` per artifact fit instead of rebuilding it through a
-  one-call helper and both association/module paths. Preserve seeding before module construction.
-- Remove the redundant Study zip strictness. Reuse the already-loaded first candidate rather than
-  performing a uniform extra disk hydration.
-- Remove inert checkpoint filename configuration, schema-irrelevant fixture rows, and assertions
-  that pin Lightning choreography rather than outputs.
-- New proposal: delete the exporter raw-byte XNNPACK substring assertion after the real
-  program-delegation and host-execution gates.
-- Apply the output-neutral app removals assigned to Slice 8 if that slice is not approved, without
-  moving styles.
-- Repair the stale research citation.
-- New proposal: after Slice 3 moves every still-live protocol fact into canonical docs, delete the
-  completed 369-line `docs/research/validation-evidence-implrevloop.md`. Git history remains the
-  record of its implementation/review loop and superseded operational detail.
-- Resolve the exporter direct dependency in Slice 6 or here, but only once.
-- Remove the unsupported MIT metadata claim; add no license file.
-
-### Explicit exclusions
-
-- No arithmetic implementation change, including the app analytics mean.
-- No schema, field order, dtype, serialized record, manifest, protocol, UUID, path, scientific
-  roster, window, feature value, prediction, action, metric, checkpoint, plot, or report change.
-- No removal of any protected guard.
-- No figure CLI helper; four tiny entry points are clearer than another shared abstraction.
-- No private-helper rename sweep; underscore-only churn does not simplify behavior.
-- No uniform first-candidate reload; one extra strict disk hydration is less direct.
-- No Apptainer smoke edit without its external build/test gate.
-- No license file or ownership assertion without supervisor/KTO confirmation.
-
-### Protected behavior
-
-- For valid inputs, scientific and thesis-facing outputs remain identical.
-- Raw malformed inputs continue to fail at the same owning boundary. Exact error wording need not
-  be preserved unless it is an external CLI/API contract.
-
-### Expected outcome
-
-Repeated internal-trust ceremony and choreography-only tests disappear without changing any
-scientific value or durable product.
-
-### Checks
-
-- Capture small deterministic pre-edit fixtures for temporal features, experiment manifests,
-  observation reduction, Study selection, and model checkpoint naming; compare after the edit.
-  Do not add permanent golden machinery solely for this sweep.
-- Existing focused tests, full Python and app suites where touched, Ruff, format, Pyright, required
-  Vulture scan with manual classification, Expo Doctor where touched, and diff check.
-- Any output difference rejects the candidate cleanup; revert that individual item rather than
-  adding compensation code.
-
-### Dependencies and gates
-
-- Runs last so mechanical edits do not create merge/review noise for semantic slices.
-- MIT metadata removal is approved and recorded as correctness/completeness work.
+- Runs after Slice 3 only to preserve one-writer sequencing; it is architecturally independent.
+- No simulator visual gate is introduced because styles do not move. Native device/model execution
+  is not claimed unless actually run.
 
 ## Explicitly rejected or deferred audit candidates
 

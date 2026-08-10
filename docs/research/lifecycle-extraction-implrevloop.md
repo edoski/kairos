@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 4 complete and green; Slice 5 preparing locally
+Status: Slice 5 complete and green; Slice 6 preparing locally
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1424,7 +1424,14 @@ Recorded result:
 
 ### Slice 5: KAIROS campaign and experiment lifecycle adoption
 
-Status: planned; depends on Slice 4 green
+Status: complete and green; exact baseline `6f2d4a2486f37216268d7ebf2f3984529f2f97c9`;
+accepted head `b8afc22ff37640bcd72af2bba5098fae43c4bfb4`
+
+Implementer: `/root/slice5_kairos_campaign_impl`; sole writer in the run-owned KAIROS worktree and
+the Servatus prerequisite correction.
+
+Reviewer: `/root/slice5_kairos_campaign_review`, with the same parallel Standards and Spec lanes
+through both correction loops.
 
 Scope:
 
@@ -1497,6 +1504,40 @@ Checks:
   packing loop, `sbatch`/`srun`/Apptainer renderer, generic scratch transaction, compatibility shim,
   or duplicate target/resource schema remains.
 - No live SSH, scheduler, queue, image, or file-transfer mutation.
+
+Recorded result:
+
+- Initial implementation `efbfdc770fdce55176b2b954b38fe7a7dc4d156b`
+  (`refactor(execution): adopt Servatus campaigns`) deleted `kairos.execution`, `jobs.tsv`, and
+  `REMOTE.yaml`; added KAIROS-owned worker/task translation; moved packing, native submission,
+  receipts, ambiguity, retry, and restart to Servatus; replaced the target with strict TOML
+  profiles; retained cells, typed requests, completion probes, and manifest meaning in KAIROS; and
+  preserved the exact production resource request and canonical output layout.
+- Review round 1 returned Standards 0 and two Spec findings. The immutable Campaign roster broke the
+  real prepare -> launch -> `hpo extend` -> relaunch flow, and Servatus had changed protected log
+  semantics from job-ID/zero-based combined logs to allocation-ID/one-based split logs.
+- The same implementer produced reviewed Servatus `0.4.0` candidate commits
+  `836d6c857776f1bb638c176faf0447f4f10e348e` and
+  `81ab533f6e680f457a4501cbff9b8c09a75a8c76`. Exact-prefix append-only Campaign growth preserves
+  durable receipts, retry, ambiguity, and accepted-prefix skipping; durable state owns the roster
+  across stale handles and submission races; `%j.out` and zero-based `%j-<slot>.out` combine both
+  streams. The prerequisite correction review returned Standards 0 and Spec 0 after closing one
+  stale-handle P1/P2 round.
+- Authorized release `v0.4.0` completed from exact reviewed head `81ab533f`: main CI
+  `31406203457`, tag CI `31406276870`, and Trusted Publishing `31406342319` passed. PyPI records
+  owner `edoski`; wheel SHA-256 is
+  `e26dd21451a87a12dfc961259534cc12da45ddf2ea6dc99ed465ae8431029af5` and sdist SHA-256 is
+  `1d8f17a39a5e33a47b00daa69405c81c29bbff81da5538cf6c58b1529b64e196`.
+- KAIROS correction `b8afc22ff37640bcd72af2bba5098fae43c4bfb4`
+  (`fix(experiments): support HPO campaign extension`) pins the published artifacts. Its real
+  author/launch integration accepts an ordered 27-task prefix, extends to 54, submits the 27-task
+  suffix exactly once in seven allocations, retains all 54 receipt keys, and leaves zero pending.
+  The same reviewer returned final `GREEN LIGHT`: Standards 0, Spec 0.
+- Accepted KAIROS gates: 41 focused and 125 full tests; Ruff check/format; strict Pyright; Vulture;
+  lock and offline frozen sync; installed Servatus API; CLI; dependency/source residue; exact diff
+  and clean status. No compatibility or migration path was added.
+- No canonical output, data, scratch, checkpoint, corpus, dataset, protected main dirt, remote job,
+  queue, GPU, Slurm, SSH, Apptainer runtime, or deployment was touched.
 
 ### Slice 6: KAIROS clean-break documentation and integration gate
 

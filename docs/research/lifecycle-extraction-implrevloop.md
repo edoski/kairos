@@ -797,7 +797,7 @@ Recorded result:
 
 Status: complete and green; exact baseline
 `d09a846c46ebad655317462da8edca1d967166d1`; accepted head
-`0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`
+`c494182cd6f036a253d41a00df5447b867b719b3`
 
 Implementer: `/root/slice2_campaign_impl`; direct writer on the single Servatus `main` worktree.
 
@@ -855,6 +855,17 @@ tests, Ruff check/format, strict Pyright, Vulture, and diff checks passed. All t
 and the one round-2 concurrency finding are closed. Live SSH, Slurm, Apptainer, GPU, TRES,
 isolation, and throughput checks remain external-gate work. The accepted `0.1.0rc1` candidate is
 local and unpushed.
+
+Stable-release correction: after live acceptance, the same implementer committed
+`c494182cd6f036a253d41a00df5447b867b719b3` (`chore(release): prepare stable 0.1.0`) on top of the
+unamended candidate. Only README, ADR 0003, `pyproject.toml`, and `uv.lock` changed. The delta records
+the validated Slurm 23.11.4 envelope and SMT/core-topology constraint, changes synchronized package
+metadata from `0.1.0rc1` to `0.1.0`, and leaves all source, rendering, resource arithmetic, and
+runtime dependencies unchanged. The same fresh reviewer checked the fixed `0c454bd...c494182`
+range: `GREEN LIGHT`, Standards 0 findings and Spec 0 findings. Full verification reported and
+proportionally repeated 169 passing tests with one expected platform skip, Ruff, formatting,
+Pyright, Vulture, build, artifact metadata, installed wheel/CLI, and diff checks. Stable local head
+is clean and awaits the separately authorized push/tag/release/PyPI sequence.
 
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
 ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live
@@ -949,7 +960,7 @@ Dependencies and gates:
 
 ### External gate: Servatus 0.1 production acceptance
 
-Status: live execution passed; stable-release hardening and review pending
+Status: complete and green; stable `0.1.0` publication authorized
 
 - Begin with read-only inventory. Never hold, release, cancel, requeue, reprioritize, alter
   dependencies, or otherwise mutate any pre-existing queued/running job. Submit new acceptance jobs
@@ -1008,11 +1019,10 @@ Live record, 2026-08-10, candidate `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`:
   site's CPU/GRES topology and a truthful resource profile. KAIROS requests 32 CPUs per GPU task,
   so its current four-way packing has ample core granularity and its renderer-equivalent throughput
   path is not negatively changed.
-- The live gate is behaviorally accepted. Before stable publication, the same Slice 2 implementer
-  and reviewer must complete a narrow release-hardening correction: record the validated envelope
-  and topology caveat in Servatus, change `0.1.0rc1` to `0.1.0`, rerun all local artifact gates, and
-  return zero Standards and Spec findings. No scheduler-rendering or automatic-resource change is
-  authorized by this finding.
+- The live gate is accepted. The same Slice 2 implementer committed the narrow release-hardening
+  correction at `c494182cd6f036a253d41a00df5447b867b719b3`; the same fresh reviewer returned
+  `GREEN LIGHT` with zero Standards and Spec findings. Servatus is a clean stable `0.1.0` candidate.
+  No scheduler-rendering or automatic-resource change resulted from the finding.
 
 ### Slice 3: KAIROS disposable publication adoption
 

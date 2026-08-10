@@ -801,15 +801,23 @@ Status: in progress; resumed by user request on 2026-08-10 from exact baseline
 Implementer: `/root/slice2_campaign_impl`; direct writer on the single Servatus `main` worktree.
 
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
-ledger updates only. No Servatus push, tag, GitHub Release, PyPI publication, research SSH/Slurm/
-Apptainer contact, KAIROS integration, or KAIROS output/data/scratch mutation is authorized by this
-resume.
+ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live
+Servatus production gate and, only if it passes, the stable `0.1.0` Servatus push, tag, GitHub
+Release, and PyPI publication. This authority never permits KAIROS integration before its declared
+dependency, mutation of KAIROS output/data/scratch, or mutation of pre-existing scheduler jobs.
 
 Continuation authority: after Slice 2, proceed through all later slices without another routine
 pause once each declared dependency and review gate is satisfied. This does not waive the external
 Servatus production-acceptance gate, authorize contact with the research cluster or its jobs/files,
 or authorize Servatus/KAIROS pushes, tags, GitHub Releases, PyPI publication, image deployment, or
 mutation of protected KAIROS state.
+
+Local KAIROS implementation is independent of remote cutover. After Servatus is accepted and its
+stable dependency is installable, Slices 3–7 may proceed in the run-owned local worktree while old
+remote jobs continue through their existing checkout and immutable image. Local work uses source,
+synthetic temporary state, and ordinary tests only; it never opens or mutates thesis outputs or
+remote scratch. Only deployment, image/config changes, protected-state handling, and live KAIROS
+GPU comparison wait for the old remote path to be safe to retire.
 
 Scope:
 
@@ -885,7 +893,14 @@ Dependencies and gates:
 
 ### External gate: Servatus 0.1 production acceptance
 
-Status: blocked by implementation and explicit cluster authorization
+Status: authorized after Slice 2 green; blocked until then and by the noninterference preflight
+
+- Begin with read-only inventory. Never hold, release, cancel, requeue, reprioritize, alter
+  dependencies, or otherwise mutate any pre-existing queued/running job. Submit new acceptance jobs
+  only when the inventory establishes a noninterfering window or route; otherwise pause.
+- Put every acceptance file, log, campaign, and optional test image under a newly created explicit
+  SHA-named Servatus acceptance path. Never write, move, delete, relink, migrate, or clean existing
+  KAIROS outputs, experiment data, logs, checkpoints, scratch, images, or other thesis state.
 
 - Present the supported envelope and threat boundary to a cluster administrator: Servatus is an
   unprivileged user-side OpenSSH/Slurm/Apptainer client, not a scheduler plugin, daemon, security
@@ -897,11 +912,15 @@ Status: blocked by implementation and explicit cluster authorization
 - Run bounded `servatus validate` and separately authorized CPU-only, one-GPU, one-process/two-GPU,
   and four-packed-one-GPU smokes. Verify requested versus allocated TRES, logs, exit propagation,
   and four distinct physical GPU UUIDs for the packed case.
+- Do not deliberately create a live ambiguous/orphan allocation. Deterministic fake-Slurm crash
+  injection is sufficient for intent/receipt ambiguity; a live orphan adds scheduler risk without
+  strengthening the contract.
 - Review the immutable intent/receipt/ambiguity record, sanitized scheduler environment, exact
   request provenance, documentation, build artifacts, version support statement, and no privileged
   installation requirement.
 - Fix any failure through another implementation/review correction loop. Stable `0.1.0` may be
-  tagged and published only after this gate passes; unit tests and fake Slurm alone are insufficient.
+  tagged and published only after this gate passes; the user authorized that stable release on
+  2026-08-10. Unit tests and fake Slurm alone are insufficient.
 
 ### Slice 3: KAIROS disposable publication adoption
 
@@ -1156,11 +1175,11 @@ or remote checkout:
    65536 MiB, and three days per process; four steps run concurrently with distinct physical GPU
    UUIDs; nine tasks remain `3 + 3 + 3`; sibling failures are aggregated without cancelling
    successful siblings; and canonical KAIROS validation remains the only completion authority.
-6. Compare old/new `ReqTRES`, `AllocTRES`, logs, results, and representative elapsed/throughput
-   behavior on the same dedicated partition and GPU model, preferably the same node, with comparable
-   driver, power, and clock state recorded alongside physical GPU UUIDs. The mixed production
-   partition route is not valid A/B evidence. Structural/local parity supports migration, but only a
-   controlled live comparison supports a no-throughput-regression claim.
+6. Compare old/new `ReqTRES`, `AllocTRES`, logs, results, and one representative task's
+   elapsed/throughput behavior using the same immutable image, input, dedicated partition, and GPU
+   model, preferably the same node. This lean A/B is a gross-regression check, not a statistical
+   performance study; repeated trials or a thesis-scale campaign are unnecessary unless making a
+   formal performance claim. The mixed production partition route is not valid A/B evidence.
 7. Run one application publication smoke. Preserve the preceding image and old execution path until
    the GPU and publication gates pass.
 8. Update remote image configuration only after acceptance. File transfer, remote pushes, package
@@ -1201,3 +1220,14 @@ The user then authorized automatic continuation through all remaining implementa
 normal. That authority is dependency-gated: Slice 3 cannot begin until the separately authorized
 production gate accepts Servatus and stable `0.1.0` is installable. No external gate or protected
 state restriction is implicitly waived.
+
+The user subsequently authorized the live Servatus acceptance gate and the conditional stable
+`0.1.0` release. Existing data and existing queued/running jobs remain strictly protected. The live
+gate uses only new isolated SHA-named state and new noninterfering smoke allocations after a
+read-only preflight. The Servatus gate proves resource/execution correctness, not performance;
+KAIROS later needs only one controlled representative A/B to detect a gross integration regression.
+
+The user confirmed that remote-job drain constrains cutover, not local implementation. Once the
+Servatus dependency gate is satisfied, local KAIROS slices continue without contacting the GPUs or
+altering the old remote checkout/image; final deployment remains blocked until protected remote
+work is safe.

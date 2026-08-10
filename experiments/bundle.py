@@ -11,7 +11,7 @@ from uuid import UUID
 
 import polars as pl
 import typer
-from servatus import Draft, Workspace
+from servatus import Draft, publish
 
 from kairos.config import EvaluateRequest, TrainRequest, TuneRequest
 from kairos.experiments import (
@@ -131,17 +131,11 @@ def publish_bundle(
     manifest = ExperimentManifest(root=cells)
     bundle = bundle_path(storage_root, kind, experiment_id)
     canonical = experiment_directory(storage_root, kind, experiment_id)
-    if canonical.exists():
-        raise FileExistsError(canonical)
 
-    with Workspace(canonical, identity=experiment_id.bytes) as workspace:
-        manifest_path = workspace.path / "manifest.json"
-        manifest_path.write_text(manifest.model_dump_json(), encoding="utf-8")
+    def assemble(draft: Draft) -> None:
+        (draft.path / "manifest.json").write_text(manifest.model_dump_json(), encoding="utf-8")
 
-        def assemble(draft: Draft) -> None:
-            draft.link(manifest_path, "manifest.json")
-
-        workspace.publish(assemble)
+    publish(canonical, assemble)
 
     shutil.rmtree(bundle)
 
@@ -166,9 +160,18 @@ def close_bundle(
     print(experiment_id)
 
 
-def print_study_metrics(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -> None:
+def print_metrics(
+    storage_root: Path,
+    kind: ExperimentKind,
+    experiment_id: UUID,
+    reducer: Callable[[Path, UUID], pl.DataFrame],
+) -> None:
     results = []
-    for cell, study_id in load_experiment_manifest(storage_root, kind, experiment_id).items():
-        metrics = reduce_study(storage_root, study_id)
+    for cell, record_id in load_experiment_manifest(storage_root, kind, experiment_id).items():
+        metrics = reducer(storage_root, record_id)
         results.append(pl.DataFrame({"cell": [cell] * metrics.height}).hstack(metrics))
     print(pl.concat(results).write_csv(None, separator="\t"), end="")
+
+
+def print_study_metrics(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -> None:
+    print_metrics(storage_root, kind, experiment_id, reduce_study)

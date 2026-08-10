@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
 from uuid import UUID, uuid4
 
-import polars as pl
-from bundle import StorageRoot, close_bundle, open_bundle, run, write_evaluate_cells
+from bundle import StorageRoot, close_bundle, open_bundle, print_metrics, run, write_evaluate_cells
 
 from kairos.config import BlockWindow, EvaluateRequest
 from kairos.corpus import load_corpus_request
@@ -55,22 +52,11 @@ def close(storage_root: StorageRoot, experiment_id: UUID) -> None:
 
 
 def report(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    _print_cells(storage_root, experiment_id, reduce_evaluation)
+    print_metrics(storage_root, _KIND, experiment_id, reduce_evaluation)
 
 
 def baselines(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    _print_cells(storage_root, experiment_id, reduce_baselines)
-
-
-def _print_cells(
-    storage_root: Path, experiment_id: UUID, reducer: Callable[[Path, UUID], pl.DataFrame]
-) -> None:
-    manifest = load_experiment_manifest(storage_root, _KIND, experiment_id)
-    results = []
-    for cell, evaluation_id in manifest.items():
-        result = reducer(storage_root, evaluation_id)
-        results.append(pl.DataFrame({"cell": [cell] * result.height}).hstack(result))
-    print(pl.concat(results).write_csv(None, separator="\t"), end="")
+    print_metrics(storage_root, _KIND, experiment_id, reduce_baselines)
 
 
 def rolling(storage_root: StorageRoot, experiment_id: UUID) -> None:

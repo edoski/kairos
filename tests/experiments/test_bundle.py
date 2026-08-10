@@ -4,13 +4,7 @@ from uuid import UUID
 import pytest
 
 import experiments.bundle as bundle_module
-from experiments.bundle import (
-    close_bundle,
-    load_roster,
-    open_bundle,
-    publish_bundle,
-    write_tune_cells,
-)
+from experiments.bundle import close_bundle, load_roster, open_bundle, write_tune_cells
 from kairos.config import (
     BlockWindow,
     ExperimentSemantics,
@@ -111,10 +105,10 @@ def test_publication_failure_preserves_authored_bundle(
     campaign.mkdir()
     (campaign / "state.json").write_text("retry", encoding="utf-8")
 
-    def fail_publication(_workspace: object, _assemble: object) -> None:
+    def fail_publication(_destination: object, _assemble: object) -> None:
         raise RuntimeError("publication failed")
 
-    monkeypatch.setattr(bundle_module.Workspace, "publish", fail_publication)
+    monkeypatch.setattr(bundle_module, "publish", fail_publication)
 
     with pytest.raises(RuntimeError, match="publication failed"):
         close_bundle(
@@ -129,16 +123,3 @@ def test_publication_failure_preserves_authored_bundle(
     assert (bundle / "cells.tsv").is_file()
     assert (bundle / "requests").is_dir()
     assert (campaign / "state.json").read_text() == "retry"
-
-
-def test_publish_refuses_an_existing_canonical_directory(tmp_path: Path) -> None:
-    bundle = open_bundle(tmp_path, ExperimentKind.HPO, _EXPERIMENT_ID)
-    write_tune_cells(bundle, [("ethereum.lstm", _request())])
-    canonical = bundle.with_name(str(_EXPERIMENT_ID))
-    canonical.mkdir()
-
-    with pytest.raises(FileExistsError):
-        publish_bundle(tmp_path, ExperimentKind.HPO, _EXPERIMENT_ID, {"ethereum.lstm": _STUDY_ID})
-
-    assert (bundle / "cells.tsv").is_file()
-    assert not (bundle / "manifest.json").exists()

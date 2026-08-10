@@ -834,6 +834,14 @@ reviewer, with fresh parallel Standards and Spec lanes pinned to the unchanged c
 the same ten closure criteria. This is an operational waiver of same-reviewer continuity, not a
 waiver of either review axis or the zero-finding gate.
 
+Correction re-review 1: rejected at `b0723013ea857542da0f96e886eb82363f6ab1e7`.
+The fresh lanes incorporated all late pre-interrupt findings and confirmed criteria 1 and 3–10
+closed. One P1 remained on both axes: a concurrent opener could observe a newly created Campaign
+directory, skip the creator's pending parent-directory sync, install state, and return without any
+successful proof that the parent entry was durable. The reviewer reproduced the ordering
+deterministically. That single finding was returned to the original implementer for correction
+round 2; stable correction hunks remain out of scope.
+
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
 ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live
 Servatus production gate and, only if it passes, the stable `0.1.0` Servatus push, tag, GitHub

@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 5 complete and green; Slice 6 preparing locally
+Status: Slice 6 complete and green; Slice 7 preparing locally
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -359,9 +359,9 @@ variance make no static grouping policy universally optimal. `tasks_per_allocati
 operator tuning knob and may only lower the legal cap.
 
 The source-backed Slurm rationale, failure boundaries, exact arithmetic, and operator acceptance
-criteria are recorded in
-[`servatus-production-resource-model.md`](servatus-production-resource-model.md). That record is
-evidence for this ledger; the public contract above remains the implementation authority.
+criteria were absorbed into this ledger and the standalone Servatus repository. The duplicated
+KAIROS research note was deleted in Slice 6; the public contract above remains the implementation
+authority.
 
 Raw `#SBATCH`, SSH, shell, `srun`, Apptainer, environment, and arbitrary option passthrough are not
 interfaces. Strict TOML rejects unknown keys, booleans as integers, controls, NULs, relative remote
@@ -656,8 +656,8 @@ opaque task
 
 Servatus V1 has no scheduler-library dependency. Its private Campaign adapter invokes OpenSSH and
 Slurm's stable command-line interfaces directly. Submitit is prior art, not a dependency, optional
-backend, or public interface. The full source-pinned decision is recorded in
-[`servatus-submitit-decision.md`](servatus-submitit-decision.md).
+backend, or public interface. The source-pinned decision was absorbed into this ledger and the
+standalone Servatus repository; the duplicated KAIROS research note was deleted in Slice 6.
 
 A real Submitit 1.5.4 fake-Slurm probe proved the strongest case for adoption: one allocation could
 launch three ranks, give each one GPU and a distinct opaque payload, and enter through an Apptainer
@@ -1541,7 +1541,12 @@ Recorded result:
 
 ### Slice 6: KAIROS clean-break documentation and integration gate
 
-Status: planned; depends on Slice 5 green
+Status: complete and green; exact baseline `002335ee9c226ab410b7d025e3594366be5cf609`;
+accepted head `f5391bbb5c157e2b94e08807c0dee5430c2bb5ad`
+
+Implementer: `/root/slice6_kairos_docs_impl`; sole writer in the run-owned KAIROS worktree.
+
+Reviewer: `/root/slice6_kairos_docs_review`, with fresh parallel Standards and Spec lanes.
 
 Scope:
 
@@ -1581,6 +1586,34 @@ Checks:
 - Explicitly unrun until authorized: real GPU training, SSH, Slurm, scheduler monitoring, file
   transfer, Apptainer image build/test, mobile simulator/device, native model assets, visual checks,
   push, package publication, and PR.
+
+Recorded result:
+
+- Initial implementation `d92b37a46850f4dccad46570aa9321677f2f98c2`
+  (`refactor(servatus): complete KAIROS integration`) added ADR 0008, superseded ADR 0007's local
+  implementation ownership, narrowed ADR 0006 to KAIROS object authority plus Servatus mechanics,
+  rewrote active execution/publication documentation, deleted two duplicated generic Servatus
+  research notes, removed dependency-internal tests, and aligned the isolated mobile exporter on
+  published `servatus==0.4.0`.
+- Review round 1 returned Standards 0 and one Spec P1: pruning removed the only exact assertion of
+  KAIROS's committed production target/resource profile. The same review found no removable wrapper,
+  middle-man, or duplicated generic mechanism in the remaining launcher, worker, CLI, or bundle
+  lines; those lines own KAIROS task meaning, canonical completion, user intent, and presentation.
+- Correction `f5391bbb5c157e2b94e08807c0dee5430c2bb5ad` restores one public-parser config contract for ordered
+  partitions, script and submit caps, exact one-task resources, and four-task ceilings without
+  retesting Servatus planning or rendering. The same reviewer returned `GREEN LIGHT`: Standards 0,
+  Spec 0.
+- Accepted gates: 116 root tests, 9 mobile-export tests, 43 App tests; App typecheck; Ruff
+  check/format; strict Pyright; Vulture; root/mobile locks and frozen syncs; npm dry install with
+  package/lock hashes preserved; CLI/import/profile/canonical-layout/residue/diff/status checks.
+- Physical production Python from planning baseline `56f24ae` is 4,222 -> 4,166 (`-56`): `src/`
+  is `-92`, `experiments/` is `+43`, and mobile exporter production is `-7`. Tests are `+110` after
+  retaining typed task, completion, extension, restart, retry, and profile integration contracts.
+  Excluding this run's 1,752-line execution ledger, active documentation is approximately flat
+  after removing 650 lines of duplicated generic research. The planning LOC estimate was too
+  optimistic and was not used as a correctness target.
+- No canonical output, data, scratch, checkpoint, corpus, dataset, protected main dirt, remote job,
+  queue, GPU, Slurm, SSH, Apptainer runtime, device, or external deployment was touched.
 
 ### Slice 7: compact-CUDA reconciliation
 
@@ -1660,8 +1693,8 @@ common-case, flexible-interface, packing-adversarial, and ownership audits conve
 production model in this ledger. A throwaway pure planner demonstrated exact homogeneous resource
 arithmetic and current KAIROS groupings (`1`, `4`, `9 -> 3 + 3 + 3`, and
 `102 -> 24*4 + 3 + 3`), plus CPU-only and whole-multi-GPU handling and rejection of heterogeneous
-tasks or unsafe explicit caps. Its result was absorbed and the prototype was deleted. The
-source-backed record is [`servatus-production-resource-model.md`](servatus-production-resource-model.md).
+tasks or unsafe explicit caps. Its result was absorbed and the prototype and duplicated research
+record were deleted.
 
 Final read-only KAIROS-parity, interface-leanness, and administrator-readiness reviews found and
 closed planning defects in the KAIROS allocation cap and controlled A/B conditions; eager

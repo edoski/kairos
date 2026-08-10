@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 2 complete and green; authorized live production preflight in progress
+Status: Slice 2 complete and green; Slice 3 paused on a narrow Servatus file-publication prerequisite
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -46,11 +46,18 @@ lifecycle into a reusable standalone repository.
   experiment drafts, scratch, or other existing work. Do not contact or mutate currently running or
   queued research-cluster jobs. They finish through their existing checkout, scripts, and immutable
   image before any cutover.
-- Preserve the exact canonical KAIROS output paths, filenames, schemas, associations, ordering, and
-  byte formats. Servatus changes future staging and commit mechanics only. Existing finalized
-  outputs remain valid and readable. Incomplete old-layout work stays untouched and, if it must be
-  resumed or finalized, uses the old checkout before clean-break cutover; Servatus adds no legacy
-  parser.
+- Within this Servatus extraction, preserve the exact canonical KAIROS output paths, filenames,
+  schemas, associations, ordering, and byte formats. Servatus changes future staging and commit
+  mechanics only. Existing finalized outputs remain valid and readable. Incomplete old-layout work
+  stays untouched and, if it must be resumed or finalized, uses the old checkout before clean-break
+  cutover; Servatus adds no legacy parser.
+- The separately planned Blockweaver--KAIROS dataset alignment in task
+  `019fea93-223d-7d42-bcfc-c4a499b59dd0` is outside this run. It may later replace only the external
+  corpus boundary under its own ledger and migration authorization. This run neither implements nor
+  alters that plan, touches `outputs/corpora` or `outputs/datasets`, nor makes Servatus understand
+  datasets, corpus UUIDs, Blockweaver manifests, or migration. Studies, trials, artifacts,
+  evaluations, experiments, figures, and other KAIROS-owned outputs retain the exact-preservation
+  rule.
 - Use a clean break. After KAIROS adopts the new module, delete replaced KAIROS infrastructure and
   tests instead of retaining wrappers, compatibility modes, migrations, or parallel execution
   paths.
@@ -254,6 +261,9 @@ class Workspace:
 
 
 def publish(destination: Path, build: Callable[[Draft], None]) -> Publication: ...
+
+
+def publish_file(destination: Path, write: Callable[[Path], None]) -> Publication: ...
 ```
 
 Only these application-facing values and a compact error hierarchy are exported from
@@ -276,9 +286,13 @@ Study workspace, then opens one nested workspace whose private destination is th
 later validates the exact ordered trial set and publishes the canonical Study through the parent
 workspace. Servatus knows neither Method indices nor the number or meaning of trials.
 
-`publish(destination, build)` is the disposable sibling for mobile export and benchmark units. It
-uses the same staged commit but always removes its private stage after failure. It has no resumable
-workspace or identity binding.
+`publish(destination, build)` is the disposable directory sibling for mobile export and benchmark
+directory units. `publish_file(destination, write)` is its explicit regular-file sibling: Servatus
+passes one already-created empty adjacent stage file, the application writes and validates it in
+place, and Servatus rejects inode substitution or a non-regular result. Both use the same durable
+no-replace transaction and always remove their private stage after failure. Neither has a resumable
+workspace or identity binding. Do not overload `publish()` with shape inference, add a `kind` flag,
+or introduce a KAIROS wrapper.
 
 ### Resource and planning contract
 
@@ -410,6 +424,9 @@ publication remains the final data-safety backstop.
   destination, and requires the caller not to mutate the source inode after linking.
 - Builders may use `Draft.path` for ordinary application-native writers such as Polars and Torch.
   Symlinks and special files are rejected before commit.
+- `publish_file()` gives its writer an existing empty regular file and requires in-place mutation.
+  The pinned inode must remain a regular file on the destination filesystem through validation and
+  sync. Application bytes, schema, and validation remain entirely caller-owned.
 - Every publication attempt gets a unique stage. Concurrent attempts cannot delete each other's
   state.
 - A builder exception exposes no destination. Disposable stages are removed; resumable Workspace
@@ -451,7 +468,8 @@ new module's ceiling.
 
 `cells.tsv`, typed request files, `ExperimentKind`, and canonical manifests remain in KAIROS.
 `jobs.tsv` leaves KAIROS and is replaced by Servatus-owned campaign state. Corpus production remains
-external; there is no KAIROS Corpus publisher to extract.
+external; there is no KAIROS Corpus publisher to extract. The later Blockweaver dataset-alignment
+plan therefore requires no Servatus product change.
 
 `CandidateProcessInput` moves from `kairos.execution` to KAIROS request/worker ownership. Hidden
 `kairos remote workflow` and `kairos remote candidate` leaves remain KAIROS application adapters.
@@ -1033,10 +1051,69 @@ Live record, 2026-08-10, candidate `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`:
   `f8bb055c83ad033aaf5433f4b87f4160fe4f86d97a8f3b49ebaed335c8f6aa10`. A strict isolated install
   from the PyPI index imported the package and returned metadata version `0.1.0`.
 
+### Prerequisite Slice 2A: Servatus atomic regular-file publication
+
+Status: planned; exact baseline `c494182cd6f036a253d41a00df5447b867b719b3`
+
+Reason:
+
+- Slice 3's read-only implementation pass found that KAIROS publishes two immutable canonical
+  regular files, `protocol.json` and `sweep-NNN.parquet`, while Servatus 0.1 publishes only complete
+  directory trees. Changing those destinations or retaining a KAIROS rename shim would violate the
+  clean extraction boundary.
+- Three independent interface designs and one disposable writer probe converged on one explicit
+  addition: `publish_file(destination, write)`. The existing `publish()` and `Workspace` interfaces
+  remain unchanged. A polymorphic Draft, output-kind flag, auto-detection, resumable file workspace,
+  filesystem adapter, or KAIROS wrapper adds concepts without another real caller and is rejected.
+
+Scope:
+
+- Add `publish_file()` to the compact public interface and reuse the private POSIX transaction.
+- Create one owner-only destination-adjacent empty regular-file stage, pin its descriptor and inode,
+  pass its path to the application writer, and require in-place writing and validation.
+- After the writer returns, reject substitution, symlink, directory, special-file, or filesystem
+  change; sync the file; commit through the existing descriptor-relative kernel no-replace rename;
+  sync the destination parent; and clean only this attempt's exact stage on failure.
+- Preserve `DestinationExists`, `CrossDevicePublication`, `UnsafePublication`, and
+  `UnsupportedPlatform`; propagate application exceptions unchanged and do not turn a committed
+  result into apparent failure because of private residue.
+- Document the narrow file contract and prepare a backward-compatible `0.2.0` candidate. A new
+  public API is a minor release, not a `0.1.1` bug-fix release.
+
+Non-goals:
+
+- Directory or Workspace behavior changes; streams; copies; object stores; Windows; overwrite;
+  multi-file transactions; validators; ML types; Blockweaver integration; datasets; corpus
+  migration; KAIROS edits; external release or publication before its explicit gate.
+
+Expected outcome:
+
+> Any application can atomically expose either one validated immutable regular file or one validated
+> immutable directory tree through two explicit operations backed by one durable transaction.
+
+Checks:
+
+- Existing-empty-stage writer ergonomics for ordinary `pathlib` and binary writers; successful
+  bytes and mode; builder exception; missing/substituted/wrong-type stage; destination race;
+  same-filesystem enforcement; file and parent sync ordering; cleanup ownership and failures;
+  Linux/macOS exclusive rename; existing directory and Workspace suite unchanged.
+- Full Pytest, Ruff check/format, strict Pyright, Vulture, lock check, wheel/sdist build and content
+  inspection, installed-wheel import/version/API smoke, CLI help, and clean fixed-range diff.
+- Fresh implementer and distinct reviewer under the same ordered correction loop. No KAIROS output,
+  Blockweaver file, SSH, Slurm, Apptainer, GPU, push, tag, GitHub Release, or PyPI mutation.
+
+Dependencies and gates:
+
+- The accepted and published Servatus `0.1.0` head is the exact implementation baseline.
+- Slice 3 remains paused until this slice is independently green and the resulting Servatus release
+  is reproducibly installable. Preparing and reviewing the local `0.2.0` candidate is authorized;
+  push, tag, GitHub Release, and PyPI publication are external mutations and remain separately
+  gated.
+
 ### Slice 3: KAIROS disposable publication adoption
 
-Status: implementation in progress; baseline
-`1df544c5fd713e4f225a52a9442186ac8c0dabee`
+Status: paused without product edits; baseline
+`3018733b79bf98ae63e71d2592eee307e11f86d8`; depends on prerequisite Slice 2A green and installable
 
 Checkout: run-owned `/Users/edo/dev/python/kairos-servatus-extraction` worktree on
 `codex/servatus-extraction`, created from the clean committed local `main` baseline. The pre-existing
@@ -1350,3 +1427,17 @@ The user confirmed that remote-job drain constrains cutover, not local implement
 Servatus dependency gate is satisfied, local KAIROS slices continue without contacting the GPUs or
 altering the old remote checkout/image; final deployment remains blocked until protected remote
 work is safe.
+
+Slice 3's first read-only implementation pass stopped without product edits at
+`3018733b79bf98ae63e71d2592eee307e11f86d8`: Servatus 0.1's directory-only publication cannot
+preserve the benchmark's exact standalone `protocol.json` and `sweep-NNN.parquet` destinations.
+Three independent interface designs favored the narrow explicit `publish_file()` operation over a
+polymorphic publication API or KAIROS shim. Prerequisite Slice 2A now closes that generic contract
+before the same KAIROS implementer resumes Slice 3.
+
+The separate future plan in task `019fea93-223d-7d42-bcfc-c4a499b59dd0` was consulted read-only on
+2026-08-10. Its committed Blockweaver ledger remains unchanged and paused until this Servatus run
+finishes. Only its relevant ownership rule is carried here: Blockweaver will later own the external
+dataset artifact under a separately authorized clean-break migration, while Servatus remains an
+opaque path transaction and KAIROS retains scientific interpretation. This run makes no corpus or
+dataset change and does not pre-empt that future plan.

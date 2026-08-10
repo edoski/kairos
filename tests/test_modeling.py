@@ -423,10 +423,8 @@ def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
         run_candidate(tmp_path, request, 0)
     first_progress = progress()
     definition = TrainingDefinition(experiment=request.experiment, method=method)
-    parent = Workspace(
-        study_directory(tmp_path, request.study_id), identity=request.model_dump_json().encode()
-    )
-    work = parent.child("trial-0", identity=definition.model_dump_json().encode()).path
+    parent = Workspace(study_directory(tmp_path, request.study_id), identity=request.study_id.bytes)
+    work = parent.child("trial-0", identity=request.model_dump_json().encode()).path
     assert (work / "last.ckpt").is_file()
     last_checkpoint = torch.load(work / "last.ckpt", map_location="cpu", weights_only=True)
     assert "optimizer_states" in last_checkpoint

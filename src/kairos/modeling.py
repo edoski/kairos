@@ -394,9 +394,9 @@ def run_candidate(storage_root: Path, request: TuneRequest, method_index: int) -
     )
     canonical = study_directory(storage_root, request.study_id)
     canonical.parent.mkdir(exist_ok=True)
-    parent = Workspace(canonical, identity=request.model_dump_json().encode())
+    parent = Workspace(canonical, identity=request.study_id.bytes)
     with parent.child(
-        f"trial-{method_index}", identity=definition.model_dump_json().encode()
+        f"trial-{method_index}", identity=request.model_dump_json().encode()
     ) as workspace:
         blocks = load_corpus_blocks(storage_root, request.corpus_id)
         prepared = prepare_fit_history(blocks, request.experiment)

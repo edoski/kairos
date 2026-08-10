@@ -98,9 +98,9 @@ def _retain(
     )
     canonical = study_directory(storage_root, request.study_id)
     canonical.parent.mkdir(exist_ok=True)
-    parent = Workspace(canonical, identity=request.model_dump_json().encode())
+    parent = Workspace(canonical, identity=request.study_id.bytes)
     with parent.child(
-        f"trial-{method_index}", identity=definition.model_dump_json().encode()
+        f"trial-{method_index}", identity=request.model_dump_json().encode()
     ) as workspace:
         workspace.publish(
             lambda draft: assemble_candidate_result(
@@ -176,39 +176,7 @@ def test_retain_publish_and_load_selected_method_in_request_order(tmp_path: Path
         "selected.ckpt",
         "validation.parquet",
     }
-    assert not Workspace(
-        study_directory(tmp_path, STUDY_ID), identity=request.model_dump_json().encode()
-    ).path.exists()
-
-
-def test_candidate_keys_are_independently_composable(tmp_path: Path) -> None:
-    request = _request((LSTM_METHOD, OTHER_LSTM_METHOD))
-    canonical = study_directory(tmp_path, STUDY_ID)
-    canonical.parent.mkdir()
-    parent = Workspace(canonical, identity=request.model_dump_json().encode())
-    first = TrainingDefinition(experiment=request.experiment, method=request.method_at(0))
-    second = TrainingDefinition(experiment=request.experiment, method=request.method_at(1))
-
-    with (
-        parent.child("trial-0", identity=first.model_dump_json().encode()) as first_workspace,
-        parent.child("trial-1", identity=second.model_dump_json().encode()) as second_workspace,
-    ):
-        assert first_workspace.path != second_workspace.path
-
-
-def test_same_candidate_key_is_busy(tmp_path: Path) -> None:
-    request = _request()
-    canonical = study_directory(tmp_path, STUDY_ID)
-    canonical.parent.mkdir()
-    parent = Workspace(canonical, identity=request.model_dump_json().encode())
-    definition = TrainingDefinition(experiment=request.experiment, method=request.method_at(0))
-
-    with (
-        parent.child("trial-0", identity=definition.model_dump_json().encode()),
-        pytest.raises(WorkspaceBusy),
-        parent.child("trial-0", identity=definition.model_dump_json().encode()),
-    ):
-        pass
+    assert not Workspace(study_directory(tmp_path, STUDY_ID), identity=STUDY_ID.bytes).path.exists()
 
 
 def test_retained_result_rejects_invalid_epoch_bounds() -> None:
@@ -254,17 +222,10 @@ def test_publish_study_rejects_missing_result(tmp_path: Path) -> None:
 
 def test_publish_study_rejects_mismatched_result_request(tmp_path: Path) -> None:
     request = _request((LSTM_METHOD, OTHER_LSTM_METHOD))
+    conflicting = _request((LSTM_METHOD, OTHER_LSTM_METHOD), corpus_id=OTHER_CORPUS_ID)
     second = RetainedResult(objective=0.4, selected_epoch=3, completed_epochs=8)
     _retain(tmp_path, request, 0, RESULT)
-    _retain(tmp_path, request, 1, second)
-    parent = Workspace(
-        study_directory(tmp_path, STUDY_ID), identity=request.model_dump_json().encode()
-    )
-    result_path = parent.path / "trial-1" / "result.json"
-    result_path.write_text(
-        result_path.read_text(encoding="utf-8").replace(str(CORPUS_ID), str(OTHER_CORPUS_ID)),
-        encoding="utf-8",
-    )
+    _retain(tmp_path, conflicting, 1, second)
 
     with pytest.raises(ValueError, match="result requests must be identical"):
         publish_study(tmp_path, STUDY_ID)
@@ -273,14 +234,12 @@ def test_publish_study_rejects_mismatched_result_request(tmp_path: Path) -> None
 
 
 def test_publish_study_is_busy_while_candidate_is_active(tmp_path: Path) -> None:
-    request = _request((LSTM_METHOD, OTHER_LSTM_METHOD))
-    _retain(tmp_path, request, 0, RESULT)
-    parent = Workspace(
-        study_directory(tmp_path, STUDY_ID), identity=request.model_dump_json().encode()
-    )
-    definition = TrainingDefinition(experiment=request.experiment, method=request.method_at(1))
+    request = _request()
+    canonical = study_directory(tmp_path, STUDY_ID)
+    canonical.parent.mkdir()
+    parent = Workspace(canonical, identity=STUDY_ID.bytes)
 
-    with parent.child("trial-1", identity=definition.model_dump_json().encode()):
+    with parent.child("trial-0", identity=request.model_dump_json().encode()):
         with pytest.raises(WorkspaceBusy):
             publish_study(tmp_path, STUDY_ID)
 
@@ -340,5 +299,4 @@ def test_publish_study_preserves_canonical_created_during_publication(
         publish_study(tmp_path, STUDY_ID)
 
     assert (canonical / "occupied").read_text(encoding="utf-8") == "occupied"
-    request = _request()
-    assert Workspace(canonical, identity=request.model_dump_json().encode()).path.is_dir()
+    assert Workspace(canonical, identity=STUDY_ID.bytes).path.is_dir()

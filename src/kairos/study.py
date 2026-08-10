@@ -77,36 +77,34 @@ def assemble_candidate_result(
 def publish_study(storage_root: Path, study_id: UUID4) -> None:
     canonical = study_directory(storage_root, study_id)
     canonical.parent.mkdir(exist_ok=True)
-    unbound = Workspace(canonical, identity=b"")
-    first = _load_candidate_result_path(unbound.path / "trial-0")
-    request = first.request
-    if request.study_id != study_id:
-        raise ValueError("result Study ID does not match requested Study ID")
-
-    parent = Workspace(canonical, identity=request.model_dump_json().encode())
-
-    def assemble(draft: Draft) -> None:
-        expected_trials = tuple(
-            parent.path / f"trial-{index}" for index in range(len(request.methods))
-        )
-        if set(parent.path.glob("trial-*")) != set(expected_trials):
-            raise ValueError("retained trials do not match TuneRequest methods")
-
-        trials = []
-        for index, retained in enumerate(expected_trials):
-            candidate = first if index == 0 else _load_candidate_result_path(retained)
-            if candidate.request != request:
-                raise ValueError("result requests must be identical")
-            _validate_trial(retained, request, index, candidate.result)
-            draft.link(retained / "selected.ckpt", f"trials/{index}/selected.ckpt")
-            draft.link(retained / "validation.parquet", f"trials/{index}/validation.parquet")
-            trials.append(candidate.result)
-
-        (draft.path / "study.json").write_text(
-            Study(request=request, trials=tuple(trials)).model_dump_json(), encoding="utf-8"
-        )
-
+    parent = Workspace(canonical, identity=study_id.bytes)
     with parent as workspace:
+        first = _load_candidate_result_path(parent.path / "trial-0")
+        request = first.request
+        if request.study_id != study_id:
+            raise ValueError("result Study ID does not match requested Study ID")
+
+        def assemble(draft: Draft) -> None:
+            expected_trials = tuple(
+                parent.path / f"trial-{index}" for index in range(len(request.methods))
+            )
+            if set(parent.path.glob("trial-*")) != set(expected_trials):
+                raise ValueError("retained trials do not match TuneRequest methods")
+
+            trials = []
+            for index, retained in enumerate(expected_trials):
+                candidate = first if index == 0 else _load_candidate_result_path(retained)
+                if candidate.request != request:
+                    raise ValueError("result requests must be identical")
+                _validate_trial(retained, request, index, candidate.result)
+                draft.link(retained / "selected.ckpt", f"trials/{index}/selected.ckpt")
+                draft.link(retained / "validation.parquet", f"trials/{index}/validation.parquet")
+                trials.append(candidate.result)
+
+            (draft.path / "study.json").write_text(
+                Study(request=request, trials=tuple(trials)).model_dump_json(), encoding="utf-8"
+            )
+
         workspace.publish(assemble)
 
 

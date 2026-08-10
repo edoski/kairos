@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Servatus `0.3.0` released and verified; Slice 4 resuming locally
+Status: Slice 4 complete and green; Slice 5 preparing locally
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1355,8 +1355,12 @@ Recorded result:
 
 ### Slice 4: KAIROS resumable ML object lifecycle adoption
 
-Status: resuming locally after prerequisite Slice 3A green and installable; repin the exact committed
-worktree head before product edits
+Status: complete and green; exact baseline `03e95e41486fcdafbb12d2f889759d77047e0df7`;
+accepted head `7d31bcbaf9a61a69003f6fd7bfbb694fb041011e`
+
+Implementer: `/root/slice4_kairos_workspace_impl`; sole writer in the run-owned worktree.
+
+Reviewer: `/root/slice4_kairos_workspace_review`, with fresh parallel Standards and Spec lanes.
 
 Scope:
 
@@ -1396,6 +1400,27 @@ Checks:
   interruption/resume tests; Ruff/Pyright/Vulture with every finding manually checked; exact
   canonical tree and semantic residue audit.
 - No GPU training, SSH, Slurm, or image claim from local CPU tests.
+
+Recorded result:
+
+- Initial implementation `8055724e629fd69e424af44432edd035dd15137f`
+  (`refactor(lifecycle): adopt Servatus workspaces`) pinned `servatus==0.3.0`, moved evaluation and
+  artifact training to ordinary Workspaces, moved candidates to concurrent child Workspaces, moved
+  Study finalization to the exclusive parent, passed stable paths into `_fit`, and deleted local
+  scratch/stage/rename/link/cleanup mechanics.
+- Review round 1 rejected one P3 Standards and one P2 Spec finding. Two tests reconstructed Servatus
+  child locks without exercising KAIROS; `publish_study` inspected trial 0 before acquiring parent
+  exclusivity, so an active unpublished child raised `FileNotFoundError` instead of `WorkspaceBusy`.
+- Correction `7d31bcbaf9a61a69003f6fd7bfbb694fb041011e`
+  (`fix(lifecycle): lock study before inspection`) uses the known Study UUID as parent identity,
+  acquires the exclusive parent before any child read, binds each indexed child to the exact full
+  TuneRequest, deletes dependency-copy tests, and strengthens the production finalizer-busy test.
+  The same reviewer and lanes returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Accepted gates: 23 focused and 113 full tests; real Lightning interruption/resume; reverse Study
+  completion with exact order; Ruff check/format; configured and explicit touched-file Pyright;
+  Vulture; lock/API/version/residue/diff/status checks. Worktree clean.
+- No canonical output, data, scratch, checkpoint, corpus, dataset, protected main dirt, remote job,
+  GPU, Slurm, Apptainer, or external system was touched.
 
 ### Slice 5: KAIROS campaign and experiment lifecycle adoption
 

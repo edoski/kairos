@@ -557,7 +557,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.5" },
     { name = "pydantic", specifier = ">=2.12" },
-    { name = "servatus", specifier = "==0.4.0" },
+    { name = "servatus", specifier = "==0.4.1" },
     { name = "torch", marker = "platform_machine != 'x86_64' or sys_platform != 'linux'", specifier = "==2.7.1" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", specifier = "==2.7.1", index = "https://download.pytorch.org/whl/cu118" },
     { name = "typer", specifier = ">=0.16" },
@@ -597,7 +597,7 @@ requires-dist = [
     { name = "kairos", editable = "../../" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "servatus", specifier = "==0.4.0" },
+    { name = "servatus", specifier = "==0.4.1" },
     { name = "torch", specifier = "==2.11.0" },
     { name = "typer", specifier = ">=0.16" },
 ]
@@ -1358,11 +1358,11 @@ wheels = [
 
 [[package]]
 name = "servatus"
-version = "0.4.0"
+version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/2f/19/a016a7eb4103f0504fa3080a2da79b5b8baf02fa76b3bba3f0d9d9b27652/servatus-0.4.0.tar.gz", hash = "sha256:1d8f17a39a5e33a47b00daa69405c81c29bbff81da5538cf6c58b1529b64e196", size = 56262, upload-time = "2026-08-10T15:57:18.221Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/95/b80d856ea24228bc7792f07b726dece9bf59991c420243bba62c4a4db4a4/servatus-0.4.1.tar.gz", hash = "sha256:1e8148d4c9c98acf896a91fa0f1c7b754b0d30634154a51b495f450e7ff1b582", size = 62314, upload-time = "2026-08-10T19:04:20.653Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/f3/a9f6f67a95c83f51d9ff69828e5e7fb879d0392c72780513306d6fa37d0f/servatus-0.4.0-py3-none-any.whl", hash = "sha256:e26dd21451a87a12dfc961259534cc12da45ddf2ea6dc99ed465ae8431029af5", size = 34416, upload-time = "2026-08-10T15:57:17.183Z" },
+    { url = "https://files.pythonhosted.org/packages/71/65/21c6669f8d2d966248112ed17a8a52e7cf00ad342d8ff309caea99d8ea61/servatus-0.4.1-py3-none-any.whl", hash = "sha256:2ec0509cfdfca4f097f4010984a674b1c771a8403aa7e80f82d6369540a5ae66", size = 36275, upload-time = "2026-08-10T19:04:19.412Z" },
 ]
 
 [[package]]

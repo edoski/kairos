@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 3 complete and green; Slice 4 paused on concurrent child Workspace prerequisite
+Status: Servatus Slice 3A complete and green; authorized `0.3.0` release in progress
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1223,7 +1223,13 @@ Recorded result:
 
 ### Prerequisite Slice 3A: Servatus concurrent child workspaces
 
-Status: planned; exact Servatus baseline `f60335416b549fdc252c56152af2b9678e94bb72`
+Status: complete and green; exact Servatus baseline
+`f60335416b549fdc252c56152af2b9678e94bb72`; accepted head
+`b8eb73f33d54a67efd9f192739223d8103877939`
+
+Implementer: `/root/slice3a_child_workspace_impl`; sole writer in the Servatus `main` worktree.
+
+Reviewer: `/root/slice3a_child_workspace_review`, with fresh parallel Standards and Spec lanes.
 
 Reason:
 
@@ -1306,10 +1312,38 @@ Dependencies and gates:
 
 - The released `0.2.0` head is the exact implementation baseline. Use a fresh Servatus implementer
   and distinct two-lane reviewer; rejected findings return to the same workers.
-- Local implementation/review are authorized. Push, tag, GitHub Release, PyPI `0.3.0`, and any live
-  shared-filesystem smoke are external mutations and remain separately gated.
-- KAIROS Slice 4 remains paused without product edits until this prerequisite is green and the
-  compatible Servatus release is reproducibly installable.
+- The user authorized push, annotated tag, GitHub Release, and PyPI `0.3.0` after green review.
+- A cross-node shared-filesystem smoke is a site deployment gate rather than a package-release gate:
+  `flock` coherence depends on the selected shared filesystem and mount configuration, while this
+  release changes no scheduler or application execution code. KAIROS remote cutover remains blocked
+  until the smoke passes; local adoption may proceed once `0.3.0` is reproducibly installable.
+
+Recorded result:
+
+- Initial implementation `c21c6fe62f9e4814591581b89693804e86458f2b`
+  (`feature(workspace): add concurrent children`) added one public method, shared-parent/exclusive-
+  child leases, stable-parent coordination, real spawned-process tests, ADR/docs, and `0.3.0`
+  metadata with zero new dependencies.
+- Review round 1 returned Standards 0 and one P1 Spec finding: replacing an active named lifecycle
+  lock could give a later opener a different inode and bypass exclusion. Correction
+  `97059b47c34b0a9d49b4e24ba8573a72cd135e0a`
+  (`fix(workspace): pin lifecycle lock identity`) durably bound container, lock, and work pins and
+  closed both root and child lock-replacement repros.
+- Correction review then exposed that a trust record inside a wholesale replaced owner-only
+  container cannot authenticate the old container to a fresh opener. The ledger and implementation
+  now state the honest unprivileged boundary: the private owner-only container is the trust root;
+  same-account arbitrary whole-root recreation is outside scope, while active-handle replacement and
+  lock/work substitution inside an authentic container fail closed. Documentation correction
+  `b8eb73f33d54a67efd9f192739223d8103877939` recorded that boundary without removing the prior fix.
+- The same reviewer and lanes returned final `GREEN LIGHT`: Standards 0, Spec 0; both P1s closed
+  within the explicit trust boundary. Accepted gates: 202 tests and one platform skip, repeated real
+  process races, Ruff check/format, strict Pyright, Vulture, lock/diff checks, wheel/sdist inspection,
+  and fresh Python 3.11 installed `0.3.0` API/CLI smokes. Worktree clean.
+- An authorized read-only queue preflight found the user's existing jobs unchanged. Immediate
+  two-node CPU acceptance request `44619` obtained no allocation and was cancelled by Slurm at zero
+  runtime because nodes/QOS were unavailable; it left no queued job. Only a fresh isolated path
+  `/scratch.hpc/edoardo.galli3/servatus-flock-0.3.0-b8eb73f` was created. The cross-node proof remains
+  required before remote KAIROS cutover and must not be retried while current queue pressure remains.
 
 ### Slice 4: KAIROS resumable ML object lifecycle adoption
 
@@ -1628,3 +1662,11 @@ one `Workspace.child()` method with shared parent/exclusive child leases and sho
 coordination. Prerequisite Slice 3A now owns that Servatus change before the same KAIROS implementer
 resumes. No repository outside this ledger, output, or external system was changed by the design or
 prototype work.
+
+Prerequisite Slice 3A completed at `b8eb73f33d54a67efd9f192739223d8103877939` after two P1
+review corrections: durable lifecycle-lock/work inode binding, then an explicit owner-only-container
+trust boundary for arbitrary same-account whole-root replacement. The same reviewer returned final
+`GREEN LIGHT` with Standards 0 and Spec 0. An immediate two-node CPU filesystem smoke obtained no
+allocation and left no queued job; it is deferred to remote deployment because shared `flock`
+coherence is site/mount configuration, not a package-release property. The user authorized the
+reviewed `0.3.0` release; no KAIROS product code resumed before an installable package exists.

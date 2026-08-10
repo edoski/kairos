@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Servatus Slice 3A complete and green; authorized `0.3.0` release in progress
+Status: Servatus `0.3.0` released and verified; Slice 4 resuming locally
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1344,11 +1344,19 @@ Recorded result:
   runtime because nodes/QOS were unavailable; it left no queued job. Only a fresh isolated path
   `/scratch.hpc/edoardo.galli3/servatus-flock-0.3.0-b8eb73f` was created. The cross-node proof remains
   required before remote KAIROS cutover and must not be retried while current queue pressure remains.
+- The reviewed head was pushed to public `main`; GitHub CI run `31397290192` passed on Ubuntu and
+  macOS. Annotated tag `v0.3.0` points exactly to `b8eb73f`; tag CI run `31397359840` passed on both
+  platforms. GitHub Release `https://github.com/edoski/servatus/releases/tag/v0.3.0` triggered
+  Trusted Publishing run `31397445672`, which succeeded without a long-lived token.
+- PyPI exposes `servatus==0.3.0` with provenance. Wheel SHA-256:
+  `699535487fd1947fa00bb817ca066f66ee3e625424192df82d13cd37159c3bdb`; source archive SHA-256:
+  `8e396b5d123b670f49acae136a5e27364a5ec80e7e28c110f3a8111ac46cc88c`. A fresh empty-cache index
+  install returned `0.3.0`, exposed `Workspace.child`, and passed the installed CLI smoke.
 
 ### Slice 4: KAIROS resumable ML object lifecycle adoption
 
-Status: paused without product edits at `77922ac597f17a19e9eeecd269612f7339863235`;
-depends on prerequisite Slice 3A green and installable
+Status: resuming locally after prerequisite Slice 3A green and installable; repin the exact committed
+worktree head before product edits
 
 Scope:
 
@@ -1670,3 +1678,9 @@ trust boundary for arbitrary same-account whole-root replacement. The same revie
 allocation and left no queued job; it is deferred to remote deployment because shared `flock`
 coherence is site/mount configuration, not a package-release property. The user authorized the
 reviewed `0.3.0` release; no KAIROS product code resumed before an installable package exists.
+
+Servatus `0.3.0` was then pushed, tagged, released, and published from the exact reviewed head.
+Branch/tag CI and Trusted Publishing succeeded, PyPI provenance/hashes were recorded, and a fresh
+index install verified version, `Workspace.child`, and CLI. This closes prerequisite Slice 3A for
+local development and permits the same paused KAIROS Slice 4 implementer to resume. The deferred
+cross-node filesystem smoke remains a hard remote-deployment gate.

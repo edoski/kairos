@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 6 complete and green; Slice 7 preparing locally
+Status: all local slices complete and green; final external deployment gates pending
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1617,7 +1617,13 @@ Recorded result:
 
 ### Slice 7: compact-CUDA reconciliation
 
-Status: planned; depends on Slice 6 green
+Status: complete and green; extraction baseline `f193a223a1264213706fd08e4ce3e274e518802f`;
+main-synced base `f00ef948fb670b3e86163e0dc6aa73e67594053c`; accepted compact head
+`68262eb8b2de96adef4c27d25ed1acc8c8675970`
+
+Implementer: `/root/slice7_compact_cuda_impl`; sole writer in the run-owned compact worktree.
+
+Reviewer: `/root/slice7_compact_cuda_review`, with fresh parallel Standards and Spec lanes.
 
 Scope:
 
@@ -1650,6 +1656,28 @@ Checks:
 - Topology, commit and hunk diff, conflict/residue scan, CUDA-focused tests, full Python/static/lock
   gates proportionate to touched files, and independent fixed-range Standards/Spec review.
 - GPU/image/Slurm smoke remains an explicit external gate.
+
+Recorded result:
+
+- Main advanced after the extraction fork by one user commit,
+  `274a4dd3ea7f5ae65e576de539f85ee29c6c3ba8` (`Restrict horizon study to selected LSTMs`). It was
+  carried onto the green extraction as `f00ef948fb670b3e86163e0dc6aa73e67594053c`; range-diff and
+  stable patch ID `c051d1ea` are exact.
+- The pre-existing compact branch was reconciled non-destructively with merge commit
+  `68262eb8b2de96adef4c27d25ed1acc8c8675970`. Its only nonmerge commits above the integrated base
+  remain the original `32758207` and `3a1fe154`; no rebase, reset, force move, or branch deletion
+  occurred.
+- Conflicts were limited to modeling's Servatus work path versus CUDA loader setup and corresponding
+  test imports. Resolution preserves Workspace/full-state resume and publication while retaining
+  the approved `.to(device).loader(...)` historical batching path.
+- Independent review returned `GREEN LIGHT`: Standards 0, Spec 0. Original and reconciled CUDA
+  deltas have the same 10-file roster, per-file numstat, and all 249 added/deleted lines; only index
+  hashes, hunk offsets, and integration context differ.
+- Accepted gates: 32 CUDA-focused and 117 full root tests; 9 mobile-export tests including host
+  XNNPACK; 43 App tests; Ruff check/format; strict Pyright; Vulture; root/mobile locks; App typecheck;
+  npm dry install; CLI/import/topology/hunk/conflict/residue/diff/status checks.
+- No real CUDA/GPU, image, Slurm, SSH, remote, output, data, checkpoint, corpus, dataset, device, or
+  deployment claim or mutation was made. Those remain final external gates.
 
 ## Final external deployment gates
 

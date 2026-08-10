@@ -11,6 +11,7 @@ import pytest
 from servatus import AmbiguousSubmission, Campaign, ResourceRequest, SlurmTarget, Task, _slurm
 
 from kairos.config import EvaluateRequest, TuneRequest
+from kairos.study import RetainedResult, Study
 from kairos.workers import CandidateProcessInput, candidate_task
 from tests.experiments.helpers import publish_generated_studies
 from tests.helpers import dispatch, read_tsv_rows, run_script, window, write_servatus_config
@@ -82,6 +83,19 @@ def _task_count(argv: tuple[str, ...]) -> int:
     return int(next(arg.removeprefix("--ntasks=") for arg in argv if arg.startswith("--ntasks=")))
 
 
+def _candidate_tasks(bundle: Path) -> tuple[list[dict[str, str]], tuple[Task, ...]]:
+    rows = read_tsv_rows(bundle / "cells.tsv")
+    return rows, tuple(
+        candidate_task(
+            CandidateProcessInput(
+                request=TuneRequest.model_validate_json(Path(row["request"]).read_bytes()),
+                method_index=int(row["method_index"]),
+            )
+        )
+        for row in rows
+    )
+
+
 def test_candidates_use_domain_tasks_and_restart_from_servatus_receipts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -104,6 +118,75 @@ def test_candidates_use_domain_tasks_and_restart_from_servatus_receipts(
     assert repeated.exit_code == 0
     assert repeated.output == ""
     assert len(calls) == 26
+
+
+def test_hpo_extend_reopens_campaign_and_submits_only_authored_suffix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    feature_id = UUID(run_script(_FEATURE_SCRIPT, "prepare", tmp_path).stdout.strip())
+    feature_bundle = tmp_path / "experiments" / "feature_ablation" / f".{feature_id}"
+    source_rows = {row["cell"]: row for row in read_tsv_rows(feature_bundle / "cells.tsv")}
+    families = ("lstm", "transformer", "transformer_lstm")
+    sources = {
+        (chain, family): Study(
+            request=TuneRequest.model_validate_json(
+                Path(source_rows[f"{chain}.{family}.full"]["request"]).read_bytes()
+            ),
+            trials=(RetainedResult(objective=1.0, selected_epoch=1, completed_epochs=1),),
+        )
+        for chain in ("ethereum", "avalanche")
+        for family in families
+    }
+    hpo = _load_hpo(monkeypatch)
+    monkeypatch.setattr(
+        hpo,
+        "selected_context_studies",
+        lambda _root, _experiment_id, chains: (
+            {(chain, family): sources[chain, family] for chain in chains for family in families},
+            (),
+        ),
+    )
+    context_id = UUID("40000000-0000-4000-8000-000000000001")
+    hpo.prepare(tmp_path, context_id, ["ethereum"])
+    hpo_id = UUID(capsys.readouterr().out.strip())
+    bundle = tmp_path / "experiments" / "hpo" / f".{hpo_id}"
+    target, resources = write_servatus_config(tmp_path)
+    launcher = _load_launcher(monkeypatch)
+    calls = _capture_submissions(monkeypatch)
+
+    initial_rows, initial_tasks = _candidate_tasks(bundle)
+    initial_request_bytes = tuple(Path(row["request"]).read_bytes() for row in initial_rows)
+    first = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
+    first_call_count = len(calls)
+
+    hpo.extend(tmp_path, context_id, hpo_id, ["avalanche"])
+    capsys.readouterr()
+    full_rows, full_tasks = _candidate_tasks(bundle)
+    second = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
+
+    assert first.exit_code == 0
+    assert second.exit_code == 0
+    assert len(initial_rows) == 27
+    assert full_rows[:27] == initial_rows
+    assert (
+        tuple(Path(row["request"]).read_bytes() for row in full_rows[:27]) == initial_request_bytes
+    )
+    assert full_tasks[:27] == initial_tasks
+    suffix = full_tasks[27:]
+    suffix_calls = calls[first_call_count:]
+    suffix_scripts = b"".join(script for _, script in suffix_calls)
+    status = Campaign.open(bundle / ".servatus-campaign", full_tasks).status()
+    assert first_call_count == 7
+    assert [_task_count(argv) for argv, _ in suffix_calls] == [4] * 6 + [3]
+    assert tuple(key for receipt in status.receipts for key in receipt.task_keys) == tuple(
+        task.key for task in full_tasks
+    )
+    assert status.pending_task_keys == ()
+    assert all(base64.b64encode(task.stdin) not in suffix_scripts for task in initial_tasks)
+    assert all(suffix_scripts.count(base64.b64encode(task.stdin)) == 1 for task in suffix)
+    assert [suffix_scripts.index(base64.b64encode(task.stdin)) for task in suffix] == sorted(
+        suffix_scripts.index(base64.b64encode(task.stdin)) for task in suffix
+    )
 
 
 def test_candidates_skip_exact_canonical_studies(

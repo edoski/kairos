@@ -1,4 +1,4 @@
-"""Generic mechanics for temporary experiment cell bundles."""
+"""KAIROS-authored experiment cell bundles."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from uuid import UUID
 
 import polars as pl
 import typer
+from servatus import Draft, Workspace
 
 from kairos.config import EvaluateRequest, TrainRequest, TuneRequest
 from kairos.experiments import (
@@ -133,12 +134,16 @@ def publish_bundle(
     if canonical.exists():
         raise FileExistsError(canonical)
 
-    with (bundle / "manifest.json").open("x", encoding="utf-8") as destination:
-        destination.write(manifest.model_dump_json())
-    shutil.rmtree(bundle / "requests")
-    (bundle / "cells.tsv").unlink()
-    (bundle / "jobs.tsv").unlink(missing_ok=True)
-    bundle.rename(canonical)
+    with Workspace(canonical, identity=experiment_id.bytes) as workspace:
+        manifest_path = workspace.path / "manifest.json"
+        manifest_path.write_text(manifest.model_dump_json(), encoding="utf-8")
+
+        def assemble(draft: Draft) -> None:
+            draft.link(manifest_path, "manifest.json")
+
+        workspace.publish(assemble)
+
+    shutil.rmtree(bundle)
 
 
 def close_bundle(

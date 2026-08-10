@@ -209,8 +209,9 @@ The output is immutable and resumable at independent measurement-unit boundaries
 `protocol.json` records only experiment IDs, the derived rolling horizons, the selected
 cell-to-artifact/evaluation UUID roster, warmup count, and sweep count. It has no `pilot`/`main`
 branch; setup and final campaigns use separate output directories and Slice 3 accepts only the
-complete ten-sweep final directory. Each unit writes through a temporary sibling and atomic rename.
-A matching protocol permits existing units to be skipped on resume; outputs are never overwritten.
+complete ten-sweep final directory. Each unit publishes through a Servatus file or directory
+transaction. A matching protocol permits existing units to be skipped on resume; outputs are never
+overwritten.
 
 ## Slice 1: CPU latency experiment
 

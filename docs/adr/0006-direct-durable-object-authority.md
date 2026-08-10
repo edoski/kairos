@@ -22,20 +22,21 @@ Typed requests, embedded associations, and the selected Study result index plus 
 
 Before an experiment closes, another experiment author may read its hidden authored `cells.tsv`
 to identify canonical records that already exist. After closure, the manifest is authoritative.
-Downstream scientific inputs always come from the canonical records, never private scratch results.
+Downstream scientific inputs always come from the canonical records, never private work state.
 
 A completed evaluation owns its exact `EvaluateRequest` plus sufficient canonical prediction and outcome observations. Atomic publication owns request pairing, ordered window coverage, and observation value consistency. Transient reduction validates the exact observation schema, trusts those publisher-owned facts, and is recomputed directly from `observations.parquet`; Artifact and Corpus availability is not required after publication. Selection remains recomputed from its canonical Study object.
 
-Artifact fitting and Study assembly use owner-local hidden scratch. A candidate's full-state
-`last.ckpt` exists only while the fit is incomplete. Successful fitting retains the selected
-weights-only checkpoint, selected-checkpoint validation observations, and compact result metadata;
-Study finalization groups the exact ordered trials. Artifact and Study publication rename a complete
-hidden sibling directory to its unoccupied canonical address, then remove resumable scratch. Failed
-fits and publication conflicts preserve scratch. Corpus and evaluation directories use the same
-hidden-directory publication shape. The mobile exporter rejects an existing output before lowering,
-builds a hidden sibling directory, checks again immediately before rename, and removes scratch after
-failure.
+Artifact fitting and Study assembly use Servatus workspaces. A candidate's full-state `last.ckpt`
+exists only while the fit is incomplete. Successful fitting retains the selected weights-only
+checkpoint, selected-checkpoint validation observations, and compact result metadata; Study
+finalization groups the exact ordered trials. KAIROS supplies canonical destinations, exact work
+identities, and application-owned assembly callbacks. Servatus owns exclusive resumable work,
+absent-or-complete publication, no-overwrite commit, failure preservation, and success cleanup.
+Corpus production remains external. Evaluation and mobile-export publication use the same Servatus
+transaction boundary.
 
 ## Consequences
 
-Callers supply the typed UUID they intend to use. Durable schemas stay focused, and each transient operation depends only on the completed object that owns its required authority.
+Callers supply the typed UUID they intend to use. Durable schemas stay focused, and each transient
+operation depends only on the completed object that owns its required authority. Servatus changes
+transaction mechanics, not canonical paths, schemas, associations, or scientific meaning.

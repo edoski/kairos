@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import shutil
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
@@ -16,6 +14,7 @@ from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPar
 from executorch.exir import ExecutorchProgramManager, to_edge_transform_and_lower
 from executorch.runtime import Runtime
 from pydantic import UUID4, Field, TypeAdapter
+from servatus import Draft, publish
 from torch import nn
 
 from kairos.config import FeatureName
@@ -218,22 +217,16 @@ def export_bundle(
     cells = _load_cells(storage_root, roster)
 
     output_directory.parent.mkdir(parents=True, exist_ok=True)
-    scratch = Path(
-        tempfile.mkdtemp(prefix=f".{output_directory.name}.", dir=output_directory.parent)
-    )
-    try:
+
+    def build(draft: Draft) -> None:
         for chain in _CHAINS:
             for horizon in _HORIZONS:
-                _export_model(cells[chain][horizon], scratch / f"{chain}-k{horizon}.pte")
-        (scratch / "manifest.json").write_text(
+                _export_model(cells[chain][horizon], draft.path / f"{chain}-k{horizon}.pte")
+        (draft.path / "manifest.json").write_text(
             json.dumps(_manifest(cells), indent=2, allow_nan=False) + "\n", encoding="utf-8"
         )
-        if output_directory.exists():
-            raise FileExistsError(output_directory)
-        scratch.rename(output_directory)
-    finally:
-        if scratch.exists():
-            shutil.rmtree(scratch)
+
+    publish(output_directory, build)
 
 
 if __name__ == "__main__":

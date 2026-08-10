@@ -5,13 +5,12 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+from servatus import JobReceipt, ResourceRequest, SlurmTarget, Task
 
 import kairos.cli as cli
-import kairos.execution as execution
 from kairos.cli import app
 from kairos.config import ExperimentSemantics, FitMethod, LstmDefinition, Method, TuneRequest
-from kairos.execution import CandidateProcessInput
-from tests.helpers import dispatch, window, write_remote
+from tests.helpers import dispatch, window, write_servatus_config
 
 STUDY_ID = UUID("10000000-0000-4000-8000-000000000001")
 CORPUS_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -51,52 +50,59 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
 ) -> None:
     request_path = tmp_path / "TUNE_REQUEST.json"
     request_path.write_text(REQUEST.model_dump_json(), encoding="utf-8")
-    calls: list[tuple[CandidateProcessInput, ...]] = []
-    monkeypatch.setattr(
-        cli, "submit_candidates", lambda candidates: calls.append(tuple(candidates)) or 123
-    )
+    target_path, resource_path = write_servatus_config(tmp_path)
+    calls: list[tuple[Path, tuple[Task, ...], SlurmTarget, ResourceRequest]] = []
 
-    result = dispatch(app, "study", "run", str(request_path), "0")
+    class FakeCampaign:
+        def __init__(self, path: Path, tasks: tuple[Task, ...]) -> None:
+            self.path = path
+            self.tasks = tasks
+
+        @classmethod
+        def open(cls, path: Path, tasks: tuple[Task, ...]) -> FakeCampaign:
+            return cls(path, tasks)
+
+        def plan(
+            self, target: SlurmTarget, resources: ResourceRequest, **options: object
+        ) -> object:
+            assert options == {"retry": (), "tasks_per_allocation": 1}
+            calls.append((self.path, self.tasks, target, resources))
+            return object()
+
+        def submit(self, _plan: object) -> tuple[JobReceipt, ...]:
+            return (JobReceipt("allocation", 123, None, (self.tasks[0].key,)),)
+
+    monkeypatch.setattr(cli, "Campaign", FakeCampaign)
+
+    result = dispatch(
+        app,
+        "study",
+        "run",
+        str(request_path),
+        "0",
+        "--target",
+        str(target_path),
+        "--resources",
+        str(resource_path),
+    )
 
     assert result.exit_code == 0
     assert result.output == "123\n"
-    assert calls == [(CandidateProcessInput(request=REQUEST, method_index=0),)]
-
-
-def test_submit_candidates_scales_three_gpu_allocation_and_preserves_payload_order(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    second_request = REQUEST.model_copy(
-        update={"study_id": UUID("10000000-0000-4000-8000-000000000002")}
+    assert len(calls) == 1
+    campaign_path, tasks, target, resources = calls[0]
+    assert campaign_path == request_path.with_name(
+        f".{request_path.name}.study-{STUDY_ID}-method-0.campaign"
     )
-    third_request = REQUEST.model_copy(
-        update={"study_id": UUID("10000000-0000-4000-8000-000000000003")}
+    assert tasks[0].key == f"study:{STUDY_ID}:method:0"
+    assert tasks[0].args == ("remote", "candidate")
+    assert tasks[0].stdin == (
+        json.dumps(
+            {"request": REQUEST.model_dump(mode="json"), "method_index": 0}, separators=(",", ":")
+        ).encode()
+        + b"\n"
     )
-    candidates = (
-        CandidateProcessInput(request=REQUEST, method_index=0),
-        CandidateProcessInput(request=second_request, method_index=0),
-        CandidateProcessInput(request=third_request, method_index=0),
-    )
-    write_remote(tmp_path / "REMOTE.yaml")
-    monkeypatch.chdir(tmp_path)
-    scripts: list[str] = []
-    monkeypatch.setattr(
-        execution, "_invoke_sbatch", lambda _remote, script: scripts.append(script) or 456
-    )
-
-    result = execution.submit_candidates(candidates)
-
-    assert result == 456
-    assert len(scripts) == 1
-    script = scripts[0]
-    assert "#SBATCH --ntasks=3\n" in script
-    assert "#SBATCH --gres=gpu:a100:3\n" in script
-    assert script.count("remote candidate <<'KAIROS_REQUEST_") == 3
-    positions = [script.index(candidate.model_dump_json()) for candidate in candidates]
-    assert positions == sorted(positions)
-    for slot in range(3):
-        assert f"--output='/remote/log root'/${{SLURM_JOB_ID}}-{slot}.out" in script
-        assert f"--error='/remote/log root'/${{SLURM_JOB_ID}}-{slot}.out" in script
+    assert target.host == "research-alias"
+    assert resources.gpus_per_task == 1
 
 
 def test_remote_candidate_dispatches_input(monkeypatch: pytest.MonkeyPatch) -> None:

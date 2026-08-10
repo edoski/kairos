@@ -38,13 +38,14 @@ transient observation-derived reductions
 ### Dependency direction
 
 ```text
-cli / experiment runners / mobile exporter
-  ├─> execution
+cli / experiment runners
+  ├─> workers ───> config
   ├─> modeling ───> corpus, study, temporal, min_block_fee
-  └─> evaluation ─> corpus, temporal, modeling, min_block_fee
+  ├─> evaluation ─> corpus, temporal, modeling, min_block_fee
+  └─> Servatus campaign and publication interfaces
 
 temporal ─────────> corpus, min_block_fee
-corpus / study / min_block_fee / execution
+corpus / study / min_block_fee / workers
          └────────> config and strict records
 ```
 
@@ -57,10 +58,14 @@ This high-level diagram summarizes the production import direction. Direct owner
   definitions, Lightning fitting, candidate retention, and native checkpoint loading.
 - `study` owns bounded candidate membership, ordered retained results, publication, and selected-Method loading.
 - `evaluation` owns canonical self-contained observations and transient reduction.
+- `workers` maps typed workflow and candidate inputs to opaque durable-work tasks.
 
 The closed model union is LSTM, Transformer, or Transformer-LSTM. Historical preparation supplies lazy contiguous CPU-backed examples; each model consumes float32 `[B,C,F]` and returns action logits `[B,K]` plus standardized minimum-fee prediction `[B]`. Architecture stays independent of target construction and evaluation accounting.
 
-Corpus production is external. Native OpenSSH and Slurm begin at `kairos.execution.submit_workflows()` ([ADR 0007](adr/0007-native-external-execution-boundary.md)). Completed objects own one exact request at direct canonical addresses; UUIDs identify instances and typed associations establish meaning ([ADR 0006](adr/0006-direct-durable-object-authority.md)).
+Corpus production is external. KAIROS delegates native remote execution and publication mechanics
+at the Servatus lifecycle boundary ([ADR 0008](adr/0008-servatus-lifecycle-boundary.md)). Completed
+objects own one exact request at direct canonical addresses; UUIDs identify instances and typed
+associations establish meaning ([ADR 0006](adr/0006-direct-durable-object-authority.md)).
 
 ## One decision, end to end
 
@@ -531,7 +536,9 @@ use seed `2026`. This is not a full factorial design.
 
 ## Architecture and deep interfaces
 
-The sections below place each direct owner interface beside the scientific and durable-object contracts it serves. Exact public records, paths, commands, YAML fields, and schemas remain in [Exact reference](#exact-reference).
+The sections below place each direct owner interface beside the scientific and durable-object
+contracts it serves. Exact public records, paths, commands, operator profiles, and schemas remain
+in [Exact reference](#exact-reference).
 
 ### Corpus input
 
@@ -616,11 +623,10 @@ Tuning is a bounded question over a finite tuple of complete Methods. A Study co
 
 `modeling.run_candidate(storage_root, request, method_index)` loads the request's Corpus, prepares
 training history and state, fits the indexed Method through native Lightning, and retains one
-successful result. Method index `i` owns checkpoint scratch at
-`studies/.<study_id>/candidate-<i>/`. After fitting, the exact selected checkpoint runs once over
-the exact validation window. Candidate success retains that checkpoint, canonical observations,
-and result metadata, then removes `candidate-<i>/`; failure preserves it for full-state
-`last.ckpt` resume. Candidate checkpoints embed only the `TrainingDefinition` needed to rebuild the
+successful result in the Study's indexed Servatus child workspace. After fitting, the exact
+selected checkpoint runs once over the exact validation window. Candidate success publishes that
+checkpoint, canonical observations, and result metadata; failure preserves `last.ckpt` for
+full-state resume. Candidate checkpoints embed only the `TrainingDefinition` needed to rebuild the
 candidate model.
 
 `RetainedResult` has three fields:
@@ -634,11 +640,10 @@ The selected epoch cannot exceed completed epochs. The enclosing Study requires 
 
 #### Indexed results and publication
 
-Each hidden retained trial carries the full request, compact result, selected checkpoint, and
-validation observations. `publish_study(storage_root, study_id)` requires exactly one retained
-trial per request Method, identical requests, exact checkpoint associations, canonical observation
-schemas, and objective equality. It assembles the complete hidden object and atomically renames it
-without overwrite to:
+Each retained trial carries the full request, compact result, selected checkpoint, and validation
+observations. `publish_study(storage_root, study_id)` requires exactly one retained trial per
+request Method, identical requests, exact checkpoint associations, canonical observation schemas,
+and objective equality. It assembles and publishes the complete object to:
 
 ```text
 studies/<study_id>/
@@ -648,7 +653,7 @@ studies/<study_id>/
     validation.parquet
 ```
 
-Successful publication removes resumable scratch. Publication conflicts preserve it.
+Servatus preserves resumable work on failure and removes it after successful publication.
 
 #### Selected training
 
@@ -666,8 +671,8 @@ Evaluation separates canonical self-contained observations from transient metric
 
 For every eligible origin the evaluation publisher owns construction of one ordered, nonnull observation containing `h_i`, `hat{k}_i`,
 `k_i*`, `hat{ell}_i`, `B_i(0)`, `P_i(0)`, `B_i(hat{k}_i)`, `P_i(hat{k}_i)`,
-`B_i(K-1)`, `P_i(K-1)`, and `m_i` under the canonical field names. Work is
-written under `evaluations/.<evaluation_id>/` and renamed to:
+`B_i(K-1)`, `P_i(K-1)`, and `m_i` under the canonical field names. A request-bound Servatus
+workspace publishes the validated pair to:
 
 ```text
 evaluations/<evaluation_id>/
@@ -686,7 +691,7 @@ Public `reduce_rolling(storage_root, roster) -> polars.DataFrame` reads only eac
 ## Exact reference
 
 This reference defines KAIROS's strict requests, completed objects, direct addresses, commands,
-operator YAML, mobile bundle and runtime surfaces, and evaluation schemas.
+operator profiles, mobile bundle and runtime surfaces, and evaluation schemas.
 
 ### Scalar conventions
 
@@ -856,11 +861,11 @@ the temporary bundle; `report` derives each chain/configuration mean from canoni
 
 Study bundles keep each complete Method roster inside its TuneRequest. Their `cells.tsv` rows
 carry the request path, zero-based `method_index`, and Study ID; they do not write separate Method
-JSON files. Packed launch writes temporary `jobs.tsv` rows containing job ID, zero-based slot,
-source-row index, and cell. Every successful allocation is appended, flushed, and synced before
-its job ID is printed. A repeated launch skips recorded rows; a failed submission leaves later
-groups pending. Closure validates every referenced canonical record, writes the flat manifest,
-deletes the temporary request files and both TSV files, and publishes the manifest-only directory.
+JSON files. Packed launch maps the rows to opaque tasks and stores Servatus campaign state under
+`.servatus-campaign/` in the bundle. A repeated launch resumes from durable receipts and canonical
+completion checks; an explicit `--retry TASK_KEY` resubmits only named accepted work. Closure
+validates every referenced canonical record and publishes a manifest-only directory. The authored
+bundle and campaign state are removed only after the manifest commits.
 
 Before closure, an experiment author's hidden `cells.tsv` is its active cell-to-record roster;
 consumers use it only to locate records that are already canonical. After closure, the manifest
@@ -905,7 +910,7 @@ uv run python experiments/figure_held_out.py STORAGE_ROOT EXPERIMENT_ID
 `figure_style.py` owns their shared typography, architecture colors, dimensions, and deterministic
 PDF metadata. The held-out script owns both horizon economics and rolling-minus-one-shot deltas;
 the K-study manifest alone contains artifacts and therefore has no independent result figure. The
-scripts never persist derived metrics or parse experiment scratch files. A manuscript may copy a
+scripts never persist derived metrics or parse experiment work state. A manuscript may copy a
 selected final PDF and owns only its caption, label, placement, and discussion.
 
 #### Study object
@@ -939,11 +944,10 @@ Its `ArtifactAssociation` contains:
 | `target_state` | Float64 finite mean and positive standard deviation |
 | `method` | exact selected Method |
 
-Fitting uses hidden scratch at `artifacts/.<artifact_id>/`. After selection, the checkpoint runs once
-over the exact validation window. Publication groups `artifact.ckpt`, `validation.parquet`, and its
-compact `RetainedResult` in `result.json` inside a complete hidden sibling, atomically renames it
-without overwrite to `artifacts/<artifact_id>/`, then removes resumable scratch. Failures preserve
-scratch.
+Fitting uses a request-bound Servatus workspace. After selection, the checkpoint runs once over the
+exact validation window. KAIROS assembles `artifact.ckpt`, `validation.parquet`, and the compact
+`RetainedResult` in `result.json`; Servatus publishes the complete directory without overwrite.
+Failures preserve resumable work.
 
 Direct loader:
 
@@ -963,13 +967,16 @@ load_artifact(
 Three public command leaves:
 
 ```text
-kairos submit REQUEST.json [REQUEST.json ...]
-kairos study run TUNE_REQUEST.json METHOD_INDEX
+kairos submit [--target REMOTE.toml] [--resources RESOURCES.toml] [--retry] REQUEST.json ...
+kairos study run [--target REMOTE.toml] [--resources RESOURCES.toml] [--retry]
+                 TUNE_REQUEST.json METHOD_INDEX
 kairos study finalize STUDY_ID
 ```
 
-- `submit` accepts one or more WorkflowRequest files and prints one positive Slurm job ID per request.
-- `study run` validates one strict TuneRequest and a zero-based Method index, then prints the candidate Slurm job ID.
+- `submit` accepts one or more WorkflowRequest files, opens one durable campaign per request, and
+  prints each accepted Servatus receipt.
+- `study run` validates one strict TuneRequest and a zero-based Method index, then opens the
+  candidate's durable campaign and prints its accepted receipt.
 - `study finalize` accepts standard UUID syntax, reads absolute `STORAGE_ROOT`, and publishes existing indexed results. The result files' strict TuneRequest must carry the same Study ID, and direct TuneRequest construction mints publishable Study IDs as UUIDv4.
 
 Two help-hidden generated-job leaves:
@@ -983,42 +990,21 @@ Generated Slurm scripts call these leaves with strict JSON on standard input.
 
 ### Remote submission
 
-`kairos.execution` exposes two submission functions:
+`kairos.workers` owns the thin application boundary. `workflow_task()` maps a strict Train or
+Evaluate request to a stable artifact/evaluation key, hidden `remote workflow` argv, and the exact
+request JSON plus trailing line feed. `candidate_task()` does the same for a validated TuneRequest
+and Method index. The hidden workers hydrate those bytes and call the direct KAIROS owner.
 
-```python
-submit_workflows(requests: Sequence[WorkflowRequest]) -> int
-submit_candidates(candidates: Sequence[CandidateProcessInput]) -> int
-```
+The public CLI and experiment launcher load cwd-local `REMOTE.toml` and `RESOURCES.toml` directly
+through Servatus. The committed profiles request one GPU, 32 CPUs, 65536 MiB, and three days per
+process. Experiment launch accepts two to four tasks per allocation; direct request commands use
+one. KAIROS rejects any profile that does not request exactly one GPU per process.
 
-It reads cwd-local `REMOTE.yaml` with this exact strict flat schema:
-
-| Section | Ordered field | Type/rule |
-| --- | --- | --- |
-| root | `ssh` | nonempty string passed to OpenSSH |
-|  | `image` | nonempty absolute Apptainer image path |
-|  | `storage_root` | nonempty absolute path |
-|  | `log_root` | nonempty absolute path |
-|  | `partition` | nonempty string |
-|  | `gres_name` | nonempty count-free GRES name, such as `gpu` or `gpu:a100` |
-|  | `cpus_per_task` | PositiveInt |
-|  | `memory_gb` | PositiveInt, rendered as `--mem=<n>G` |
-|  | `time_limit` | nonempty Slurm time string |
-
-Each allocation contains one to four processes and requests one node and one task, GPU,
-CPU allotment, and memory allotment per process input. Each process runs as an exclusive exact
-`srun` step, sees one GPU, receives one strict stdin record, and writes
-`<job_id>-<slot>.out` for every allocation size; `%j.out` remains the allocation log. The parent
-waits for every step and fails if any step fails. Experiment authors own unique workflow
-destinations and candidate Method indices before submission.
-
-Allocations change to `storage_root`, export `STORAGE_ROOT`, and run the immutable Apptainer image
-with NVIDIA support. The image dispatches `kairos remote workflow` or `kairos remote candidate`.
-Workflow stdin is the Train or Evaluate request JSON directly. Candidate stdin is the strict
-record containing the TuneRequest and validated Method index. Each allocation uses one
-`ssh -T -o BatchMode=yes … sbatch --parsable` call.
-
-The image owns one exact KAIROS revision and fixed runtime profile. Its path must remain unchanged
-while submitted jobs are queued.
+Servatus owns campaign identity, packing, target ceilings, native OpenSSH/Slurm/Apptainer command
+construction, durable receipts, ambiguity refusal, and explicit retry. KAIROS owns typed task bytes,
+canonical completion checks, target and resource values, and the immutable image. Each image path
+must remain unchanged while its jobs are queued. The image exports `STORAGE_ROOT` from its Servatus
+work root and dispatches `kairos remote workflow` or `kairos remote candidate`.
 
 `STORAGE_ROOT` is the neutral implicit environment input to current CLI, remote Python, and mobile
 export paths.
@@ -1027,7 +1013,11 @@ export paths.
 
 The isolated `tools/mobile-export` project pins Torch 2.11 and ExecuTorch 1.2 without changing KAIROS's Torch 2.7.1 environment. Its strict `MOBILE.yaml` roster contains exactly `ethereum`, `polygon`, and `avalanche`, each with integer horizons `2…5` mapped to artifact UUIDv4 values.
 
-Every cell must match artifact identity, chain, horizon, shared feature contract, native output semantics, eager-to-XNNPACK host parity, selected action, and decoded-fee tolerance. At least one delegate across the exported program's execution plans must have exact ID `XnnpackBackend`. The exporter reads only the Corpus request needed for chain identity, rejects an occupied output before lowering, builds a hidden sibling directory, checks again immediately before rename, and removes scratch on failure. Publication is all twelve models plus one manifest:
+Every cell must match artifact identity, chain, horizon, shared feature contract, native output
+semantics, eager-to-XNNPACK host parity, selected action, and decoded-fee tolerance. At least one
+delegate across the exported program's execution plans must have exact ID `XnnpackBackend`. The
+exporter reads only the Corpus request needed for chain identity and publishes all twelve models
+plus one manifest through one Servatus transaction:
 
 ```text
 app/assets/models/
@@ -1059,7 +1049,7 @@ matmul TF32, and a separate cuDNN flag enables TF32 for float32 operations. Each
 Lightning owns deterministic
 setup through `Trainer(deterministic=True)` and norm clipping through the configured
 `gradient_clip_norm`; shuffled loading uses the seeded global Torch RNG. These are code facts, not
-request, schema, YAML, or public configuration surfaces.
+request, schema, roster, or public configuration surfaces.
 
 ### Evaluation API
 

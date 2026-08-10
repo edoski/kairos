@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import shutil
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Self, cast
@@ -16,6 +14,7 @@ import polars as plr
 import torch
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from pydantic import TypeAdapter, model_validator
+from servatus import Draft, Workspace
 from torch import nn
 
 from . import _runtime
@@ -24,6 +23,7 @@ from .addresses import (
     artifact_directory,
     artifact_observations_path,
     artifact_result_path,
+    study_directory,
 )
 from .config import (
     LstmDefinition,
@@ -38,7 +38,7 @@ from .corpus import BlockFrame, load_corpus_blocks
 from .min_block_fee import MinBlockFeeOutput, TargetState, decode_action, min_block_fee_loss
 from .observations import collect_observations, reduce_observation_frame, validate_observations
 from .records import StrictFrozenRecord
-from .study import RetainedResult, candidate_scratch_directory, load_selected_method, retain_result
+from .study import RetainedResult, assemble_candidate_result, load_selected_method
 from .temporal import FeatureState, HistoricalPreparation, prepare_fit_history
 
 
@@ -268,9 +268,8 @@ class _FitModule(pl.LightningModule):
 
 
 def _fit(
-    association: _Association, prepared: HistoricalPreparation, blocks: BlockFrame, scratch: Path
+    association: _Association, prepared: HistoricalPreparation, blocks: BlockFrame, work: Path
 ) -> tuple[Path, plr.DataFrame, RetainedResult]:
-    scratch.mkdir(parents=True, exist_ok=True)
     _runtime.configure_torch()
     fit = association.method.fit
     pl.seed_everything(fit.seed)
@@ -279,7 +278,7 @@ def _fit(
     definition = module.definition
     use_bfloat16 = not isinstance(definition.method.model, LstmDefinition)
     best = ModelCheckpoint(
-        dirpath=scratch,
+        dirpath=work,
         filename="best-{epoch:02d}",
         monitor="validation_base_fee_optimality_gap",
         save_weights_only=True,
@@ -310,7 +309,7 @@ def _fit(
             ),
             best,
             ModelCheckpoint(
-                dirpath=scratch,
+                dirpath=work,
                 filename="last",
                 save_weights_only=False,
                 save_on_train_epoch_end=True,
@@ -323,7 +322,7 @@ def _fit(
     validation_loader = prepared.validation.loader(
         batch_size=_runtime.FIT_BATCH_SIZE, shuffle=False
     )
-    last_checkpoint = scratch / "last.ckpt"
+    last_checkpoint = work / "last.ckpt"
     trainer.fit(
         module,
         train_dataloaders=training_loader,
@@ -365,50 +364,47 @@ def _fit(
 
 
 def train(request: TrainRequest, storage_root: Path) -> None:
-    source = request.source
     canonical = artifact_directory(storage_root, request.artifact_id)
-    if canonical.exists():
-        raise FileExistsError(canonical)
+    canonical.parent.mkdir(exist_ok=True)
+    with Workspace(canonical, identity=request.model_dump_json().encode()) as workspace:
+        source = request.source
+        method = load_selected_method(storage_root, source)
+        blocks = load_corpus_blocks(storage_root, source.corpus_id)
+        prepared = prepare_fit_history(blocks, source.experiment)
+        association = ArtifactAssociation(
+            request=request,
+            feature_state=prepared.feature_state,
+            target_state=prepared.target_state,
+            method=method,
+        )
+        best_checkpoint, observations, result = _fit(association, prepared, blocks, workspace.path)
 
-    method = load_selected_method(storage_root, source)
-    blocks = load_corpus_blocks(storage_root, source.corpus_id)
-    prepared = prepare_fit_history(blocks, source.experiment)
-    association = ArtifactAssociation(
-        request=request,
-        feature_state=prepared.feature_state,
-        target_state=prepared.target_state,
-        method=method,
-    )
+        def assemble(draft: Draft) -> None:
+            draft.link(best_checkpoint, "artifact.ckpt")
+            observations.write_parquet(draft.path / "validation.parquet")
+            (draft.path / "result.json").write_text(result.model_dump_json(), encoding="utf-8")
 
-    scratch = canonical.with_name(f".{request.artifact_id}")
-    best_checkpoint, observations, result = _fit(association, prepared, blocks, scratch)
-    completed = canonical.with_name(f".{request.artifact_id}.completed")
-    shutil.rmtree(completed, ignore_errors=True)
-    completed.mkdir()
-    os.link(best_checkpoint, completed / "artifact.ckpt")
-    observations.write_parquet(completed / "validation.parquet")
-    (completed / "result.json").write_text(result.model_dump_json(), encoding="utf-8")
-    if canonical.exists():
-        raise FileExistsError(canonical)
-    try:
-        completed.rename(canonical)
-    except OSError as error:
-        if canonical.exists():
-            raise FileExistsError(canonical) from error
-        raise
-    shutil.rmtree(scratch)
+        workspace.publish(assemble)
 
 
 def run_candidate(storage_root: Path, request: TuneRequest, method_index: int) -> None:
-    candidate_scratch = candidate_scratch_directory(storage_root, request.study_id, method_index)
-    blocks = load_corpus_blocks(storage_root, request.corpus_id)
-    prepared = prepare_fit_history(blocks, request.experiment)
     definition = TrainingDefinition(
         experiment=request.experiment, method=request.method_at(method_index)
     )
-    checkpoint, observations, result = _fit(definition, prepared, blocks, candidate_scratch)
-    retain_result(storage_root, request, method_index, result, checkpoint, observations)
-    shutil.rmtree(candidate_scratch)
+    canonical = study_directory(storage_root, request.study_id)
+    canonical.parent.mkdir(exist_ok=True)
+    parent = Workspace(canonical, identity=request.study_id.bytes)
+    with parent.child(
+        f"trial-{method_index}", identity=request.model_dump_json().encode()
+    ) as workspace:
+        blocks = load_corpus_blocks(storage_root, request.corpus_id)
+        prepared = prepare_fit_history(blocks, request.experiment)
+        checkpoint, observations, result = _fit(definition, prepared, blocks, workspace.path)
+        workspace.publish(
+            lambda draft: assemble_candidate_result(
+                draft, request, result, checkpoint, observations
+            )
+        )
 
 
 def load_artifact(storage_root: Path, artifact_id: UUID) -> tuple[ArtifactAssociation, nn.Module]:

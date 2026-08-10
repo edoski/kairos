@@ -1,0 +1,15 @@
+host = "research"
+slurm_bin = "/usr/bin"
+apptainer = "/usr/bin/apptainer"
+image = "/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-004f951.sif"
+work_root = "/scratch.hpc/edoardo.galli3/kairos"
+log_root = "/scratch.hpc/edoardo.galli3/logs/kairos"
+partitions = ["h100sxm5", "h100pcie", "a100", "l40s", "l40"]
+gpu_gres = "gpu"
+max_tasks_per_allocation = 4
+max_cpus_per_allocation = 128
+max_memory_mib_per_allocation = 262144
+max_gpus_per_allocation = 4
+max_time_limit = "3-00:00:00"
+max_allocations_per_submit = 64
+max_script_bytes = 1048576

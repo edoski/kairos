@@ -7,8 +7,11 @@ import polars as pl
 import pytest
 import torch
 from pydantic import ValidationError
+from servatus import DestinationExists, Workspace, WorkspaceBusy
 
+import kairos.study as study_module
 from kairos.addresses import (
+    study_directory,
     study_json_path,
     study_trial_checkpoint_path,
     study_trial_observations_path,
@@ -27,11 +30,11 @@ from kairos.observations import OBSERVATION_SCHEMA
 from kairos.study import (
     RetainedResult,
     Study,
+    assemble_candidate_result,
     load_selected_method,
     load_study,
     publish_study,
     reduce_study,
-    retain_result,
 )
 
 STUDY_ID = UUID("10000000-0000-4000-8000-000000000001")
@@ -93,9 +96,17 @@ def _retain(
     torch.save(
         {"hyper_parameters": {"association": definition.model_dump(mode="json")}}, checkpoint
     )
-    retain_result(
-        storage_root, request, method_index, result, checkpoint, _observations(result.objective)
-    )
+    canonical = study_directory(storage_root, request.study_id)
+    canonical.parent.mkdir(exist_ok=True)
+    parent = Workspace(canonical, identity=request.study_id.bytes)
+    with parent.child(
+        f"trial-{method_index}", identity=request.model_dump_json().encode()
+    ) as workspace:
+        workspace.publish(
+            lambda draft: assemble_candidate_result(
+                draft, request, result, checkpoint, _observations(result.objective)
+            )
+        )
 
 
 def _write_canonical_study(storage_root: Path, study: Study) -> None:
@@ -165,7 +176,7 @@ def test_retain_publish_and_load_selected_method_in_request_order(tmp_path: Path
         "selected.ckpt",
         "validation.parquet",
     }
-    assert not (tmp_path / "studies" / f".{STUDY_ID}").exists()
+    assert not Workspace(study_directory(tmp_path, STUDY_ID), identity=STUDY_ID.bytes).path.exists()
 
 
 def test_retained_result_rejects_invalid_epoch_bounds() -> None:
@@ -222,6 +233,19 @@ def test_publish_study_rejects_mismatched_result_request(tmp_path: Path) -> None
     assert not study_json_path(tmp_path, STUDY_ID).exists()
 
 
+def test_publish_study_is_busy_while_candidate_is_active(tmp_path: Path) -> None:
+    request = _request()
+    canonical = study_directory(tmp_path, STUDY_ID)
+    canonical.parent.mkdir()
+    parent = Workspace(canonical, identity=STUDY_ID.bytes)
+
+    with parent.child("trial-0", identity=request.model_dump_json().encode()):
+        with pytest.raises(WorkspaceBusy):
+            publish_study(tmp_path, STUDY_ID)
+
+    assert not study_json_path(tmp_path, STUDY_ID).exists()
+
+
 def test_load_selected_method_rejects_corpus_mismatch(tmp_path: Path) -> None:
     _write_canonical_study(tmp_path, Study(request=_request(), trials=(RESULT,)))
     source = SelectedStudySource(
@@ -260,18 +284,19 @@ def test_publish_study_preserves_canonical_created_during_publication(
 ) -> None:
     _retain(tmp_path, _request(), 0, RESULT)
     canonical = study_json_path(tmp_path, STUDY_ID).parent
-    real_rename = Path.rename
+    real_validate = study_module._validate_trial
 
-    def create_collision(source: Path, target: Path) -> Path:
-        if target == canonical:
-            canonical.mkdir()
-            (canonical / "occupied").write_text("occupied", encoding="utf-8")
-        return real_rename(source, target)
+    def create_collision(
+        retained: Path, request: TuneRequest, method_index: int, result: RetainedResult
+    ) -> None:
+        real_validate(retained, request, method_index, result)
+        canonical.mkdir()
+        (canonical / "occupied").write_text("occupied", encoding="utf-8")
 
-    monkeypatch.setattr(Path, "rename", create_collision)
+    monkeypatch.setattr(study_module, "_validate_trial", create_collision)
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(DestinationExists):
         publish_study(tmp_path, STUDY_ID)
 
     assert (canonical / "occupied").read_text(encoding="utf-8") == "occupied"
-    assert (tmp_path / "studies" / f".{STUDY_ID}").is_dir()
+    assert Workspace(canonical, identity=STUDY_ID.bytes).path.is_dir()

@@ -842,6 +842,13 @@ successful proof that the parent entry was durable. The reviewer reproduced the 
 deterministically. That single finding was returned to the original implementer for correction
 round 2; stable correction hunks remain out of scope.
 
+Correction round 2: `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`
+(`fix(campaign): prove directory durability on open`). Every opener now descriptor-syncs the parent
+before Campaign state access, so it must wait for or supply a successful durability proof. The
+implementer reports deterministic blocked/failing two-opener coverage, 169 passing tests with one
+expected platform skip, and all static/build/artifact/installed-CLI gates green. The same fresh
+reviewer pair is checking only `b072301...0c454bd` and the remaining P1 closure.
+
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
 ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live
 Servatus production gate and, only if it passes, the stable `0.1.0` Servatus push, tag, GitHub

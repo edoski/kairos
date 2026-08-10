@@ -1069,8 +1069,10 @@ Reason:
 Scope:
 
 - Add `publish_file()` to the compact public interface and reuse the private POSIX transaction.
-- Create one owner-only destination-adjacent empty regular-file stage, pin its descriptor and inode,
-  pass its path to the application writer, and require in-place writing and validation.
+- Create one uniquely named destination-adjacent empty regular-file stage with exclusive creation,
+  pin its descriptor and inode, pass its path to the application writer, and require in-place
+  writing and validation. Use ordinary `0o666` creation subject to the process umask so the
+  published file has normal writer-compatible permissions; preserve an explicit writer `chmod`.
 - After the writer returns, reject substitution, symlink, directory, special-file, or filesystem
   change; sync the file; commit through the existing descriptor-relative kernel no-replace rename;
   sync the destination parent; and clean only this attempt's exact stage on failure.

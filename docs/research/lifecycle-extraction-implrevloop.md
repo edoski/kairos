@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: approved; Slice 1 repository inception and implementation authorized
+Status: Slice 1 complete; paused before Slice 2 by user request
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -16,7 +16,8 @@ lifecycle into a reusable standalone repository.
   declaration and untracked `docs/research/thesis-epigraph-candidates.md`
 - Concurrent user-owned work observed later and left untouched:
   `docs/research/thesis-epigraph-finalists.md` and
-  `docs/research/thesis-epigraph-fresh-pass.md`
+  `docs/research/thesis-epigraph-fresh-pass.md`, plus
+  `docs/research/thesis-epigraph-canonical-epics-pass.md`
 - Run-owned planning file: `docs/research/lifecycle-extraction-implrevloop.md`
 - External mutations authorized on 2026-08-10: create and push the public
   `edoski/servatus` GitHub repository and claim the normalized PyPI project name `servatus` during
@@ -699,9 +700,12 @@ Recorded inception:
 
 ### Slice 1: Servatus durable workspace and publication
 
-Status: in progress; baseline `eea6135f08eeeb4ba418577616e3c9a7e52c2948`
+Status: complete; baseline `eea6135f08eeeb4ba418577616e3c9a7e52c2948`; accepted head
+`d09a846c46ebad655317462da8edca1d967166d1`
 
 Implementer: `/root/slice1_workspace_impl`; direct writer on the single Servatus `main` worktree.
+
+Reviewer: `/root/slice1_workspace_review`, with independent parallel Standards and Spec lanes.
 
 Scope:
 
@@ -761,9 +765,38 @@ Dependencies and gates:
 - GitHub and PyPI mutations are the authorized Slice 1 external systems. Research SSH, Slurm,
   Apptainer, KAIROS data, and KAIROS code remain out of scope.
 
+Recorded result:
+
+- Initial implementation: `b138b40a881f372f7d9d374a9d863743bd3df690`
+  (`feature(workspace): add durable publication`). The first independent review rejected it with
+  six Standards and four Spec findings. The hard findings covered NUL-truncated C paths, path-based
+  macOS parent substitution, crash-stranded identity initialization, and double-close descriptor
+  ownership. Softer findings covered stage cleanup, bounded corrupt-state reads, and documenting
+  linked-source immutability.
+- Correction: `d09a846c46ebad655317462da8edca1d967166d1`. It added raw-boundary NUL
+  rejection, descriptor-relative macOS `renameatx_np(RENAME_EXCL)`, atomic synced identity
+  installation, bounded identity reads, exact descriptor/stage ownership, sync-failure cleanup,
+  adversarial race coverage, and the hard-link immutability contract.
+- Same-reviewer correction review: `GREEN LIGHT`; Standards 0 findings, Spec 0 findings.
+- Accepted local gates: 30 tests passed and one Linux-only cross-device test skipped locally;
+  Ruff check/format, strict Pyright, Vulture, Python 3.11, wheel/sdist build and inspection,
+  installed-wheel import, and diff checks passed.
+- Accepted head pushed to public `edoski/servatus` `main`. GitHub CI run
+  `31377009274` passed the full gate on both Ubuntu and macOS.
+- GitHub environment `pypi` and PyPI Trusted Publishing bind exactly
+  `edoski/servatus`, `.github/workflows/publish.yml`, and environment `pypi`. Publish run
+  `31377016353` succeeded from the accepted head using OIDC and no long-lived token.
+- PyPI `servatus` is claimed under the user's account as sole owner. Version `0.0.1` is live. The
+  wheel SHA-256 is `67b6e0187f51c4df979c69c60fab2440de10078fbec884789ca3a24f4ca8ff7c`;
+  the sdist SHA-256 is `d45605ac4deda280a1ec8d6064f77ea5f11415fa1843e8bfc11ee98cb51e14bf`.
+  Both match the accepted local build, and a fresh PyPI install/import smoke returned `0.0.1`.
+- No GitHub Release or tag was created. No KAIROS application code, outputs, experiment data,
+  scratch, remote files, running/queued jobs, SSH, Slurm, or Apptainer state was touched.
+
 ### Slice 2: Servatus Slurm Campaign and CLI
 
-Status: planned; depends on Slice 1 green
+Status: planned and paused by user request; depends on explicit resume from accepted Slice 1 head
+`d09a846c46ebad655317462da8edca1d967166d1`
 
 Scope:
 
@@ -1125,8 +1158,8 @@ or remote checkout:
 Planning research completed on 2026-08-10. Independent source, failure-semantics, operational,
 native-cost, alternatives, and adversarial audits all rejected Submitit as an internal V1
 dependency. A throwaway Submitit 1.5.4 compatibility/crash probe was absorbed into the focused
-decision record and deleted. Current checks found both the exact GitHub repository name and the
-normalized PyPI distribution name `servatus` unclaimed; neither has been reserved.
+decision record and deleted. Those availability checks preceded Slice 1; the public GitHub
+repository and normalized PyPI project are now both owned as recorded above.
 
 Independent Slurm-resource, admin-readiness, KAIROS-parity, interface-minimality, policy-boundary,
 common-case, flexible-interface, packing-adversarial, and ownership audits converged on the narrow
@@ -1143,6 +1176,7 @@ deterministic Slurm executable ownership; native cancellation guidance; cluster-
 canonical duration representation; and serial remote validation. All three correction reviews
 returned `GREEN LIGHT` with no remaining actionable finding.
 
-No implementation slice has started. Implementer/reviewer identities, slice baselines/heads,
-checks, findings, corrections, branches, worktrees, releases, and external gates will be appended
-here during execution. The planning ledger remains uncommitted and run-owned in this phase.
+Slice 1 completed through the ordered implementation, independent rejection, correction, and
+zero-finding re-review loop recorded above. The accepted package is public and installable as
+`servatus==0.0.1`. Work is intentionally paused before Slice 2; resumption starts from the accepted
+Servatus head and must not infer authorization for research-cluster or KAIROS-output mutations.

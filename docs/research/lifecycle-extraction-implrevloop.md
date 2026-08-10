@@ -810,6 +810,15 @@ Pyright, Vulture, wheel/sdist build and inspection, isolated installed-wheel imp
 both installed CLI help paths passed. The worktree was clean. Live SSH, Slurm, Apptainer, GPU,
 TRES, throughput, push, release, and publication gates were not run before review.
 
+Review round 1: rejected at `a329339691ef26f30a0c642af988982845374a98`; Standards 4
+findings, Spec 6 findings. Standards found a writer/loader state-size contradiction, missing parent
+sync for new Campaign installation, leaked journal stages on write/sync failure, and untyped
+malformed-plan exceptions. Spec found non-GPU GRES accepted as GPU, incomplete explicit
+plan/intent provenance and sensitive-script diagnostics, type-confused plan comparison, raw rather
+than effective Slurm time, discarded `sbatch --test-only` decisions, and invalid direct target path
+types surviving until planning. Worst severity was P1. All findings returned to the same
+implementer; the same reviewer will inspect only the correction delta and closure.
+
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
 ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live
 Servatus production gate and, only if it passes, the stable `0.1.0` Servatus push, tag, GitHub

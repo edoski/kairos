@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 2 authorized and in progress; external production gate remains blocked
+Status: Slice 2 complete and green; authorized live production preflight in progress
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -795,9 +795,9 @@ Recorded result:
 
 ### Slice 2: Servatus Slurm Campaign and CLI
 
-Status: independent review in progress; exact baseline
-`d09a846c46ebad655317462da8edca1d967166d1`; implementation head
-`a329339691ef26f30a0c642af988982845374a98`
+Status: complete and green; exact baseline
+`d09a846c46ebad655317462da8edca1d967166d1`; accepted head
+`0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`
 
 Implementer: `/root/slice2_campaign_impl`; direct writer on the single Servatus `main` worktree.
 
@@ -847,7 +847,14 @@ Correction round 2: `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`
 before Campaign state access, so it must wait for or supply a successful durability proof. The
 implementer reports deterministic blocked/failing two-opener coverage, 169 passing tests with one
 expected platform skip, and all static/build/artifact/installed-CLI gates green. The same fresh
-reviewer pair is checking only `b072301...0c454bd` and the remaining P1 closure.
+reviewer pair checked only `b072301...0c454bd` and the remaining P1 closure.
+
+Final correction review: `GREEN LIGHT`; Standards 0 findings, Spec 0 findings. Four focused
+durability/concurrency tests, 169 full-suite tests with one expected platform skip, 122 Campaign/CLI
+tests, Ruff check/format, strict Pyright, Vulture, and diff checks passed. All ten round-1 findings
+and the one round-2 concurrency finding are closed. Live SSH, Slurm, Apptainer, GPU, TRES,
+isolation, and throughput checks remain external-gate work. The accepted `0.1.0rc1` candidate is
+local and unpushed.
 
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
 ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live
@@ -942,7 +949,7 @@ Dependencies and gates:
 
 ### External gate: Servatus 0.1 production acceptance
 
-Status: authorized after Slice 2 green; blocked until then and by the noninterference preflight
+Status: authorized and in preflight; smoke submission remains blocked by noninterference proof
 
 - Begin with read-only inventory. Never hold, release, cancel, requeue, reprioritize, alter
   dependencies, or otherwise mutate any pre-existing queued/running job. Submit new acceptance jobs

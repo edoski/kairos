@@ -312,7 +312,11 @@ def _ensure_protocol(output: Path, protocol: Protocol) -> None:
         return
     if any(output.iterdir()):
         raise ValueError("output without a protocol cannot be resumed")
-    publish_file(path, lambda temporary: temporary.write_text(protocol.model_dump_json()))
+
+    def write_protocol(temporary: Path) -> None:
+        temporary.write_text(protocol.model_dump_json())
+
+    publish_file(path, write_protocol)
 
 
 def _load_cell(storage_root: Path, cell: str, resolved: Mapping[int, EvaluateRequest]) -> _Cell:

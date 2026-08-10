@@ -501,6 +501,8 @@ servatus/
   uv.lock
   docs/
     CONTEXT.md
+    agents/
+      issue-tracker.md
     adr/
       README.md
       0001-opaque-application-seam.md
@@ -671,7 +673,7 @@ the current jobs drain; this approval does not supply it.
 
 ### Setup gate: repository inception
 
-Status: authorized; executes as the opening phase of Slice 1
+Status: complete
 
 - Create the empty public `edoski/servatus` GitHub repository with the approved short description;
   Slice 1 adds the MIT license. No issues, PRs, releases, or package upload are implied beyond the
@@ -686,9 +688,20 @@ Status: authorized; executes as the opening phase of Slice 1
   `main`, preserving the existing dirty main checkout and pre-existing compact-CUDA branch.
 - GitHub creation and the Slice 1 pushes are authorized. No KAIROS remote push is authorized.
 
+Recorded inception:
+
+- Public repository: `https://github.com/edoski/servatus`
+- Local checkout: `/Users/edo/dev/python/servatus`
+- Branch/worktrees: one `main` worktree; no other branch or worktree
+- Immutable baseline: `eea6135f08eeeb4ba418577616e3c9a7e52c2948`
+- Baseline commit: `chore: initialize repository`
+- Remote: `origin=https://github.com/edoski/servatus.git`; baseline pushed successfully
+
 ### Slice 1: Servatus durable workspace and publication
 
-Status: authorized; repository inception pending
+Status: in progress; baseline `eea6135f08eeeb4ba418577616e3c9a7e52c2948`
+
+Implementer: `/root/slice1_workspace_impl`; direct writer on the single Servatus `main` worktree.
 
 Scope:
 

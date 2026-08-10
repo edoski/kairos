@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 1 complete; paused before Slice 2 by user request
+Status: Slice 2 authorized and in progress; external production gate remains blocked
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -795,8 +795,15 @@ Recorded result:
 
 ### Slice 2: Servatus Slurm Campaign and CLI
 
-Status: planned and paused by user request; depends on explicit resume from accepted Slice 1 head
+Status: in progress; resumed by user request on 2026-08-10 from exact baseline
 `d09a846c46ebad655317462da8edca1d967166d1`
+
+Implementer: `/root/slice2_campaign_impl`; direct writer on the single Servatus `main` worktree.
+
+Authority: local implementation, commits, synthetic tests, independent review, correction, and
+ledger updates only. No Servatus push, tag, GitHub Release, PyPI publication, research SSH/Slurm/
+Apptainer contact, KAIROS integration, or KAIROS output/data/scratch mutation is authorized by this
+resume.
 
 Scope:
 
@@ -1178,5 +1185,8 @@ returned `GREEN LIGHT` with no remaining actionable finding.
 
 Slice 1 completed through the ordered implementation, independent rejection, correction, and
 zero-finding re-review loop recorded above. The accepted package is public and installable as
-`servatus==0.0.1`. Work is intentionally paused before Slice 2; resumption starts from the accepted
-Servatus head and must not infer authorization for research-cluster or KAIROS-output mutations.
+`servatus==0.0.1`.
+
+The user resumed Slice 2 on 2026-08-10. Its implementation-review loop starts from the exact
+accepted Slice 1 head. This resumption does not authorize any research-cluster, KAIROS-output,
+GitHub release, PyPI, or deployment mutation.

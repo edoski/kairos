@@ -827,6 +827,13 @@ skip, 137 focused tests passing, and all static/build/artifact/installed-CLI gat
 original reviewer is re-reviewing only `a329339...b072301` and finding closure; one usage-limit
 interruption was retried with the same reviewer and worker identities.
 
+The original reviewer and both original review lanes then failed before sampling because their
+service usage allowance was exhausted. The user explicitly authorized replacing those blocked
+lanes with fresh subagents. `/root/slice2_campaign_rereview` is the fresh read-only correction
+reviewer, with fresh parallel Standards and Spec lanes pinned to the unchanged correction delta and
+the same ten closure criteria. This is an operational waiver of same-reviewer continuity, not a
+waiver of either review axis or the zero-finding gate.
+
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
 ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live
 Servatus production gate and, only if it passes, the stable `0.1.0` Servatus push, tag, GitHub

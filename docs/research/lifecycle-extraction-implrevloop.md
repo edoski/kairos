@@ -1035,7 +1035,15 @@ Live record, 2026-08-10, candidate `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`:
 
 ### Slice 3: KAIROS disposable publication adoption
 
-Status: planned; depends on accepted, installable Servatus 0.1.0
+Status: implementation in progress; baseline
+`1df544c5fd713e4f225a52a9442186ac8c0dabee`
+
+Checkout: run-owned `/Users/edo/dev/python/kairos-servatus-extraction` worktree on
+`codex/servatus-extraction`, created from the clean committed local `main` baseline. The pre-existing
+main worktree remains on `main` with its user-owned `app/package.json` edit and four untracked thesis
+notes untouched. No run-owned change may be made in that main worktree.
+
+Implementer: `/root/slice3_kairos_publication_impl`; sole writer in the run-owned worktree.
 
 Scope:
 

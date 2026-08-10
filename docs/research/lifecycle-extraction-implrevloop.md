@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 2 complete and green; Slice 3 paused on a narrow Servatus file-publication prerequisite
+Status: Servatus Slice 2A complete and green; Slice 3 paused until reviewed `0.2.0` is installable
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1053,7 +1053,12 @@ Live record, 2026-08-10, candidate `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`:
 
 ### Prerequisite Slice 2A: Servatus atomic regular-file publication
 
-Status: planned; exact baseline `c494182cd6f036a253d41a00df5447b867b719b3`
+Status: complete and green; exact baseline `c494182cd6f036a253d41a00df5447b867b719b3`;
+accepted head `f60335416b549fdc252c56152af2b9678e94bb72`
+
+Implementer: `/root/slice2a_file_publication_impl`; sole writer in the Servatus `main` worktree.
+
+Reviewer: `/root/slice2a_file_publication_review`, with fresh parallel Standards and Spec lanes.
 
 Reason:
 
@@ -1107,10 +1112,23 @@ Checks:
 Dependencies and gates:
 
 - The accepted and published Servatus `0.1.0` head is the exact implementation baseline.
-- Slice 3 remains paused until this slice is independently green and the resulting Servatus release
-  is reproducibly installable. Preparing and reviewing the local `0.2.0` candidate is authorized;
-  push, tag, GitHub Release, and PyPI publication are external mutations and remain separately
-  gated.
+- Slice 3 remains paused until the resulting Servatus release is reproducibly installable.
+  Preparing and reviewing the local `0.2.0` candidate was authorized; push, tag, GitHub Release,
+  and PyPI publication are new external mutations and remain separately gated.
+
+Recorded result:
+
+- Implementation commit `f60335416b549fdc252c56152af2b9678e94bb72`
+  (`feature(publication): add atomic regular files`) added the explicit regular-file transaction,
+  shared no-replace commit path, public export, documentation, focused adversarial coverage, and
+  synchronized `0.2.0` metadata without a runtime dependency.
+- The fresh reviewer returned `GREEN LIGHT`: Standards 0 findings and Spec 0 findings for the exact
+  `c494182...f603354` range.
+- Accepted gates: 179 tests passed and one platform-specific skip; Ruff check/format, strict
+  Pyright, Vulture, lock check, wheel/sdist build and content inspection, isolated wheel install,
+  `0.2.0` metadata and `publish_file` smoke, installed CLI help, and fixed-range diff check.
+- Worktree clean. No push, tag, release, PyPI, GitHub, KAIROS, Blockweaver, SSH, Slurm, Apptainer,
+  GPU, output, or external-state mutation occurred.
 
 ### Slice 3: KAIROS disposable publication adoption
 
@@ -1443,3 +1461,11 @@ finishes. Only its relevant ownership rule is carried here: Blockweaver will lat
 dataset artifact under a separately authorized clean-break migration, while Servatus remains an
 opaque path transaction and KAIROS retains scientific interpretation. This run makes no corpus or
 dataset change and does not pre-empt that future plan.
+
+Prerequisite Slice 2A then completed at `f60335416b549fdc252c56152af2b9678e94bb72` through a fresh
+implementation and independent two-lane review. The accepted `publish_file()` operation preserves
+the ordinary file mode selected by `0o666` plus the process umask, pins the stage inode, and reuses
+the same exclusive durable commit transaction as directory publication. The reviewer returned
+`GREEN LIGHT` with zero Standards and Spec findings. The clean local `0.2.0` candidate is not yet
+pushed, tagged, released, or published; Slice 3 remains paused until that separately authorized
+external gate makes the reviewed dependency reproducibly installable.

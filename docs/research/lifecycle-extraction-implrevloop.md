@@ -795,10 +795,20 @@ Recorded result:
 
 ### Slice 2: Servatus Slurm Campaign and CLI
 
-Status: in progress; resumed by user request on 2026-08-10 from exact baseline
-`d09a846c46ebad655317462da8edca1d967166d1`
+Status: independent review in progress; exact baseline
+`d09a846c46ebad655317462da8edca1d967166d1`; implementation head
+`a329339691ef26f30a0c642af988982845374a98`
 
 Implementer: `/root/slice2_campaign_impl`; direct writer on the single Servatus `main` worktree.
+
+Reviewer: `/root/slice2_campaign_review`, with fresh parallel Standards and Spec lanes.
+
+Implementation record: `a329339691ef26f30a0c642af988982845374a98`
+(`feature(campaign): add durable Slurm execution`), 17 files and `+2566/-33`. The implementer
+reported 141 passing synthetic tests and one expected platform skip; Ruff check/format, strict
+Pyright, Vulture, wheel/sdist build and inspection, isolated installed-wheel import/version, and
+both installed CLI help paths passed. The worktree was clean. Live SSH, Slurm, Apptainer, GPU,
+TRES, throughput, push, release, and publication gates were not run before review.
 
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
 ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live

@@ -949,7 +949,7 @@ Dependencies and gates:
 
 ### External gate: Servatus 0.1 production acceptance
 
-Status: authorized and in preflight; smoke submission remains blocked by noninterference proof
+Status: live execution passed; stable-release hardening and review pending
 
 - Begin with read-only inventory. Never hold, release, cancel, requeue, reprioritize, alter
   dependencies, or otherwise mutate any pre-existing queued/running job. Submit new acceptance jobs
@@ -977,6 +977,42 @@ Status: authorized and in preflight; smoke submission remains blocked by noninte
 - Fix any failure through another implementation/review correction loop. Stable `0.1.0` may be
   tagged and published only after this gate passes; the user authorized that stable release on
   2026-08-10. Unit tests and fake Slurm alone are insufficient.
+
+Live record, 2026-08-10, candidate `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`:
+
+- Read-only inventory found Slurm 23.11.4, `select/cons_tres` with `CR_CPU_MEMORY`, cgroup task and
+  affinity plugins, absolute `/usr/bin` Slurm executables, `/usr/bin/apptainer` on compute nodes,
+  and no configured `SchedulerParameters` script-size override. The acceptance target imposed a
+  conservative one-MiB script cap. The only pre-existing user job, `44282`, remained running on
+  `h100sxm5` and was never held, released, canceled, requeued, reprioritized, or otherwise changed.
+- Every new file and log stayed under local `/tmp/servatus-acceptance-0c454bd` or remote
+  `/scratch.hpc/edoardo.galli3/servatus-acceptance-0c454bd`. Build job `44587` created and tested a
+  44,666,880-byte diagnostic SIF on the isolated `sbuild` partition. No KAIROS output, experiment,
+  checkpoint, scratch, deployment image, log, checkout, or remote configuration was opened for
+  mutation.
+- Four serial `servatus validate` calls accepted the exact CPU-only, one-GPU, one-process/two-GPU,
+  and four-task/four-GPU shapes without submission. Jobs `44592`–`44595` then proved byte-exact
+  stdin and argv, exact requested and allocated TRES, CPU-only omission of CUDA/GRES, one visible
+  physical GPU, two distinct GPUs in one process, durable unambiguous receipts, and child-exit-7 to
+  allocation-exit-1 aggregation while successful siblings completed.
+- The first four-pack used one Slurm CPU per task and exposed a site-topology constraint: on this
+  SMT2 cluster, each exclusive step consumes one physical core while `CR_CPU_MEMORY` accounts one
+  requested CPU as one logical thread. Only two steps could run at once; the later two retried and
+  reused the same UUIDs. CPU-only diagnostic job `44596` reproduced the exact two-step ceiling and
+  showed affinity pairs such as `0,128`. This was not a KAIROS-versus-Servatus renderer delta.
+- A corrected Servatus profile requested two logical CPUs per task. Job `44598` requested and was
+  allocated exactly eight CPUs, four GiB, and four GPUs; all four 12-second steps began within four
+  milliseconds, completed in 14 seconds, and saw four distinct physical GPU UUIDs. Servatus must
+  not silently inflate CPU requests or disable binding. The standalone documentation must state
+  that it requests concurrent exact steps, while actual simultaneous placement depends on the
+  site's CPU/GRES topology and a truthful resource profile. KAIROS requests 32 CPUs per GPU task,
+  so its current four-way packing has ample core granularity and its renderer-equivalent throughput
+  path is not negatively changed.
+- The live gate is behaviorally accepted. Before stable publication, the same Slice 2 implementer
+  and reviewer must complete a narrow release-hardening correction: record the validated envelope
+  and topology caveat in Servatus, change `0.1.0rc1` to `0.1.0`, rerun all local artifact gates, and
+  return zero Standards and Spec findings. No scheduler-rendering or automatic-resource change is
+  authorized by this finding.
 
 ### Slice 3: KAIROS disposable publication adoption
 

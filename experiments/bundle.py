@@ -1,4 +1,4 @@
-"""Generic mechanics for temporary experiment cell bundles."""
+"""KAIROS-authored experiment cell bundles."""
 
 from __future__ import annotations
 

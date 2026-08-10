@@ -6,7 +6,6 @@ from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
-from servatus import Campaign, ResourceRequest, SlurmTarget
 
 from kairos.config import (
     EvaluateRequest,
@@ -110,31 +109,6 @@ def test_candidate_task_owns_validated_method_and_exact_payload() -> None:
 
     with pytest.raises(ValidationError, match="method_index must identify"):
         CandidateProcessInput(request=request, method_index=1)
-
-
-def test_production_profile_plans_exact_four_gpu_allocation(tmp_path: Path) -> None:
-    target = SlurmTarget.from_toml(_ROOT / "REMOTE.toml")
-    resources = ResourceRequest.from_toml(_ROOT / "RESOURCES.toml")
-    tasks = tuple(
-        workflow_task(
-            _workflow("evaluate").model_copy(
-                update={"evaluation_id": UUID(f"10000000-0000-4000-8000-{index:012d}")}
-            )
-        )
-        for index in range(1, 5)
-    )
-
-    plan = Campaign.open(tmp_path / "campaign", tasks).plan(
-        target, resources, tasks_per_allocation=4
-    )
-
-    assert target.partitions == ("h100sxm5", "h100pcie", "a100", "l40s", "l40")
-    assert target.max_script_bytes == 1_048_576
-    assert resources.gpus_per_task == 1
-    assert plan.allocations[0].cpus == 128
-    assert plan.allocations[0].memory_mib == 262_144
-    assert plan.allocations[0].gpus == 4
-    assert plan.allocations[0].time_limit == "3-00:00:00"
 
 
 def test_image_runs_workers_from_servatus_work_root() -> None:

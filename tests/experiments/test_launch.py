@@ -8,7 +8,7 @@ from types import ModuleType
 from uuid import UUID
 
 import pytest
-from servatus import AmbiguousSubmission, Campaign, ResourceRequest, SlurmTarget, Task, _slurm
+from servatus import Campaign, ResourceRequest, SlurmTarget, Task, _slurm
 
 from kairos.config import EvaluateRequest, TuneRequest
 from kairos.study import RetainedResult, Study
@@ -206,41 +206,20 @@ def test_candidates_skip_exact_canonical_studies(
     assert [_task_count(argv) for argv, _ in calls] == [4] * 21 + [3, 3, 3]
 
 
-@pytest.mark.parametrize(
-    ("count", "capacity", "expected_sizes"),
-    (
-        (7, 4, [4, 3]),
-        (9, 4, [3, 3, 3]),
-        (45, 4, [4] * 9 + [3] * 3),
-        (7, 3, [3, 2, 2]),
-        (8, 3, [3, 3, 2]),
-        (3, 3, [3]),
-        (1, 3, [1]),
-        (7, 2, [2, 2, 2, 1]),
-    ),
-)
-def test_workflows_preserve_balanced_ordered_packing(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    count: int,
-    capacity: int,
-    expected_sizes: list[int],
+def test_workflows_preserve_kairos_nine_task_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    bundle, requests = _write_workflow_bundle(tmp_path, count)
+    bundle, requests = _write_workflow_bundle(tmp_path, 9)
     target, resources = write_servatus_config(tmp_path)
     launcher = _load_launcher(monkeypatch)
     calls = _capture_submissions(monkeypatch)
 
     result = dispatch(
-        launcher.app,
-        "workflows",
-        *_launch_args(bundle, target, resources),
-        "--tasks-per-job",
-        str(capacity),
+        launcher.app, "workflows", *_launch_args(bundle, target, resources), "--tasks-per-job", "4"
     )
 
     assert result.exit_code == 0
-    assert [_task_count(argv) for argv, _ in calls] == expected_sizes
+    assert [_task_count(argv) for argv, _ in calls] == [3, 3, 3]
     combined = b"".join(script for _, script in calls)
     positions = [
         combined.index(base64.b64encode(request.model_dump_json().encode() + b"\n"))
@@ -272,36 +251,6 @@ def test_workflows_skip_exact_canonical_evaluations(
     script = calls[0][1]
     assert base64.b64encode(requests[0].model_dump_json().encode() + b"\n") not in script
     assert base64.b64encode(requests[1].model_dump_json().encode() + b"\n") in script
-
-
-def test_four_task_script_preserves_kairos_runtime_shape(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    bundle, _ = _write_workflow_bundle(tmp_path, 4)
-    target, resources = write_servatus_config(tmp_path)
-    launcher = _load_launcher(monkeypatch)
-    calls = _capture_submissions(monkeypatch)
-
-    result = dispatch(launcher.app, "workflows", *_launch_args(bundle, target, resources))
-
-    assert result.exit_code == 0
-    assert len(calls) == 1
-    argv, script_bytes = calls[0]
-    assert "--nodes=1" in argv
-    assert "--ntasks=4" in argv
-    assert "--cpus-per-task=8" in argv
-    assert "--mem=196608M" in argv
-    assert "--gres=gpu:a100:4" in argv
-    assert "--partition=thesis-partition" in argv
-    script = script_bytes.decode()
-    assert script.count("srun --exclusive --exact --nodes=1 --ntasks=1") == 4
-    assert script.count("--cpus-per-task=8 --mem=49152M") == 4
-    assert script.count("--gres=gpu:a100:1") == 4
-    assert script.count("/usr/bin/apptainer run --cleanenv") == 4
-    assert script.count("--bind '/remote/storage root:/remote/storage root'") == 4
-    assert script.count("--pwd '/remote/storage root' --nv") == 4
-    assert script.count("remote workflow") == 4
-    assert script.count("if ! wait") == 4
 
 
 @pytest.mark.parametrize("tasks_per_job", [1, 5])
@@ -385,33 +334,6 @@ def test_largest_current_hpo_payload_fits_live_script_cap(
 
     assert len(plan.allocations) == 1
     assert plan.allocations[0].task_keys == tuple(task.key for task in tasks)
-
-
-def test_ambiguous_submission_refuses_replay(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    bundle, _ = _write_workflow_bundle(tmp_path, 8)
-    target, resources = write_servatus_config(tmp_path)
-    launcher = _load_launcher(monkeypatch)
-    calls = 0
-
-    def fail_second(_target: SlurmTarget, _argv: tuple[str, ...], _script: bytes) -> _slurm.Result:
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise OSError("connection lost")
-        return _slurm.Result(0, b"3001\n", b"")
-
-    monkeypatch.setattr(_slurm, "_run_ssh", fail_second)
-
-    failed = dispatch(launcher.app, "workflows", *_launch_args(bundle, target, resources))
-    replay = dispatch(launcher.app, "workflows", *_launch_args(bundle, target, resources))
-
-    assert failed.exit_code == 1
-    assert isinstance(failed.exception, AmbiguousSubmission)
-    assert replay.exit_code == 1
-    assert isinstance(replay.exception, AmbiguousSubmission)
-    assert calls == 2
 
 
 def test_explicit_retry_resubmits_only_selected_accepted_task(

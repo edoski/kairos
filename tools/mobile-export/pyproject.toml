@@ -7,7 +7,7 @@ dependencies = [
   "kairos",
   "pydantic>=2.12",
   "PyYAML>=6.0",
-  "servatus==0.2.0",
+  "servatus==0.4.0",
   "torch==2.11.0",
   "typer>=0.16",
 ]

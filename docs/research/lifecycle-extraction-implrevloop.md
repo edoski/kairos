@@ -960,7 +960,7 @@ Dependencies and gates:
 
 ### External gate: Servatus 0.1 production acceptance
 
-Status: complete and green; stable `0.1.0` publication authorized
+Status: complete and green; stable `0.1.0` released and published
 
 - Begin with read-only inventory. Never hold, release, cancel, requeue, reprioritize, alter
   dependencies, or otherwise mutate any pre-existing queued/running job. Submit new acceptance jobs
@@ -1023,6 +1023,15 @@ Live record, 2026-08-10, candidate `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`:
   correction at `c494182cd6f036a253d41a00df5447b867b719b3`; the same fresh reviewer returned
   `GREEN LIGHT` with zero Standards and Spec findings. Servatus is a clean stable `0.1.0` candidate.
   No scheduler-rendering or automatic-resource change resulted from the finding.
+- Servatus `main` and annotated tag `v0.1.0` were pushed to the public
+  `https://github.com/edoski/servatus` repository. GitHub CI passed on Ubuntu and macOS for both the
+  branch push (run `31385574471`) and tag push (run `31385627514`). The published GitHub Release is
+  `https://github.com/edoski/servatus/releases/tag/v0.1.0`.
+- Release-triggered Trusted Publishing completed successfully in GitHub Actions run `31385685069`.
+  PyPI exposes `servatus==0.1.0` with provenance: wheel SHA-256
+  `3e78710f808068a58525d8cd36e29621d9b75d4e04635994c0dc56ebaffc05cc` and sdist SHA-256
+  `f8bb055c83ad033aaf5433f4b87f4160fe4f86d97a8f3b49ebaed335c8f6aa10`. A strict isolated install
+  from the PyPI index imported the package and returned metadata version `0.1.0`.
 
 ### Slice 3: KAIROS disposable publication adoption
 

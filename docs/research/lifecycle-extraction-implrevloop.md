@@ -805,6 +805,12 @@ ledger updates only. No Servatus push, tag, GitHub Release, PyPI publication, re
 Apptainer contact, KAIROS integration, or KAIROS output/data/scratch mutation is authorized by this
 resume.
 
+Continuation authority: after Slice 2, proceed through all later slices without another routine
+pause once each declared dependency and review gate is satisfied. This does not waive the external
+Servatus production-acceptance gate, authorize contact with the research cluster or its jobs/files,
+or authorize Servatus/KAIROS pushes, tags, GitHub Releases, PyPI publication, image deployment, or
+mutation of protected KAIROS state.
+
 Scope:
 
 - Implement `Task`, `ResourceRequest`, strict `SlurmTarget` TOML, immutable `SubmissionPlan`,
@@ -1190,3 +1196,8 @@ zero-finding re-review loop recorded above. The accepted package is public and i
 The user resumed Slice 2 on 2026-08-10. Its implementation-review loop starts from the exact
 accepted Slice 1 head. This resumption does not authorize any research-cluster, KAIROS-output,
 GitHub release, PyPI, or deployment mutation.
+
+The user then authorized automatic continuation through all remaining implementation slices as
+normal. That authority is dependency-gated: Slice 3 cannot begin until the separately authorized
+production gate accepts Servatus and stable `0.1.0` is installable. No external gate or protected
+state restriction is implicitly waived.

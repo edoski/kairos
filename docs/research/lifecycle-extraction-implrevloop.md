@@ -442,6 +442,11 @@ publication remains the final data-safety backstop.
   unlinked and recreated as a different inode while another opener still holds the old lock. Never
   block on the parent lifecycle lock while holding coordination: unavailable shared/exclusive leases
   fail immediately, avoiding deadlock with child cleanup.
+- The owner-only private Workspace container is the lifecycle trust root. Active handles pin and
+  verify that parent entry; the durable identity inside it binds the lifecycle lock and work inode
+  across normal reopens. Servatus does not claim isolation from arbitrary code running as the same
+  Unix account that renames and recreates the entire owner-only container: such code can also read or
+  rewrite every user-owned artifact and is outside this unprivileged library's security boundary.
 - Every publication attempt gets a unique stage. Concurrent attempts cannot delete each other's
   state.
 - A builder exception exposes no destination. Disposable stages are removed; resumable Workspace
@@ -1262,9 +1267,9 @@ Scope:
   failure or destination collision preserves all child results/work. Parent success publishes the
   canonical object and then removes the complete private hierarchy.
 - Harden Workspace open/cleanup around the removable lifecycle-lock inode: use the verified stable
-  destination-parent directory descriptor as the short coordination lock; check finalized state and
-  preserve expected container, lock, and work inode identities; never unlink or recreate lifecycle
-  locks outside that choreography.
+  destination-parent directory descriptor as the short coordination lock; check finalized state;
+  pin the active container; durably bind and verify the lifecycle lock and work inode inside the
+  authentic owner-only container; never unlink or recreate lifecycle locks outside that choreography.
 - Document the contract and prepare additive `0.3.0` metadata. Slurm, Campaign, publication formats,
   dependencies, and existing root Workspace semantics otherwise remain unchanged.
 
@@ -1272,8 +1277,9 @@ Non-goals:
 
 - Expected-child lists, status, polling, waiting, automatic readiness, registries, `Parts` or
   `Assembly`, workflow topology, KAIROS Method knowledge, lock-mode flags, arbitrary relative child
-  paths, multi-level recursion without a real caller, scheduler changes, corpus/dataset work, or
-  compatibility shims.
+  paths, multi-level recursion without a real caller, scheduler changes, corpus/dataset work,
+  compatibility shims, or isolation from hostile/arbitrary mutation by the same Unix account that
+  owns the private container.
 
 Expected outcome:
 
@@ -1287,7 +1293,9 @@ Checks:
   duplicate child is busy; parent is busy during a child and succeeds afterward; child is busy
   during parent entry; identity mismatch; failed-child resume; parent validation failure preserves
   completed children; canonical destination blocks stale children; cleanup/open and
-  cleanup/finalization barrier races admit only valid outcomes.
+  cleanup/finalization barrier races admit only valid outcomes; replacement lock/work entries inside
+  an authentic container fail before application entry; an active handle rejects container path
+  replacement before publication or cleanup.
 - Existing Workspace/file/directory/Campaign suites, Ruff check/format, strict Pyright, Vulture, lock
   check, wheel/sdist inspection, installed-wheel version/API/CLI smokes, clean fixed-range diff.
 - After local green and separate authorization, one isolated CPU-only shared-scratch smoke should

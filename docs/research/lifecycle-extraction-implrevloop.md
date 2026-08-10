@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 3 complete and green; Slice 4 preparing locally
+Status: Slice 3 complete and green; Slice 4 paused on concurrent child Workspace prerequisite
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -257,6 +257,8 @@ class Workspace:
     @property
     def path(self) -> Path: ...
 
+    def child(self, name: str, *, identity: bytes) -> "Workspace": ...
+
     def publish(self, build: Callable[[Draft], None]) -> Publication: ...
 
 
@@ -280,11 +282,14 @@ destination, binds it to the SHA-256 digest of the opaque identity, and exposes 
 exclusive writer lock. A worker failure preserves the workspace; another same-key worker fails
 immediately instead of concurrently mutating checkpoints.
 
-Nested workspaces cover Study fan-in without a generic workflow engine. KAIROS opens the canonical
-Study workspace, then opens one nested workspace whose private destination is the KAIROS-owned
-`trial-<method_index>` result. The nested workspace retains that complete private result. KAIROS
-later validates the exact ordered trial set and publishes the canonical Study through the parent
-workspace. Servatus knows neither Method indices nor the number or meaning of trials.
+Concurrent child workspaces cover Study fan-in without a generic workflow engine. KAIROS constructs
+the canonical Study workspace and opens one `child(name, identity=...)` per Method without entering
+the parent as an exclusive writer. A child holds a shared parent lifecycle lease and its own
+exclusive writer lock, so different children run concurrently while a duplicate child fails
+immediately. Parent entry remains exclusive and fails while any child is active. Each child retains
+one complete private result; KAIROS later enters the parent, validates the exact ordered trial set,
+and publishes the canonical Study. Servatus knows neither Method indices nor the number, readiness,
+order, or meaning of children.
 
 `publish(destination, build)` is the disposable directory sibling for mobile export and benchmark
 directory units. `publish_file(destination, write)` is its explicit regular-file sibling: Servatus
@@ -427,6 +432,16 @@ publication remains the final data-safety backstop.
 - `publish_file()` gives its writer an existing empty regular file and requires in-place mutation.
   The pinned inode must remain a regular file on the destination filesystem through validation and
   sync. Application bytes, schema, and validation remain entirely caller-owned.
+- `Workspace.child(name, identity=...)` accepts one safe leaf, verifies the opaque parent identity,
+  and returns a normal resumable Workspace under the parent's private work. Different children hold
+  shared parent lifecycle leases and may overlap; the same child remains a nonblocking exclusive
+  writer. Parent finalization uses the existing nonblocking exclusive lifecycle lock and fails
+  `WorkspaceBusy` while any child is active. Servatus never waits for or interprets child readiness.
+- Workspace open and cleanup take a short exclusive coordination lock on the verified stable
+  destination-parent directory descriptor. This prevents a removable lock pathname from being
+  unlinked and recreated as a different inode while another opener still holds the old lock. Never
+  block on the parent lifecycle lock while holding coordination: unavailable shared/exclusive leases
+  fail immediately, avoiding deadlock with child cleanup.
 - Every publication attempt gets a unique stage. Concurrent attempts cannot delete each other's
   state.
 - A builder exception exposes no destination. Disposable stages are removed; resumable Workspace
@@ -1201,14 +1216,102 @@ Recorded result:
 - No canonical output, data, scratch, checkpoint, protected main-worktree dirt, remote system, GPU,
   GitHub, PyPI, corpus, dataset, or future Blockweaver plan was touched.
 
+### Prerequisite Slice 3A: Servatus concurrent child workspaces
+
+Status: planned; exact Servatus baseline `f60335416b549fdc252c56152af2b9678e94bb72`
+
+Reason:
+
+- Slice 4's read-only mapping proved evaluation and artifact training fit one ordinary Workspace,
+  but the planned nested Study composition does not preserve real HPO concurrency. Entering the
+  parent takes its exclusive lock for the whole context, while KAIROS intentionally runs nine
+  Methods for one Study in concurrent `4 + 4 + 1` allocations. Holding the parent during `_fit()`
+  would reject or serialize sibling GPU work.
+- KAIROS must not regain generic parent initialization, retry, lock, or scratch coordination. The
+  missing concurrency lease belongs in Servatus because every application using concurrent private
+  children before one final publication has the same lifecycle race.
+
+Design evidence:
+
+- Independent minimal-interface and adversarial audits converged on one additive method:
+  `Workspace.child(name, identity=...) -> Workspace`. A child holds a shared parent lifecycle lease
+  and its own exclusive lock; parent entry remains exclusive and nonblocking.
+- A third design considered first-class `Parts`, `Assembly`, contribution registries, incomplete
+  state, and lane leases. Those designs are valid but add a class, errors, registries, readiness-like
+  state, and roughly 180--280 production lines for one known caller. Reject them until a second real
+  need proves the one-method hierarchy insufficient.
+- A deleted throwaway spawned-process prototype on macOS proved different-child overlap,
+  duplicate-child exclusion, parent exclusion/retry, cleanup/open ordering, and 30 simultaneous
+  first-initialization/finalization races. Negative controls proved that unlinking and recreating a
+  lock pathname without stable-parent coordination permits two exclusive locks on different inodes.
+  Blocking parent acquisition while holding coordination deadlocks and is forbidden.
+
+Scope:
+
+- Add only `Workspace.child(name, *, identity) -> Workspace`; `name` is one safe opaque leaf. Reuse
+  existing errors and Workspace path/publish behavior. No new public class or readiness value.
+- Child entry verifies the parent identity and canonical-destination absence under a short exclusive
+  coordination flock on the pinned destination-parent directory, then holds the parent lifecycle
+  lock shared and the child lock exclusive/nonblocking for the whole context. Lock order is stable
+  parent coordination, parent lifecycle, child lifecycle.
+- Different children overlap; duplicate child, child during parent finalization, or parent during an
+  active child raises `WorkspaceBusy` immediately. A conflicting parent or child identity raises
+  `WorkConflict`. A canonical parent destination prevents new child state.
+- Child failure preserves only its resumable work. Child success atomically retains one immutable
+  private result under parent work and cleans only its child workspace. Parent validation/build
+  failure or destination collision preserves all child results/work. Parent success publishes the
+  canonical object and then removes the complete private hierarchy.
+- Harden Workspace open/cleanup around the removable lifecycle-lock inode: use the verified stable
+  destination-parent directory descriptor as the short coordination lock; check finalized state and
+  preserve expected container, lock, and work inode identities; never unlink or recreate lifecycle
+  locks outside that choreography.
+- Document the contract and prepare additive `0.3.0` metadata. Slurm, Campaign, publication formats,
+  dependencies, and existing root Workspace semantics otherwise remain unchanged.
+
+Non-goals:
+
+- Expected-child lists, status, polling, waiting, automatic readiness, registries, `Parts` or
+  `Assembly`, workflow topology, KAIROS Method knowledge, lock-mode flags, arbitrary relative child
+  paths, multi-level recursion without a real caller, scheduler changes, corpus/dataset work, or
+  compatibility shims.
+
+Expected outcome:
+
+> Independent children can resume and complete concurrently under one future immutable destination,
+> while the application alone decides when and how their validated results become one canonical
+> object.
+
+Checks:
+
+- Real spawned-process tests on Linux and macOS: simultaneous first sibling children overlap;
+  duplicate child is busy; parent is busy during a child and succeeds afterward; child is busy
+  during parent entry; identity mismatch; failed-child resume; parent validation failure preserves
+  completed children; canonical destination blocks stale children; cleanup/open and
+  cleanup/finalization barrier races admit only valid outcomes.
+- Existing Workspace/file/directory/Campaign suites, Ruff check/format, strict Pyright, Vulture, lock
+  check, wheel/sdist inspection, installed-wheel version/API/CLI smokes, clean fixed-range diff.
+- After local green and separate authorization, one isolated CPU-only shared-scratch smoke should
+  prove coherent shared/exclusive `flock` across distinct research-cluster nodes. No GPU smoke is
+  needed because no Campaign, Slurm renderer, resource, image, or application hot path changes.
+
+Dependencies and gates:
+
+- The released `0.2.0` head is the exact implementation baseline. Use a fresh Servatus implementer
+  and distinct two-lane reviewer; rejected findings return to the same workers.
+- Local implementation/review are authorized. Push, tag, GitHub Release, PyPI `0.3.0`, and any live
+  shared-filesystem smoke are external mutations and remain separately gated.
+- KAIROS Slice 4 remains paused without product edits until this prerequisite is green and the
+  compatible Servatus release is reproducibly installable.
+
 ### Slice 4: KAIROS resumable ML object lifecycle adoption
 
-Status: planned; depends on Slice 3 green
+Status: paused without product edits at `77922ac597f17a19e9eeecd269612f7339863235`;
+depends on prerequisite Slice 3A green and installable
 
 Scope:
 
 - Replace evaluation, artifact, candidate-result, and Study hidden workspace/staging/rename/cleanup
-  mechanics with nested Servatus Workspaces.
+  mechanics with ordinary and concurrent child Servatus Workspaces.
 - Pass Servatus-owned stable work paths into `_fit()` while leaving Lightning `last.ckpt`, callback,
   `ckpt_path`, selected checkpoint, validation observations, objective equality, and full-state resume
   entirely in KAIROS.
@@ -1508,3 +1611,12 @@ callback return-type defect; the same implementer corrected it in a separate com
 two-lane reviewer returned `GREEN LIGHT` with Standards 0 and Spec 0. KAIROS now directly delegates
 disposable file and directory transactions to Servatus while preserving benchmark/mobile paths,
 formats, validation, and restart meaning. No protected or external state was touched.
+
+Slice 4's fresh implementer paused read-only at `77922ac597f17a19e9eeecd269612f7339863235`
+after proving that ordinary nested Workspaces would break concurrent Study candidate throughput.
+Evaluation and artifact mappings remain direct; no product edit was made. Three independent designs,
+an adversarial lock audit, and a deleted spawned-process prototype established the lean generic fix:
+one `Workspace.child()` method with shared parent/exclusive child leases and short stable-parent
+coordination. Prerequisite Slice 3A now owns that Servatus change before the same KAIROS implementer
+resumes. No repository outside this ledger, output, or external system was changed by the design or
+prototype work.

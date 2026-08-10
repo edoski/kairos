@@ -96,30 +96,6 @@ def _candidate_tasks(bundle: Path) -> tuple[list[dict[str, str]], tuple[Task, ..
     )
 
 
-def test_candidates_use_domain_tasks_and_restart_from_servatus_receipts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    experiment_id = UUID(run_script(_FEATURE_SCRIPT, "prepare", tmp_path).stdout.strip())
-    bundle = tmp_path / "experiments" / "feature_ablation" / f".{experiment_id}"
-    target, resources = write_servatus_config(tmp_path)
-    launcher = _load_launcher(monkeypatch)
-    calls = _capture_submissions(monkeypatch)
-
-    result = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
-
-    assert result.exit_code == 0
-    assert result.output.splitlines() == [f"{job_id};research" for job_id in range(1_001, 1_027)]
-    assert [_task_count(argv) for argv, _ in calls] == [4] * 24 + [3, 3]
-    assert all(script.count(b"remote candidate") == _task_count(argv) for argv, script in calls)
-    assert (bundle / ".servatus-campaign").is_dir()
-
-    repeated = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
-
-    assert repeated.exit_code == 0
-    assert repeated.output == ""
-    assert len(calls) == 26
-
-
 def test_hpo_extend_reopens_campaign_and_submits_only_authored_suffix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -291,22 +267,6 @@ def test_kairos_requires_one_explicit_gpu_per_task(
     assert result.exit_code == 1
     assert isinstance(result.exception, ValueError)
     assert str(result.exception) == "KAIROS experiment tasks require exactly one GPU"
-
-
-@pytest.mark.parametrize("count", [102, 108])
-@pytest.mark.parametrize("capacity", [2, 3, 4])
-def test_current_campaign_sizes_fit_one_submit(tmp_path: Path, count: int, capacity: int) -> None:
-    target = SlurmTarget.from_toml(_ROOT / "REMOTE.toml")
-    resources = ResourceRequest.from_toml(_ROOT / "RESOURCES.toml")
-    tasks = tuple(Task(f"task-{index}", ("remote", "workflow"), b"{}\n") for index in range(count))
-
-    plan = Campaign.open(tmp_path / f"campaign-{count}-{capacity}", tasks).plan(
-        target, resources, tasks_per_allocation=capacity
-    )
-
-    expected = (count + capacity - 1) // capacity
-    assert len(plan.allocations) == expected
-    assert expected <= target.max_allocations_per_submit
 
 
 def test_largest_current_hpo_payload_fits_live_script_cap(

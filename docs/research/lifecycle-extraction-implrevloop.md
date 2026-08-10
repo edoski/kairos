@@ -819,6 +819,14 @@ than effective Slurm time, discarded `sbatch --test-only` decisions, and invalid
 types surviving until planning. Worst severity was P1. All findings returned to the same
 implementer; the same reviewer will inspect only the correction delta and closure.
 
+Correction round 1: `b0723013ea857542da0f96e886eb82363f6ab1e7`
+(`fix(campaign): harden durable submission plans`). The original implementer resumed preserved
+partial work after one usage-limit interruption and committed without amending the rejected head.
+It reports all ten findings mapped to fixes, 167 full-suite tests passing with one expected platform
+skip, 137 focused tests passing, and all static/build/artifact/installed-CLI gates green. The
+original reviewer is re-reviewing only `a329339...b072301` and finding closure; one usage-limit
+interruption was retried with the same reviewer and worker identities.
+
 Authority: local implementation, commits, synthetic tests, independent review, correction, and
 ledger updates are authorized. After Slice 2 is green, the user also authorizes the isolated live
 Servatus production gate and, only if it passes, the stable `0.1.0` Servatus push, tag, GitHub

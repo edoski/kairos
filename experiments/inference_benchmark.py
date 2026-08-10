@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import plistlib
-import shutil
 import signal
 import subprocess
 import time
@@ -13,12 +12,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, TypeVar, cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import polars as pl
 import torch
 import typer
 from pydantic import UUID4, Field
+from servatus import publish, publish_file
 from torch import nn
 
 from kairos.addresses import evaluation_json_path
@@ -240,7 +240,6 @@ def _phase_record(phase: _Phase) -> dict[str, float | int | str]:
 
 
 def _write_energy(path: Path, cell: _Cell, settings: dict[str, int]) -> None:
-    path.mkdir()
     phases = _capture_power(
         path / "powermetrics.plist", lambda alive: _run_phases(cell, settings, alive)
     )
@@ -304,23 +303,6 @@ def _protocol(
     )
 
 
-def _publish(path: Path, write: Callable[[Path], object]) -> None:
-    if path.exists():
-        raise FileExistsError(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{uuid4()}.tmp")
-    try:
-        write(temporary)
-        if path.exists():
-            raise FileExistsError(path)
-        temporary.rename(path)
-    finally:
-        if temporary.is_dir():
-            shutil.rmtree(temporary)
-        else:
-            temporary.unlink(missing_ok=True)
-
-
 def _ensure_protocol(output: Path, protocol: Protocol) -> None:
     output.mkdir(parents=True, exist_ok=True)
     path = output / "protocol.json"
@@ -330,7 +312,7 @@ def _ensure_protocol(output: Path, protocol: Protocol) -> None:
         return
     if any(output.iterdir()):
         raise ValueError("output without a protocol cannot be resumed")
-    _publish(path, lambda temporary: temporary.write_text(protocol.model_dump_json()))
+    publish_file(path, lambda temporary: temporary.write_text(protocol.model_dump_json()))
 
 
 def _load_cell(storage_root: Path, cell: str, resolved: Mapping[int, EvaluateRequest]) -> _Cell:
@@ -462,7 +444,8 @@ def _run_unit(
     with torch.inference_mode():
         _warm(cell, protocol.warmup_iterations)
         rows = _time_cell(cell, sweep)
-    _publish(path, rows.write_parquet)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    publish_file(path, rows.write_parquet)
 
 
 def _run_energy_unit(
@@ -483,7 +466,8 @@ def _run_energy_unit(
     with torch.inference_mode():
         _warm(cell, warmup_iterations)
         subprocess.run(("/usr/bin/sudo", "-v"), check=True)
-        _publish(path, lambda temporary: _write_energy(temporary, cell, settings))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        publish(path, lambda draft: _write_energy(draft.path, cell, settings))
 
 
 def run_cpu(

@@ -17,6 +17,7 @@ dependencies = [
   "lightning==2.6.5",
   "pydantic>=2.12",
   "PyYAML>=6.0",
+  "servatus==0.2.0",
   "typer>=0.16",
 ]
 

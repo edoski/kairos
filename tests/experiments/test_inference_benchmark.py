@@ -313,9 +313,7 @@ def test_orders_rotate_deterministically() -> None:
     assert benchmark._pass_order(2) == (*first[1:], first[0])
 
 
-def test_protocol_match_atomic_publication_and_resume(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_protocol_match_and_units_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     protocol = _protocol()
     output = tmp_path / "output"
     benchmark._ensure_protocol(output, protocol)
@@ -325,40 +323,6 @@ def test_protocol_match_atomic_publication_and_resume(
     )
     with pytest.raises(ValueError, match="does not match"):
         benchmark._ensure_protocol(output, protocol.model_copy(update={"warmup_iterations": 3}))
-
-    target = tmp_path / "unit"
-    benchmark._publish(target, lambda path: path.write_text("first"))
-    with pytest.raises(FileExistsError):
-        benchmark._publish(target, lambda path: path.write_text("second"))
-    interrupted = tmp_path / "interrupted"
-
-    def interrupt(path: Path) -> None:
-        path.write_text("partial")
-        raise KeyboardInterrupt
-
-    with pytest.raises(KeyboardInterrupt):
-        benchmark._publish(interrupted, interrupt)
-    assert target.read_text() == "first"
-    assert not interrupted.exists()
-    assert not list(tmp_path.glob(".interrupted.*.tmp"))
-
-    directory = tmp_path / "directory"
-    benchmark._publish(
-        directory, lambda path: (path.mkdir(), (path / "complete").write_text("yes"))
-    )
-    assert (directory / "complete").read_text() == "yes"
-
-    interrupted_directory = tmp_path / "interrupted-directory"
-
-    def interrupt_directory(path: Path) -> None:
-        path.mkdir()
-        (path / "partial").write_text("partial")
-        raise KeyboardInterrupt
-
-    with pytest.raises(KeyboardInterrupt):
-        benchmark._publish(interrupted_directory, interrupt_directory)
-    assert not interrupted_directory.exists()
-    assert not list(tmp_path.glob(".interrupted-directory.*.tmp"))
 
     calls = 0
 

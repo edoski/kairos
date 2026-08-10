@@ -90,14 +90,14 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(tmp_path: Pat
     rows = read_tsv_rows(k_bundle / "cells.tsv")
     requests = [TrainRequest.model_validate_json(Path(row["request"]).read_bytes()) for row in rows]
 
-    assert len(rows) == 81
-    assert [row["cell"] for row in rows[:9]] == [
-        f"ethereum.lstm.K{horizon}" for horizon in _HORIZONS
+    assert [row["cell"] for row in rows] == [
+        f"{chain}.lstm.K{horizon}"
+        for chain in ("ethereum", "polygon", "avalanche")
+        for horizon in _HORIZONS
     ]
-    assert rows[-1]["cell"] == "avalanche.transformer_lstm.K200"
     assert [request.source.experiment.horizon_blocks for request in requests[:9]] == list(_HORIZONS)
     assert {request.source.study_result_index for request in requests} == {1}
-    assert len({request.artifact_id for request in requests}) == 81
+    assert len({request.artifact_id for request in requests}) == 27
 
     k_manifest = ExperimentManifest(root={row["cell"]: UUID(row["artifact_id"]) for row in rows})
     canonical_path = experiment_manifest_path(tmp_path, ExperimentKind.K_STUDY, k_experiment_id)
@@ -130,8 +130,8 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(tmp_path: Pat
         for row in evaluation_rows
     ]
 
-    assert len(evaluation_rows) == 81
-    assert len({request.evaluation_id for request in evaluation_requests}) == 81
+    assert len(evaluation_rows) == 27
+    assert len({request.evaluation_id for request in evaluation_requests}) == 27
     assert [request.testing_window for request in evaluation_requests[:4]] == [
         BlockWindow(first_parent_block=701, last_parent_block=803),
         BlockWindow(first_parent_block=701, last_parent_block=802),

@@ -12,16 +12,20 @@ from kairos.modeling import load_artifact
 from kairos.study import load_study
 
 _KIND = ExperimentKind.K_STUDY
+_LSTM_CELLS = tuple(f"{chain}.lstm" for chain in ("ethereum", "polygon", "avalanche"))
 _HORIZONS = (2, 3, 4, 5, 10, 25, 50, 100, 200)
 
 
 def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID) -> None:
     experiment_id = uuid4()
     manifest = load_experiment_manifest(storage_root, ExperimentKind.HPO, hpo_experiment_id)
+    if not set(_LSTM_CELLS) <= manifest.keys():
+        raise ValueError("HPO manifest is missing selected LSTM Studies")
     bundle = open_bundle(storage_root, _KIND, experiment_id)
 
     cells: list[tuple[str, TrainRequest]] = []
-    for cell, study_id in manifest.items():
+    for cell in _LSTM_CELLS:
+        study_id = manifest[cell]
         study = load_study(storage_root, study_id)
         selected_index, _ = study.best_result()
         for horizon in _HORIZONS:

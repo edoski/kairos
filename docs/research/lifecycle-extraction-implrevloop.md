@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Servatus `0.2.0` released; Slice 3 resuming locally
+Status: Slice 3 complete and green; Slice 4 preparing locally
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1139,8 +1139,8 @@ Recorded result:
 
 ### Slice 3: KAIROS disposable publication adoption
 
-Status: resuming locally after prerequisite Slice 2A green and installable; repin the exact committed
-worktree head before the implementer writes product code
+Status: complete and green; exact baseline `79428b5db28e05082976732eaf882ed67640c984`;
+accepted head `87f09c09f0441af49990c7c9be296e3286783ed2`
 
 Checkout: run-owned `/Users/edo/dev/python/kairos-servatus-extraction` worktree on
 `codex/servatus-extraction`, created from the clean committed local `main` baseline. The pre-existing
@@ -1148,6 +1148,8 @@ main worktree remains on `main` with its user-owned `app/package.json` edit and 
 notes untouched. No run-owned change may be made in that main worktree.
 
 Implementer: `/root/slice3_kairos_publication_impl`; sole writer in the run-owned worktree.
+
+Reviewer: `/root/slice3_kairos_publication_review`, with fresh parallel Standards and Spec lanes.
 
 Scope:
 
@@ -1180,6 +1182,24 @@ Checks:
 - Focused benchmark and mobile-export tests, root/mobile lock checks, root Ruff and Pyright, mobile
   export installed-environment smoke, and KAIROS status/diff/residue checks.
 - No native device, generated model, energy campaign, Slurm, SSH, image, push, or PR gate.
+
+Recorded result:
+
+- Initial implementation `52574968d9035728c92f33c6bdeaf988ea509e94`
+  (`refactor(publication): adopt Servatus transactions`) pinned `servatus==0.2.0` in root and mobile
+  exporter projects, adopted `publish_file()` for exact protocol and Parquet destinations, adopted
+  `publish()` for energy and mobile directories, and deleted local generic mechanics/tests.
+- The first review rejected one P2 Standards finding and returned Spec green: the protocol writer
+  lambda returned `Path.write_text()`'s integer instead of the callback contract's `None`; configured
+  root Pyright did not include the experiment file, while an explicit file check exposed it.
+- Correction `87f09c09f0441af49990c7c9be296e3286783ed2`
+  (`fix(publication): return none from protocol writer`) added one typed writer without suppression or
+  interface widening. The same reviewer and lanes returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Accepted gates: 112 root tests, 15 benchmark tests, 9 mobile-export tests including host XNNPACK
+  export, Ruff check/format, strict root and explicit experiment Pyright, Vulture, root/mobile lock
+  checks, installed Servatus API and mobile CLI smokes, residue/diff/status checks. Worktree clean.
+- No canonical output, data, scratch, checkpoint, protected main-worktree dirt, remote system, GPU,
+  GitHub, PyPI, corpus, dataset, or future Blockweaver plan was touched.
 
 ### Slice 4: KAIROS resumable ML object lifecycle adoption
 
@@ -1482,3 +1502,9 @@ and PyPI Trusted Publishing all completed from exact head `f60335416b549fdc252c5
 Branch and tag CI passed on Ubuntu and macOS, the publish workflow succeeded, and a fresh index
 install verified version, API, and CLI. This closes prerequisite Slice 2A and permits the same paused
 KAIROS Slice 3 implementer to resume locally without contacting outputs or the research cluster.
+
+Slice 3 completed at `87f09c09f0441af49990c7c9be296e3286783ed2`. Its first review found one
+callback return-type defect; the same implementer corrected it in a separate commit and the same
+two-lane reviewer returned `GREEN LIGHT` with Standards 0 and Spec 0. KAIROS now directly delegates
+disposable file and directory transactions to Servatus while preserving benchmark/mobile paths,
+formats, validation, and restart meaning. No protected or external state was touched.

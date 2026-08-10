@@ -7,8 +7,11 @@ import polars as pl
 import pytest
 import torch
 from pydantic import ValidationError
+from servatus import DestinationExists, Workspace, WorkspaceBusy
 
+import kairos.study as study_module
 from kairos.addresses import (
+    study_directory,
     study_json_path,
     study_trial_checkpoint_path,
     study_trial_observations_path,
@@ -27,11 +30,11 @@ from kairos.observations import OBSERVATION_SCHEMA
 from kairos.study import (
     RetainedResult,
     Study,
+    assemble_candidate_result,
     load_selected_method,
     load_study,
     publish_study,
     reduce_study,
-    retain_result,
 )
 
 STUDY_ID = UUID("10000000-0000-4000-8000-000000000001")
@@ -93,9 +96,17 @@ def _retain(
     torch.save(
         {"hyper_parameters": {"association": definition.model_dump(mode="json")}}, checkpoint
     )
-    retain_result(
-        storage_root, request, method_index, result, checkpoint, _observations(result.objective)
-    )
+    canonical = study_directory(storage_root, request.study_id)
+    canonical.parent.mkdir(exist_ok=True)
+    parent = Workspace(canonical, identity=request.model_dump_json().encode())
+    with parent.child(
+        f"trial-{method_index}", identity=definition.model_dump_json().encode()
+    ) as workspace:
+        workspace.publish(
+            lambda draft: assemble_candidate_result(
+                draft, request, result, checkpoint, _observations(result.objective)
+            )
+        )
 
 
 def _write_canonical_study(storage_root: Path, study: Study) -> None:
@@ -165,7 +176,39 @@ def test_retain_publish_and_load_selected_method_in_request_order(tmp_path: Path
         "selected.ckpt",
         "validation.parquet",
     }
-    assert not (tmp_path / "studies" / f".{STUDY_ID}").exists()
+    assert not Workspace(
+        study_directory(tmp_path, STUDY_ID), identity=request.model_dump_json().encode()
+    ).path.exists()
+
+
+def test_candidate_keys_are_independently_composable(tmp_path: Path) -> None:
+    request = _request((LSTM_METHOD, OTHER_LSTM_METHOD))
+    canonical = study_directory(tmp_path, STUDY_ID)
+    canonical.parent.mkdir()
+    parent = Workspace(canonical, identity=request.model_dump_json().encode())
+    first = TrainingDefinition(experiment=request.experiment, method=request.method_at(0))
+    second = TrainingDefinition(experiment=request.experiment, method=request.method_at(1))
+
+    with (
+        parent.child("trial-0", identity=first.model_dump_json().encode()) as first_workspace,
+        parent.child("trial-1", identity=second.model_dump_json().encode()) as second_workspace,
+    ):
+        assert first_workspace.path != second_workspace.path
+
+
+def test_same_candidate_key_is_busy(tmp_path: Path) -> None:
+    request = _request()
+    canonical = study_directory(tmp_path, STUDY_ID)
+    canonical.parent.mkdir()
+    parent = Workspace(canonical, identity=request.model_dump_json().encode())
+    definition = TrainingDefinition(experiment=request.experiment, method=request.method_at(0))
+
+    with (
+        parent.child("trial-0", identity=definition.model_dump_json().encode()),
+        pytest.raises(WorkspaceBusy),
+        parent.child("trial-0", identity=definition.model_dump_json().encode()),
+    ):
+        pass
 
 
 def test_retained_result_rejects_invalid_epoch_bounds() -> None:
@@ -211,13 +254,35 @@ def test_publish_study_rejects_missing_result(tmp_path: Path) -> None:
 
 def test_publish_study_rejects_mismatched_result_request(tmp_path: Path) -> None:
     request = _request((LSTM_METHOD, OTHER_LSTM_METHOD))
-    conflicting = _request((LSTM_METHOD, OTHER_LSTM_METHOD), corpus_id=OTHER_CORPUS_ID)
     second = RetainedResult(objective=0.4, selected_epoch=3, completed_epochs=8)
     _retain(tmp_path, request, 0, RESULT)
-    _retain(tmp_path, conflicting, 1, second)
+    _retain(tmp_path, request, 1, second)
+    parent = Workspace(
+        study_directory(tmp_path, STUDY_ID), identity=request.model_dump_json().encode()
+    )
+    result_path = parent.path / "trial-1" / "result.json"
+    result_path.write_text(
+        result_path.read_text(encoding="utf-8").replace(str(CORPUS_ID), str(OTHER_CORPUS_ID)),
+        encoding="utf-8",
+    )
 
     with pytest.raises(ValueError, match="result requests must be identical"):
         publish_study(tmp_path, STUDY_ID)
+
+    assert not study_json_path(tmp_path, STUDY_ID).exists()
+
+
+def test_publish_study_is_busy_while_candidate_is_active(tmp_path: Path) -> None:
+    request = _request((LSTM_METHOD, OTHER_LSTM_METHOD))
+    _retain(tmp_path, request, 0, RESULT)
+    parent = Workspace(
+        study_directory(tmp_path, STUDY_ID), identity=request.model_dump_json().encode()
+    )
+    definition = TrainingDefinition(experiment=request.experiment, method=request.method_at(1))
+
+    with parent.child("trial-1", identity=definition.model_dump_json().encode()):
+        with pytest.raises(WorkspaceBusy):
+            publish_study(tmp_path, STUDY_ID)
 
     assert not study_json_path(tmp_path, STUDY_ID).exists()
 
@@ -260,18 +325,20 @@ def test_publish_study_preserves_canonical_created_during_publication(
 ) -> None:
     _retain(tmp_path, _request(), 0, RESULT)
     canonical = study_json_path(tmp_path, STUDY_ID).parent
-    real_rename = Path.rename
+    real_validate = study_module._validate_trial
 
-    def create_collision(source: Path, target: Path) -> Path:
-        if target == canonical:
-            canonical.mkdir()
-            (canonical / "occupied").write_text("occupied", encoding="utf-8")
-        return real_rename(source, target)
+    def create_collision(
+        retained: Path, request: TuneRequest, method_index: int, result: RetainedResult
+    ) -> None:
+        real_validate(retained, request, method_index, result)
+        canonical.mkdir()
+        (canonical / "occupied").write_text("occupied", encoding="utf-8")
 
-    monkeypatch.setattr(Path, "rename", create_collision)
+    monkeypatch.setattr(study_module, "_validate_trial", create_collision)
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(DestinationExists):
         publish_study(tmp_path, STUDY_ID)
 
     assert (canonical / "occupied").read_text(encoding="utf-8") == "occupied"
-    assert (tmp_path / "studies" / f".{STUDY_ID}").is_dir()
+    request = _request()
+    assert Workspace(canonical, identity=request.model_dump_json().encode()).path.is_dir()

@@ -9,6 +9,7 @@ from uuid import UUID
 import numpy as np
 import polars as pl
 import torch
+from servatus import Draft, Workspace
 
 from . import _runtime
 from .addresses import evaluation_directory, evaluation_observations_path
@@ -31,42 +32,42 @@ def evaluate(request: EvaluateRequest, storage_root: Path) -> None:
     """Publish canonical observations for one exact artifact/window request."""
 
     canonical = evaluation_directory(storage_root, request.evaluation_id)
-    if canonical.exists():
-        raise FileExistsError(canonical)
+    canonical.parent.mkdir(exist_ok=True)
+    with Workspace(canonical, identity=request.model_dump_json().encode()) as workspace:
+        blocks = load_corpus_blocks(storage_root, request.corpus_id)
+        association, model = load_artifact(storage_root, request.artifact_id)
+        if association.request.source.corpus_id != request.corpus_id:
+            raise ValueError("artifact source Corpus must match the evaluation Corpus")
+        experiment = association.training_definition.experiment
+        dataset = prepare_historical_window(
+            blocks,
+            experiment,
+            request.testing_window,
+            feature_state=association.feature_state,
+            target_state=association.target_state,
+        )
 
-    scratch = storage_root / "evaluations" / f".{request.evaluation_id}"
-    scratch.mkdir(parents=True)
+        _runtime.configure_torch()
+        observations = collect_observations(
+            dataset,
+            model,
+            blocks,
+            request.testing_window,
+            target_state=association.target_state,
+            horizon_blocks=experiment.horizon_blocks,
+            device=_DEVICE,
+            batch_size=_runtime.EVALUATION_BATCH_SIZE,
+        )
+        request_path = workspace.path / "evaluation.json"
+        observations_path = workspace.path / "observations.parquet"
+        request_path.write_text(request.model_dump_json(), encoding="utf-8")
+        observations.write_parquet(observations_path)
 
-    blocks = load_corpus_blocks(storage_root, request.corpus_id)
-    association, model = load_artifact(storage_root, request.artifact_id)
-    if association.request.source.corpus_id != request.corpus_id:
-        raise ValueError("artifact source Corpus must match the evaluation Corpus")
-    experiment = association.training_definition.experiment
-    dataset = prepare_historical_window(
-        blocks,
-        experiment,
-        request.testing_window,
-        feature_state=association.feature_state,
-        target_state=association.target_state,
-    )
+        def assemble(draft: Draft) -> None:
+            draft.link(request_path, "evaluation.json")
+            draft.link(observations_path, "observations.parquet")
 
-    _runtime.configure_torch()
-    observations = collect_observations(
-        dataset,
-        model,
-        blocks,
-        request.testing_window,
-        target_state=association.target_state,
-        horizon_blocks=experiment.horizon_blocks,
-        device=_DEVICE,
-        batch_size=_runtime.EVALUATION_BATCH_SIZE,
-    )
-    (scratch / "evaluation.json").write_text(request.model_dump_json(), encoding="utf-8")
-    observations.write_parquet(scratch / "observations.parquet")
-
-    if canonical.exists():
-        raise FileExistsError(canonical)
-    scratch.rename(canonical)
+        workspace.publish(assemble)
 
 
 def reduce_evaluation(storage_root: Path, evaluation_id: UUID) -> pl.DataFrame:

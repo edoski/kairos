@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Servatus Slice 2A complete and green; Slice 3 paused until reviewed `0.2.0` is installable
+Status: Servatus `0.2.0` released; Slice 3 resuming locally
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1112,9 +1112,8 @@ Checks:
 Dependencies and gates:
 
 - The accepted and published Servatus `0.1.0` head is the exact implementation baseline.
-- Slice 3 remains paused until the resulting Servatus release is reproducibly installable.
-  Preparing and reviewing the local `0.2.0` candidate was authorized; push, tag, GitHub Release,
-  and PyPI publication are new external mutations and remain separately gated.
+- Slice 3 was paused until the resulting Servatus release became reproducibly installable. The user
+  authorized the `0.2.0` push, tag, GitHub Release, and PyPI publication after the green review.
 
 Recorded result:
 
@@ -1129,11 +1128,19 @@ Recorded result:
   `0.2.0` metadata and `publish_file` smoke, installed CLI help, and fixed-range diff check.
 - Worktree clean. No push, tag, release, PyPI, GitHub, KAIROS, Blockweaver, SSH, Slurm, Apptainer,
   GPU, output, or external-state mutation occurred.
+- The reviewed head was pushed to `main`; GitHub CI run `31389354062` passed on Ubuntu and macOS.
+  Annotated tag `v0.2.0` points exactly to `f603354`; tag CI run `31389412085` passed on both
+  platforms. GitHub Release `https://github.com/edoski/servatus/releases/tag/v0.2.0` triggered
+  Trusted Publishing run `31389483759`, which succeeded without a long-lived upload token.
+- PyPI exposes `servatus==0.2.0` with provenance. Wheel SHA-256:
+  `122a26ac97b266595ba9aedb2350569b4f5970b7b067de38ddb4c3c9f170df19`; source archive SHA-256:
+  `cfaa6a9829d25a8e15cd1c556af60cc60c25588f77d42186bd42dab1fb677fdf`. A fresh empty-cache index
+  install returned `0.2.0`, imported `publish_file`, and passed the installed CLI smoke.
 
 ### Slice 3: KAIROS disposable publication adoption
 
-Status: paused without product edits; baseline
-`3018733b79bf98ae63e71d2592eee307e11f86d8`; depends on prerequisite Slice 2A green and installable
+Status: resuming locally after prerequisite Slice 2A green and installable; repin the exact committed
+worktree head before the implementer writes product code
 
 Checkout: run-owned `/Users/edo/dev/python/kairos-servatus-extraction` worktree on
 `codex/servatus-extraction`, created from the clean committed local `main` baseline. The pre-existing
@@ -1469,3 +1476,9 @@ the same exclusive durable commit transaction as directory publication. The revi
 `GREEN LIGHT` with zero Standards and Spec findings. The clean local `0.2.0` candidate is not yet
 pushed, tagged, released, or published; Slice 3 remains paused until that separately authorized
 external gate makes the reviewed dependency reproducibly installable.
+
+The user then authorized that external gate. Servatus `main`, annotated tag `v0.2.0`, GitHub Release,
+and PyPI Trusted Publishing all completed from exact head `f60335416b549fdc252c56152af2b9678e94bb72`.
+Branch and tag CI passed on Ubuntu and macOS, the publish workflow succeeded, and a fresh index
+install verified version, API, and CLI. This closes prerequisite Slice 2A and permits the same paused
+KAIROS Slice 3 implementer to resume locally without contacting outputs or the research cluster.

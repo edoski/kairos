@@ -2514,8 +2514,13 @@ Execution authorization and run setup on 2026-08-11:
   checks/wrapper and 18 net product lines. The correction candidate is net +108 product source lines
   versus v0.4.1: Campaign `-98`, Slurm `-9`, Workspace `-1`, CLI `+3`, public exports `+2`, and POSIX
   `+211`. The growth is concentrated in the new exact trust-root deletion and retained-tree
-  retirement implementation, not duplicated client-facing surface. Final rereview remains pending;
-  release remains blocked.
+  retirement implementation, not duplicated client-facing surface. The same reviewer returned
+  final GREEN LIGHT with Standards 0 and Spec 0, confirming one authoritative preflight check, one
+  owner-only policy, and one exact pinned-tree deletion path. Final C4 passed 285 tests with one
+  environmental skip plus all static/build/install gates. Exact accepted 0.5.0 source head is
+  `79ee407c431d1f9c0510e9462d5136fa7b58319d`. The user authorized the Servatus push, tag, GitHub
+  Release, and PyPI publication gate; KAIROS C5 remains paused until published artifact hashes are
+  verified.
 
 ### Historical final deployment gates for the initial extraction
 

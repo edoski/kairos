@@ -1,7 +1,7 @@
 # Generic lifecycle extraction implementation-review ledger
 
 Status: extraction, CephFS correction, isolated acceptance, and Slices 10-11 green; compact-CUDA
-correction sync and re-review active; final main integration, publication, and cleanup pending
+ledger correction re-review active; final main integration, publication, and cleanup pending
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1886,7 +1886,7 @@ Implementation-review loop:
 
 ### Slice 11: final campaign path and production CPU profile
 
-Status: complete and green; compact correction sync and re-review pending
+Status: complete and green; compact ledger correction re-review active
 
 - Exact baseline: `76a1396a42bcfb0897bdf661a066bd030a0644d3`.
 - Initial implementation `44d9c7c89d137685cb38d1b866773370951f34c7` changed the campaign path and
@@ -1894,9 +1894,11 @@ Status: complete and green; compact correction sync and re-review pending
   Servatus's private `state.json` filename.
 - Correction `8840c049ab5ecb7c31d812631fa71833e0571660` replaced that private coupling with
   opaque campaign-state sentinels. The same reviewer returned `GREEN LIGHT`: Standards 0, Spec 0.
-- Compact CUDA was reconciled through `cb86c3c9` before the correction. Syncing `8840c049` into
-  compact CUDA and re-reviewing the corrected integration remain the next gates; final main
-  integration, branch publication, and cleanup follow only after they are green.
+- Compact merge `cb86c3c9` contains correction `8840c049` as its exact second parent. Later
+  ledger-only correction `0cc4ab1` was merged into compact at
+  `1a5dea51542e264fcea0e73e801c3a645d7f42e3`, with parents `cb86c3c9` and `0cc4ab1` and zero
+  product or resolution delta. The same-reviewer re-review of `1a5dea51` is active; final main
+  integration, branch publication, and cleanup follow only after it is green.
 - New KAIROS experiment bundles store their Servatus campaign at `.servatus/`. This is a clean
   break: there is no alias, fallback, migration, or parser for `.servatus-campaign/` or
   `jobs.tsv`.
@@ -1948,7 +1950,7 @@ or remote checkout:
    preceding image and old execution path until production cutover passes.
 8. Update remote image configuration only after acceptance. Acceptance and permission preparation
    are complete; final branch merge/publication and run-owned cleanup are authorized but await the
-   compact correction re-review. Preserve the old image and old lifecycle state while
+   compact ledger-correction re-review. Preserve the old image and old lifecycle state while
    already-submitted jobs still reference them.
 
 ## Run records

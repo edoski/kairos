@@ -2474,6 +2474,12 @@ Execution authorization and run setup on 2026-08-11:
   with one platform skip, Ruff check/format, strict Pyright, Vulture, lock/diff checks, build,
   archive inspection, and fresh-wheel API/CLI smokes. The Servatus worktree is clean; C1B starts
   from exact `b6d7647`.
+- C1B implementation `ecf7c644a35ac4d8d6e212f55230dc37ef8b36b2` reduced the Workspace/POSIX
+  slice by 56 net lines and passed 250 tests with one platform skip plus every static/build/install
+  gate. Its first review rejected one P1 on both axes: `_verify_level()` reused stale open-time
+  metadata, so a post-open permissive chmod escaped the C1A owner-only recheck. The same pair owns a
+  focused correction that must retain a fresh UID/mode read without restoring redundant
+  type/device validation; C2 remains blocked.
 
 ### Historical final deployment gates for the initial extraction
 

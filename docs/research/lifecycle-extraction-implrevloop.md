@@ -2492,6 +2492,12 @@ Execution authorization and run setup on 2026-08-11:
   `f5cb8afcc3cbe6ebacfb33da1b7d98fe713f9a0f` without restoring the duplicate decoder. Rereview
   returned GREEN LIGHT with Standards 0 and Spec 0. Final C2 passed 262 tests with one platform
   skip plus all static/build/install gates. C3 starts from exact `f5cb8af`.
+- C3 implementation `6c8c96c289a5e812f45c3e06440a09f5cff93a4d` passed 267 tests with one
+  platform skip plus all static/build/install gates. Its first review rejected one shared
+  Standards/Spec defect: CLI plan bytes were written while the ordinary-umask stage was still
+  `0644`, before chmod to `0600`. Standards also found validation messages coupled to submission
+  and a stale file-wide private-usage suppression. The same pair owns a focused correction; C4
+  remains blocked.
 
 ### Historical final deployment gates for the initial extraction
 

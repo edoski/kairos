@@ -1,6 +1,6 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: all local slices complete and green; final external deployment gates pending
+Status: local extraction slices green; CephFS parent-permission correction and final acceptance active
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1679,7 +1679,61 @@ Recorded result:
 - No real CUDA/GPU, image, Slurm, SSH, remote, output, data, checkpoint, corpus, dataset, device, or
   deployment claim or mutation was made. Those remain final external gates.
 
-## Final external deployment gates
+### Slice 8: KAIROS directory-publication parent permissions
+
+Status: active; exact extraction baseline `01046b4b7f7f73177c2cb3d7d528c439c870dd77`
+
+Trigger:
+
+- Final-image A/B job `44718` completed both old and new synthetic GPU fits, then the new image
+  failed during Study finalization. CephFS does not support native no-replace directory rename, so
+  Servatus correctly selected its coherent-lock fallback and rejected the group-writable
+  `studies/` parent.
+- The exact cluster condition is deterministic: account umask `0002` plus KAIROS's default
+  `Path.mkdir()` creates mode `0775`; Servatus directory fallback requires an owner-owned parent
+  without group/other write. A fast local umask-`0002` repro produces the same mode and failure
+  precondition.
+- This is a KAIROS integration defect, not a reason to weaken Servatus. An ordinary directory
+  rename inside a group-writable parent cannot preserve the package's no-clobber guarantee against
+  a non-cooperating writer.
+
+Scope:
+
+- Request mode `0755` when KAIROS creates each direct parent used for directory publication:
+  Studies, Artifacts, Evaluations, experiment manifests, inference-energy units, and mobile export.
+  Experiment authoring must create the exact canonical experiment-kind parent explicitly; a
+  recursive `requests/` mkdir otherwise leaves the intermediate parent at `0775`.
+- Leave regular-file publication parents unchanged: Servatus's hard-link fallback already provides
+  kernel-enforced create-if-absent semantics there.
+- Keep Servatus `0.4.1`, every output path, file roster, schema, hard link, request, and scientific
+  validation unchanged. Add no wrapper, compatibility path, storage initializer, chmod helper, or
+  new configuration surface.
+- Add lean umask-`0002` tests at the KAIROS caller seams. They prove newly created direct parents are
+  `0755`; they do not retest Servatus fallback internals.
+
+Cutover boundary:
+
+- Explicit mkdir modes do not modify an already-existing `0775` directory. After all old jobs and
+  old-layout closure work finish, the final cutover preflight may inspect only owner/mode metadata
+  for exact known publication parents and remove group/other write from those exact directories.
+- No recursive chmod, glob, output traversal, content read, copy, rewrite, inode/path change, or
+  schema migration is allowed. If an exact parent is not owned by the KAIROS account or shared
+  write is intentional, fail closed and choose a per-owner namespace rather than weakening
+  Servatus. This is bounded permission preparation, not output migration.
+
+Implementation-review loop:
+
+- A fresh implementer changes only the KAIROS callers/tests/docs required above in the isolated
+  extraction worktree. A distinct reviewer runs parallel Standards and Spec lanes against the
+  exact fixed range. Findings return to the same workers until zero-finding `GREEN LIGHT`.
+- After local green, reconcile the accepted extraction head into compact CUDA while proving its
+  original ten-file CUDA delta remains patch-identical. Build a fresh exact-SHA image in new
+  isolated paths; never overwrite `004f951` or `ade5827`.
+- Re-run only the affected isolated CephFS publication and final KAIROS functional gates. The
+  successful old/new compute evidence from `44718`/`44720` remains valid: request, epochs,
+  objective, and metrics were identical; `116.63s` old versus `118.39s` new is ratio `1.015`.
+
+### Final external deployment gates
 
 The clean break cannot deploy while queued jobs, running jobs, experiment drafts with old
 `jobs.tsv`, or resumable old-layout scratch are still needed. Before changing the university image

@@ -1,6 +1,7 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: local extraction slices green; CephFS parent-permission correction and final acceptance active
+Status: extraction, CephFS correction, compact-CUDA integration, and isolated acceptance green;
+production cutover awaiting final approval
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1681,7 +1682,7 @@ Recorded result:
 
 ### Slice 8: KAIROS directory-publication parent permissions
 
-Status: active; exact extraction baseline `01046b4b7f7f73177c2cb3d7d528c439c870dd77`
+Status: green; exact extraction baseline `01046b4b7f7f73177c2cb3d7d528c439c870dd77`
 
 Trigger:
 
@@ -1733,6 +1734,50 @@ Implementation-review loop:
   successful old/new compute evidence from `44718`/`44720` remains valid: request, epochs,
   objective, and metrics were identical; `116.63s` old versus `118.39s` new is ratio `1.015`.
 
+Recorded result:
+
+- The fresh implementer committed `0f70ead03359c94f2d5ab479c89c63becbc9b64c`
+  (`fix(publication): create safe directory parents`). Seven direct directory-publication parent
+  creators now request mode `0755`; regular-file publishers, paths, schemas, hard links, and
+  scientific validation are unchanged. The same implementer closed one review finding in separate
+  commit `223cfacf7f0a2eee02ebdbcea9f61555500d1c24` by restoring `bundle_path()` as the sole bundle
+  address owner. The same independent reviewer returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Extraction gates passed: 109 root tests, 9 mobile-export tests including host XNNPACK, 43 App
+  tests, Ruff check/format, strict Pyright, Vulture, root/mobile locks, App typecheck, npm dry
+  install, and clean diff/status checks.
+- Compact CUDA was reconciled without rewriting its history at
+  `f49db0b712845632f6a5457159b628e635a00f9f`. Its only nonmerge CUDA commits remain `32758207` and
+  `3a1fe154`; the ten-file roster, per-file numstat, and all 249 changed lines remain patch-identical.
+  Independent review returned `GREEN LIGHT`: Standards 0, Spec 0. Gates passed: 110 root tests, 32
+  CUDA-focused tests, 9 mobile-export tests, 43 App tests, and all static, lock, CLI, App, npm,
+  topology, conflict, residue, and clean-status checks.
+- Build job `44721` created and tested the exact clean `f49db0b` image at
+  `/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-f49db0b.sif` through `sbuild` with 8 CPUs,
+  30 GiB, and one hour. The prior `004f951`, `9385753`, and `ade5827` images remain untouched.
+- Exact-production-shape job `44722` requested 128 CPUs, 256 GiB, and four GPUs but never obtained a
+  node. After the user authorized a smaller equivalent functional gate, it was cancelled while
+  pending with zero elapsed time and no node. Replacement `44828` reduced CPU and memory to 8 CPUs
+  and 32 GiB while retaining four GPUs; it proved the active constraint was four-GPU availability,
+  not CPU or memory, and was likewise cancelled pending with zero elapsed time and no node.
+- The user then authorized the minimal gate for the changed seam. Synthetic candidate job `44829`
+  completed in 27 seconds with exact `cpu=2,mem=8G,gres/gpu=1`; CPU finalizer `44830` atomically
+  published and strictly loaded Study `f45717de-df84-4c10-b203-083b4a80c6a3`. Synthetic
+  `TrainRequest` job `44831` completed in 12 seconds with the same TRES; CPU validator `44832`
+  strictly loaded Artifact `f70c4af8-323e-4d57-81b2-9a1415262c18`.
+- Both changed directory parents are mode `0755`; each immutable Study/Artifact directory is mode
+  `0700`. Validators proved exact canonical file rosters, one Study reduction row with finite
+  metrics, one completed epoch, a loadable non-training LSTM Artifact, and request-bound identities.
+  Servatus logs are exactly `%j.out` plus zero-based `%j-0.out` for both GPU jobs. Every path and
+  output is under the isolated `kairos-f49db0b-small` acceptance namespace.
+- The smaller final smoke is sufficient for Slice 8 because the reviewed delta changes only parent
+  creation modes. Four-task concurrent launch, distinct GPU isolation, aggregate exit behavior,
+  TRES arithmetic, and zero-based combined log rendering were already proven live before this
+  correction and their source paths did not change. The prior same-GPU A/B remains the performance
+  evidence; it showed equal requests, epochs, objectives, and metrics with new/old ratio `1.01509`.
+- No thesis input, canonical production output, production scratch, existing science job, or
+  independent automation was read or mutated. No production configuration, branch push/merge, or
+  cleanup is part of this accepted slice.
+
 ### Final external deployment gates
 
 The clean break cannot deploy while queued jobs, running jobs, experiment drafts with old
@@ -1747,20 +1792,19 @@ or remote checkout:
    do not add legacy parsing to new KAIROS or Servatus.
 4. Build a new immutable KAIROS image through the documented `sbuild` partition procedure from an
    isolated exact-SHA checkout. Run `apptainer build` then `apptainer test`.
-5. Run separately authorized new-path KAIROS smokes with the same immutable application image and
-   request bytes. Verify the one-task and four-packed-task scripts request exactly one GPU, 32 CPUs,
-   65536 MiB, and three days per process; four steps run concurrently with distinct physical GPU
-   UUIDs; nine tasks remain `3 + 3 + 3`; sibling failures are aggregated without cancelling
-   successful siblings; and canonical KAIROS validation remains the only completion authority.
+5. Run separately authorized new-path KAIROS smokes. Completed above: final-image candidate,
+   Study publication/load, TrainRequest, Artifact publication/load, TRES, and log-shape gates are
+   green. Existing live evidence remains authoritative for unchanged four-pack, UUID isolation,
+   failure aggregation, `3 + 3 + 3`, and exact production-profile rendering.
 6. Compare old/new `ReqTRES`, `AllocTRES`, logs, results, and one representative task's
    elapsed/throughput behavior using the same immutable image, input, dedicated partition, and GPU
    model, preferably the same node. This lean A/B is a gross-regression check, not a statistical
    performance study; repeated trials or a thesis-scale campaign are unnecessary unless making a
    formal performance claim. The mixed production partition route is not valid A/B evidence.
-7. Run one application publication smoke. Preserve the preceding image and old execution path until
-   the GPU and publication gates pass.
-8. Update remote image configuration only after acceptance. File transfer, remote pushes, package
-   release, and deployment each require explicit authorization.
+7. Run one application publication smoke. Completed above for both Study and Artifact. Preserve the
+   preceding image and old execution path until production cutover passes.
+8. Update remote image configuration only after acceptance. Production parent permission metadata,
+   remote configuration, branch push/merge, and cleanup remain separately authorized mutations.
 
 ## Run records
 

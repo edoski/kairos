@@ -1897,8 +1897,10 @@ Status: complete and green; compact ledger correction re-review active
 - Compact merge `cb86c3c9` contains correction `8840c049` as its exact second parent. Later
   ledger-only correction `0cc4ab1` was merged into compact at
   `1a5dea51542e264fcea0e73e801c3a645d7f42e3`, with parents `cb86c3c9` and `0cc4ab1` and zero
-  product or resolution delta. The same-reviewer re-review of `1a5dea51` is active; final main
-  integration, branch publication, and cleanup follow only after it is green.
+  product or resolution delta. Subsequent ledger-only correction syncs preserve that zero-product
+  delta. Compact has inherited all accepted extraction corrections, and the same-reviewer final
+  re-review is active; final main integration, branch publication, and cleanup follow only after it
+  is green.
 - New KAIROS experiment bundles store their Servatus campaign at `.servatus/`. This is a clean
   break: there is no alias, fallback, migration, or parser for `.servatus-campaign/` or
   `jobs.tsv`.

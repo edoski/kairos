@@ -1,7 +1,8 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: extraction, CephFS correction, isolated acceptance, and Slices 10-11 green; compact-CUDA
-ledger correction re-review active; final main integration, publication, and cleanup pending
+Status: extraction, CephFS correction, isolated acceptance, Slices 10-11, and compact-CUDA green;
+local main integration complete; independent final review is the publication gate; branch
+publication, stash restoration, and cleanup pending
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1886,7 +1887,8 @@ Implementation-review loop:
 
 ### Slice 11: final campaign path and production CPU profile
 
-Status: complete and green; compact ledger correction re-review active
+Status: complete and green; compact final review green; local main integration complete;
+independent final review active
 
 - Exact baseline: `76a1396a42bcfb0897bdf661a066bd030a0644d3`.
 - Initial implementation `44d9c7c89d137685cb38d1b866773370951f34c7` changed the campaign path and
@@ -1898,9 +1900,14 @@ Status: complete and green; compact ledger correction re-review active
   ledger-only correction `0cc4ab1` was merged into compact at
   `1a5dea51542e264fcea0e73e801c3a645d7f42e3`, with parents `cb86c3c9` and `0cc4ab1` and zero
   product or resolution delta. Subsequent ledger-only correction syncs preserve that zero-product
-  delta. Compact has inherited all accepted extraction corrections, and the same-reviewer final
-  re-review is active; final main integration, branch publication, and cleanup follow only after it
-  is green.
+  delta. Compact inherited all accepted extraction corrections; its final same-reviewer review at
+  `3f1926f4073b9f8febe81a347d8e381e1142a7c1` returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Local main integration completed through normal non-fast-forward merge
+  `36069aa9f93c98d774f36b6df828f9e9b2a63195`, with parents `ccd3709a` and accepted extraction
+  `4d29e81f`. Its final tree exactly equals the extraction tree, and its remerge/resolution delta is
+  empty. User stash `98047c1e` remains unchanged. Thirty-three focused and 109 full tests plus all
+  static gates passed. Independent final review is the publication gate; branch publication, stash
+  restoration, and cleanup remain pending.
 - New KAIROS experiment bundles store their Servatus campaign at `.servatus/`. This is a clean
   break: there is no alias, fallback, migration, or parser for `.servatus-campaign/` or
   `jobs.tsv`.
@@ -1951,8 +1958,8 @@ or remote checkout:
 7. Run one application publication smoke. Completed above for both Study and Artifact. Preserve the
    preceding image and old execution path until production cutover passes.
 8. Update remote image configuration only after acceptance. Acceptance and permission preparation
-   are complete; final branch merge/publication and run-owned cleanup are authorized but await the
-   compact ledger-correction re-review. Preserve the old image and old lifecycle state while
+   are complete; branch publication, stash restoration, and run-owned cleanup are authorized but
+   await independent final review. Preserve the old image and old lifecycle state while
    already-submitted jobs still reference them.
 
 ## Run records

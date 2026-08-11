@@ -58,7 +58,7 @@ def test_close_preserves_bundle_after_verifier_failure_then_retries(
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
     campaign = bundle / ".servatus"
     campaign.mkdir()
-    (campaign / "state.json").write_text("temporary", encoding="utf-8")
+    (campaign / "sentinel").write_bytes(b"opaque campaign state")
     inputs = {
         path.relative_to(bundle): path.read_bytes() for path in bundle.rglob("*") if path.is_file()
     }
@@ -106,7 +106,8 @@ def test_publication_failure_preserves_authored_bundle(
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
     campaign = bundle / ".servatus"
     campaign.mkdir()
-    (campaign / "state.json").write_text("retry", encoding="utf-8")
+    sentinel = campaign / "sentinel"
+    sentinel.write_bytes(b"opaque campaign state")
 
     def fail_publication(_destination: object, _assemble: object) -> None:
         raise RuntimeError("publication failed")
@@ -125,4 +126,4 @@ def test_publication_failure_preserves_authored_bundle(
     assert not bundle.with_name(str(_EXPERIMENT_ID)).exists()
     assert (bundle / "cells.tsv").is_file()
     assert (bundle / "requests").is_dir()
-    assert (campaign / "state.json").read_text() == "retry"
+    assert sentinel.read_bytes() == b"opaque campaign state"

@@ -2484,6 +2484,11 @@ Execution authorization and run setup on 2026-08-11:
   pathname-to-pinned-inode check. The same reviewer returned GREEN LIGHT with Standards 0 and Spec
   0. Final C1B is a net 29-line reduction from C1A; 253 tests with one platform skip and every
   static/build/install gate pass. C2 starts from exact `960a3f0`.
+- C2 implementation `e861789e262f8930a5c0b130f50b53ebe0f232d9` removed 135 Campaign/Slurm
+  source lines and passed 255 tests with one platform skip plus all static/build/install gates.
+  Standards review returned zero findings. Spec review rejected one P2 durable-ingress defect:
+  Python numeric equality admitted float schema versions and bool/float allocation totals. The same
+  pair owns a focused exact-integer correction; C3 remains blocked.
 
 ### Historical final deployment gates for the initial extraction
 

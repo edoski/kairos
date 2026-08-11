@@ -2447,6 +2447,23 @@ Planning review record:
 - `git diff --check` passed. Planning contacted no remote scheduler, output, dataset, campaign,
   image, GitHub, or PyPI surface and changed no product code.
 
+Execution authorization and run setup on 2026-08-11:
+
+- The user authorized Servatus consolidation slices C1A through C4 and requested a pause before
+  KAIROS slice C5. The user separately authorized pushing Servatus, creating/tagging the GitHub
+  `v0.5.0` release, and publishing `servatus==0.5.0` after all four slices are independently GREEN.
+- The immutable Servatus baseline is the clean released `v0.4.1` head
+  `2ccf749e2a4c3f5ad7ca572ee34fe78e5b1bb78f`; its primary checkout had only `main` and no other
+  worktree. This run owns branch `codex/servatus-consolidation-0.5` and worktree
+  `/private/tmp/servatus-consolidation-0.5`, created at that exact baseline.
+- The KAIROS orchestration baseline is clean `main` at
+  `fa7ba4f1571eb293dd6d1e919cf4e9e0f532183a`, three commits ahead of `origin/main`. Existing
+  `codex/compact-cuda-execution` at `a81efb47e653227381401a597a48d76ab03068ef` is pre-run state and
+  is not owned or modified by the Servatus slices.
+- Each slice receives one fresh implementer and one distinct reviewer. Corrections return to the
+  same pair; the next slice starts only after a zero-finding Standards/Spec review. No KAIROS
+  product, remote scheduler, image, output, dataset, campaign, or production scratch is in scope.
+
 ### Historical final deployment gates for the initial extraction
 
 This retained record describes the completed initial 0.4.1 cutover. It does not authorize or prove

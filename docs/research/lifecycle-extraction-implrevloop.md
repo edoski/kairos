@@ -2463,6 +2463,12 @@ Execution authorization and run setup on 2026-08-11:
 - Each slice receives one fresh implementer and one distinct reviewer. Corrections return to the
   same pair; the next slice starts only after a zero-finding Standards/Spec review. No KAIROS
   product, remote scheduler, image, output, dataset, campaign, or production scratch is in scope.
+- C1A implementation commit `0cb630eb8da19518f1cf65eadb64a824bc740e54` passed 247 tests with
+  one platform skip plus all static/build/installed-artifact gates. Its first independent review
+  rejected four findings: stage creation still accepted a substituted inode; the C1B reopen-sync
+  optimization landed early; mode-`000` regular files blocked exact cleanup; and root/nested
+  removal duplicated one recursive algorithm. The same implementer/reviewer pair owns a focused
+  correction round; C1B remains blocked.
 
 ### Historical final deployment gates for the initial extraction
 

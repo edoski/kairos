@@ -2501,6 +2501,14 @@ Execution authorization and run setup on 2026-08-11:
   validation/submission precise operation messages, and removes the suppression. Rereview returned
   GREEN LIGHT with Standards 0 and Spec 0. Final C3 passed 268 tests with one platform skip plus all
   static/build/install gates. C4 starts from exact `e602874`.
+- C4 implementation `ce7c8ffe69adea70432629100fe1873ea895d14c` passed 285 tests with one
+  platform skip plus all static/build/install gates and produced inspected 0.5.0 artifacts. Review
+  accepted every functional retirement/preflight/warning contract but rejected three concrete
+  duplications: repeated parent verification, repeated owner-only policy, and repeated pinned-tree
+  verification behind a single-use wrapper. It also rejected the plan's optimistic cumulative
+  “smaller overall” wording: measured C1A-C4 product source was net +126 versus v0.4.1. The same pair
+  owns the deletion correction; the orchestrator must record the final measured outcome truthfully
+  after rereview. Release remains blocked.
 
 ### Historical final deployment gates for the initial extraction
 

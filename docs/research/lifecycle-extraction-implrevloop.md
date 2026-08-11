@@ -2467,8 +2467,13 @@ Execution authorization and run setup on 2026-08-11:
   one platform skip plus all static/build/installed-artifact gates. Its first independent review
   rejected four findings: stage creation still accepted a substituted inode; the C1B reopen-sync
   optimization landed early; mode-`000` regular files blocked exact cleanup; and root/nested
-  removal duplicated one recursive algorithm. The same implementer/reviewer pair owns a focused
-  correction round; C1B remains blocked.
+  removal duplicated one recursive algorithm. Correction `322296de64e5cebe6cea683c486f8fa1206aa1d7`
+  closed all functional findings; its rereview rejected one unused recursive-device parameter.
+  Correction `b6d7647367486375017e4ee1756a9c80903d5d1a` made that root-device invariant explicit. The same
+  reviewer returned final GREEN LIGHT with Standards 0 and Spec 0. Final C1A gates passed 250 tests
+  with one platform skip, Ruff check/format, strict Pyright, Vulture, lock/diff checks, build,
+  archive inspection, and fresh-wheel API/CLI smokes. The Servatus worktree is clean; C1B starts
+  from exact `b6d7647`.
 
 ### Historical final deployment gates for the initial extraction
 

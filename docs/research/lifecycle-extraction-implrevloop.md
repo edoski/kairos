@@ -1833,38 +1833,55 @@ Recorded result:
 
 ### Slice 10: selected-LSTM horizon contract alignment
 
-Status: active; exact baseline `87d85ea282584efa4532a41b675016eb4a27d057`
+Status: correction complete; independent re-review pending
+
+- Exact baseline: `e894870a886cd0585b32aed93f39f832eb2005db`
+- Initial implementation: `7660cf39241aebd50c651d9a02a4cf3183ccf310`
 
 Trigger and expected outcome:
 
 - Final main integration review found one P1 predating the merge: the intentional horizon-study
-  restriction authors exactly three chain-LSTM cells across nine horizons, while canonical and
-  benchmark contracts still promised nine architecture-chain cells. The corrected system must
-  consistently own 27 K-study/held-out records and three complete rolling groups (12 selected
-  `K=2..5` records), without weakening manifest-derived validation.
+  restriction authors exactly three chain-LSTM cells across nine horizons, while its active manual
+  still promised nine architecture-chain cells. The corrected K-study and held-out authoring
+  contract owns 27 records; its rolling report selects the three chain-LSTM groups over `K=2..5`,
+  for 12 records.
+- The inference cost/time benchmark is a separate consumer contract. It takes explicit completed
+  full-roster canonical manifests and requires nine manifest-derived chain-family groups over
+  `K=2..5`, for 36 artifacts and evaluations.
 
 Scope:
 
-- Keep `experiments/k_study.py` and `held_out.py` manifest-driven behavior unchanged. In inference
-  benchmark resolution, require exactly three complete groups over `ROLLING_HORIZONS` without
-  hard-coding chain names. Reject partial or surplus campaign rosters before model loading.
-- Use one realistic three-group benchmark fixture; prove 12 protocol labels, incomplete-roster
-  rejection, artifact association rejection, and exact ordered 27 held-out labels. Do not duplicate
-  reducer, loader, or publisher tests.
-- Align active `docs/KAIROS.md` and inference-benchmark planning contracts with three selected LSTM
-  cells, 27 K-study/held-out objects, and 12 rolling benchmark artifacts/evaluations. Mark the old
-  nine-cell/36-record benchmark investigation as superseded historical scope instead of rewriting
-  recorded review history.
+- Keep `experiments/k_study.py` and `held_out.py` manifest-driven behavior unchanged. Prove their
+  exact ordered 27-label selected-LSTM authoring roster.
+- In inference benchmark resolution, require exactly nine complete groups over
+  `ROLLING_HORIZONS` without hard-coding chain or family names. Reject partial or surplus campaign
+  rosters and evaluation-to-artifact mismatches before model loading.
+- Use one realistic benchmark fixture with all three chains, all three model families, four rolling
+  horizons, and the five nonrolling horizon labels. Prove 36 protocol labels while retaining the
+  separate 27-label authoring proof. Do not duplicate reducer, loader, or publisher tests.
+- Align active `docs/KAIROS.md` with the selected-LSTM author and rolling-report contract. Preserve
+  the inference-benchmark planning contract at nine groups/36 records and document its distinct
+  full-roster manifest source boundary.
 - HPO remains nine architecture-chain Studies with 81 Method rows; that upstream contract is not
   the horizon roster and must not change. No scientific outputs, schemas, IDs, resources, remote
   state, user-owned main dirt, or queued jobs may be touched.
 
+Readiness:
+
+- The narrowed K-study author cannot generate the other 24 rolling benchmark models. Before the
+  inference campaign, verify the explicit completed full-roster K-study/held-out manifest pair and
+  its canonical objects. If that pair is unavailable or incompatible, separately scope a dedicated
+  benchmark-input author; do not widen the horizon-sensitivity author implicitly.
+- Implementer gates at `7660cf39241aebd50c651d9a02a4cf3183ccf310`: 16 focused tests and 109
+  full root tests passed; repository Ruff check/format, configured and explicit experiment
+  Pyright, Vulture, root/mobile lock checks, and diff/status hygiene were green.
+
 Implementation-review loop:
 
-- A fresh implementer commits the bounded code/test/docs correction in extraction. A distinct
-  reviewer runs Standards and Spec against the fixed range and returns `GREEN LIGHT` only at zero
-  findings. Then compact CUDA and main integration are reconciled with exact tree/parity proofs
-  before publication resumes.
+- Initial independent review returned Standards green and one Spec finding: this ledger still
+  collapsed the benchmark to the selected-LSTM roster. The same implementer corrected only this
+  record. The same reviewer must return `GREEN LIGHT` at zero findings before compact CUDA and main
+  integration are reconciled with exact tree/parity proofs.
 
 ### Final external deployment gates
 

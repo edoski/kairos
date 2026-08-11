@@ -146,12 +146,15 @@ def _energy_cell(events: list[str]) -> benchmark._Cell:
 
 
 def _resolved() -> dict[str, dict[int, EvaluateRequest]]:
-    return {
-        "ethereum.lstm": {
-            horizon: _request(index, horizon)
-            for index, horizon in enumerate(reversed(benchmark.ROLLING_HORIZONS))
-        }
-    }
+    resolved: dict[str, dict[int, EvaluateRequest]] = {}
+    for index, (chain, family, horizon) in enumerate(
+        (chain, family, horizon)
+        for chain in ("ethereum", "polygon", "avalanche")
+        for family in ("lstm", "transformer", "transformer_lstm")
+        for horizon in reversed(benchmark.ROLLING_HORIZONS)
+    ):
+        resolved.setdefault(f"{chain}.{family}", {})[horizon] = _request(index, horizon)
+    return resolved
 
 
 def _protocol() -> benchmark.Protocol:
@@ -174,8 +177,11 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
             path = tmp_path / "evaluations" / str(request.evaluation_id) / "evaluation.json"
             path.parent.mkdir(parents=True)
             path.write_text(request.model_dump_json())
-    k_study["ethereum.lstm.K10"] = UUID("30000000-0000-4000-8000-000000000010")
-    held_out["ethereum.lstm.K10"] = UUID("40000000-0000-4000-8000-000000000010")
+    for index, (group, horizon) in enumerate(
+        (group, horizon) for group in source for horizon in (10, 25, 50, 100, 200)
+    ):
+        k_study[f"{group}.K{horizon}"] = UUID(f"30000000-0000-4000-8000-{index:012d}")
+        held_out[f"{group}.K{horizon}"] = UUID(f"40000000-0000-4000-8000-{index:012d}")
 
     monkeypatch.setattr(
         benchmark,
@@ -184,15 +190,38 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
             k_study if kind == benchmark.ExperimentKind.K_STUDY else held_out
         ),
     )
-    monkeypatch.setattr(benchmark, "load_artifact", lambda *_args: pytest.fail("model loaded"))
+    monkeypatch.setattr(benchmark, "_load_cell", lambda *_args: pytest.fail("model loaded"))
 
     resolved = benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
 
     assert resolved == source
+    protocol = benchmark._protocol(_K_STUDY_ID, _HELD_OUT_ID, resolved, 2, 10)
+    assert len(protocol.roster) == 36
+    assert sorted(protocol.roster) == [
+        f"{group}.K{horizon}"
+        for group in sorted(source)
+        for horizon in reversed(benchmark.ROLLING_HORIZONS)
+    ]
+    missing = held_out.pop("polygon.lstm.K4")
+    with pytest.raises(ValueError, match="nine complete rolling groups"):
+        benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
+    held_out["polygon.lstm.K4"] = missing
+    surplus_labels = []
+    for index, horizon in enumerate(reversed(benchmark.ROLLING_HORIZONS), start=36):
+        request = _request(index, horizon)
+        label = f"surplus.lstm.K{horizon}"
+        surplus_labels.append(label)
+        k_study[label] = request.artifact_id
+        held_out[label] = request.evaluation_id
+    with pytest.raises(ValueError, match="nine complete rolling groups"):
+        benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
+    for label in surplus_labels:
+        del k_study[label], held_out[label]
     label = "ethereum.lstm.K5"
     k_study[label] = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
     with pytest.raises(ValueError, match="does not name"):
-        benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
+        benchmark.run_cpu(tmp_path, _K_STUDY_ID, _HELD_OUT_ID, tmp_path / "output", 2, 1)
+    assert not (tmp_path / "output").exists()
 
 
 def test_batch_one_is_a_chronological_view() -> None:

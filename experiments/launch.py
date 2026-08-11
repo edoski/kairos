@@ -25,7 +25,7 @@ from kairos.study import load_study
 from kairos.workers import CandidateProcessInput, candidate_task, workflow_task
 
 _MAX_TASKS_PER_JOB = 4
-_CAMPAIGN_DIRECTORY = ".servatus-campaign"
+_CAMPAIGN_DIRECTORY = ".servatus"
 _TargetPath = Annotated[Path, typer.Option("--target", dir_okay=False, readable=True)]
 _ResourcePath = Annotated[Path, typer.Option("--resources", dir_okay=False, readable=True)]
 _RetryKeys = Annotated[list[str] | None, typer.Option("--retry", metavar="TASK_KEY")]

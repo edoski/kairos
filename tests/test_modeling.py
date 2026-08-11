@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import stat
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -282,6 +283,7 @@ def test_validation_logs_weight_short_batches_in_float64(monkeypatch: pytest.Mon
     assert weighted_gap == pytest.approx(expected_gap)
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_lstm_trains_loads_and_applies_direct_loss(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -295,6 +297,7 @@ def test_lstm_trains_loads_and_applies_direct_loss(
     train(request, tmp_path)
     association, loaded_model = load_artifact(tmp_path, artifact_id)
 
+    assert stat.S_IMODE((tmp_path / "artifacts").stat().st_mode) == 0o755
     assert association.request == request
     assert checkpoint == tmp_path / "artifacts" / str(artifact_id) / "artifact.ckpt"
     assert checkpoint.is_file()
@@ -359,6 +362,7 @@ def test_train_preserves_canonical_created_during_publication(
     assert Workspace(canonical, identity=request.model_dump_json().encode()).path.is_dir()
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -418,6 +422,7 @@ def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
 
     with pytest.raises(RuntimeError, match="simulated interruption"):
         run_candidate(tmp_path, request, 0)
+    assert stat.S_IMODE((tmp_path / "studies").stat().st_mode) == 0o755
     first_progress = progress()
     definition = TrainingDefinition(experiment=request.experiment, method=method)
     parent = Workspace(study_directory(tmp_path, request.study_id), identity=request.study_id.bytes)

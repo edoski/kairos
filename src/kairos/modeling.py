@@ -365,7 +365,7 @@ def _fit(
 
 def train(request: TrainRequest, storage_root: Path) -> None:
     canonical = artifact_directory(storage_root, request.artifact_id)
-    canonical.parent.mkdir(exist_ok=True)
+    canonical.parent.mkdir(mode=0o755, exist_ok=True)
     with Workspace(canonical, identity=request.model_dump_json().encode()) as workspace:
         source = request.source
         method = load_selected_method(storage_root, source)
@@ -392,7 +392,7 @@ def run_candidate(storage_root: Path, request: TuneRequest, method_index: int) -
         experiment=request.experiment, method=request.method_at(method_index)
     )
     canonical = study_directory(storage_root, request.study_id)
-    canonical.parent.mkdir(exist_ok=True)
+    canonical.parent.mkdir(mode=0o755, exist_ok=True)
     parent = Workspace(canonical, identity=request.study_id.bytes)
     with parent.child(
         f"trial-{method_index}", identity=request.model_dump_json().encode()

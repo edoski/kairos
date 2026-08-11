@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 from typing import Any, Self
 from uuid import UUID
@@ -212,6 +213,7 @@ class _Model(nn.Module):
         )
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_evaluate_publishes_exact_observations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -226,6 +228,7 @@ def test_evaluate_publishes_exact_observations(
 
     evaluation_module.evaluate(request, tmp_path)
 
+    assert stat.S_IMODE((tmp_path / "evaluations").stat().st_mode) == 0o755
     assert model.transfers == 1
     assert model.batch_sizes == [5]
     assert evaluation_json_path(tmp_path, _EVALUATION_ID).read_text() == request.model_dump_json()

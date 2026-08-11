@@ -860,7 +860,7 @@ the temporary bundle; `report` derives each chain/configuration mean from canoni
 Study bundles keep each complete Method roster inside its TuneRequest. Their `cells.tsv` rows
 carry the request path, zero-based `method_index`, and Study ID; they do not write separate Method
 JSON files. Packed launch maps the rows to opaque tasks and stores Servatus campaign state under
-`.servatus-campaign/` in the bundle. A repeated launch resumes from durable receipts and canonical
+`.servatus/` in the bundle. A repeated launch resumes from durable receipts and canonical
 completion checks; an explicit `--retry TASK_KEY` resubmits only named accepted work. Closure
 validates every referenced canonical record and publishes a manifest-only directory. The authored
 bundle and campaign state are removed only after the manifest commits.
@@ -994,7 +994,7 @@ request JSON plus trailing line feed. `candidate_task()` does the same for a val
 and Method index. The hidden workers hydrate those bytes and call the direct KAIROS owner.
 
 The public CLI and experiment launcher load cwd-local `REMOTE.toml` and `RESOURCES.toml` directly
-through Servatus. The committed profiles request one GPU, 32 CPUs, 65536 MiB, and three days per
+through Servatus. The committed profiles request one GPU, 24 CPUs, 65536 MiB, and three days per
 process. Experiment launch accepts two to four tasks per allocation; direct request commands use
 one. KAIROS rejects any profile that does not request exactly one GPU per process.
 

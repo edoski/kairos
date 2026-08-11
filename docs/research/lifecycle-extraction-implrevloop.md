@@ -1883,6 +1883,35 @@ Implementation-review loop:
   record. The same reviewer must return `GREEN LIGHT` at zero findings before compact CUDA and main
   integration are reconciled with exact tree/parity proofs.
 
+### Slice 11: final campaign path and production CPU profile
+
+Status: implementation complete; independent review pending
+
+- Exact baseline: `76a1396a42bcfb0897bdf661a066bd030a0644d3`.
+- New KAIROS experiment bundles store their Servatus campaign at `.servatus/`. This is a clean
+  break: there is no alias, fallback, migration, or parser for `.servatus-campaign/` or
+  `jobs.tsv`.
+- The active old-layout HPO bundle `dfd33e91-702e-46c5-8cb1-3c510af4c048` must finish, finalize,
+  and close entirely through image `004f951` and its existing `jobs.tsv` lifecycle. The first
+  Servatus campaign is the next new K-study artifact bundle. The old image and lifecycle state
+  remain preserved until that bundle is closed.
+- The production resource profile now requests 24 CPUs, 65536 MiB, one GPU, and three days per
+  task. Four packed tasks request 96 CPUs. The 24-CPU choice preserves headroom for the current
+  four-worker DataLoader while crossing the observed scheduling threshold that prevented a
+  128-CPU four-pack from fitting a node with 104 CPUs free. The target ceilings remain four tasks,
+  128 CPUs, 262144 MiB, four GPUs, and three days per allocation; every other target and resource
+  value remains unchanged.
+- Servatus receipts prove scheduler acceptance, not scientific completion. KAIROS continues to
+  derive completion from canonical Study, artifact, or evaluation evidence, and retries remain
+  explicit task keys. Queue awareness and the one-free-QOS-slot policy remain external operator or
+  heartbeat concerns; they do not enter Servatus.
+- TDD proved the profile and campaign-path changes through the public Servatus parsers and KAIROS
+  experiment seams. Seventeen focused and 109 full tests passed. Ruff check/format, configured
+  Pyright, Vulture, root and mobile lock/frozen-sync checks, both CLI help paths, source residue,
+  diff, and status gates passed.
+- No remote checkout, active job, queue, output, production scratch, image, or old campaign state
+  was read or mutated by this slice.
+
 ### Final external deployment gates
 
 The clean break cannot deploy while queued jobs, running jobs, experiment drafts with old

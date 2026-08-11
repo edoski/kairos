@@ -56,7 +56,7 @@ def test_close_preserves_bundle_after_verifier_failure_then_retries(
 ) -> None:
     bundle = open_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID)
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
-    campaign = bundle / ".servatus-campaign"
+    campaign = bundle / ".servatus"
     campaign.mkdir()
     (campaign / "state.json").write_text("temporary", encoding="utf-8")
     inputs = {
@@ -104,7 +104,7 @@ def test_publication_failure_preserves_authored_bundle(
 ) -> None:
     bundle = open_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID)
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
-    campaign = bundle / ".servatus-campaign"
+    campaign = bundle / ".servatus"
     campaign.mkdir()
     (campaign / "state.json").write_text("retry", encoding="utf-8")
 

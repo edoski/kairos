@@ -151,7 +151,7 @@ def test_hpo_extend_reopens_campaign_and_submits_only_authored_suffix(
     suffix = full_tasks[27:]
     suffix_calls = calls[first_call_count:]
     suffix_scripts = b"".join(script for _, script in suffix_calls)
-    status = Campaign.open(bundle / ".servatus-campaign", full_tasks).status()
+    status = Campaign.open(bundle / ".servatus", full_tasks).status()
     assert first_call_count == 7
     assert [_task_count(argv) for argv, _ in suffix_calls] == [4] * 6 + [3]
     assert tuple(key for receipt in status.receipts for key in receipt.task_keys) == tuple(

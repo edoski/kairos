@@ -2479,7 +2479,11 @@ Execution authorization and run setup on 2026-08-11:
   gate. Its first review rejected one P1 on both axes: `_verify_level()` reused stale open-time
   metadata, so a post-open permissive chmod escaped the C1A owner-only recheck. The same pair owns a
   focused correction that must retain a fresh UID/mode read without restoring redundant
-  type/device validation; C2 remains blocked.
+  type/device validation. Correction `960a3f09e5865f846f34a8dcf279b575294a5446` fresh-fstats the
+  already-open container, work, and lock descriptors for current owner/mode while preserving the
+  pathname-to-pinned-inode check. The same reviewer returned GREEN LIGHT with Standards 0 and Spec
+  0. Final C1B is a net 29-line reduction from C1A; 253 tests with one platform skip and every
+  static/build/install gate pass. C2 starts from exact `960a3f0`.
 
 ### Historical final deployment gates for the initial extraction
 

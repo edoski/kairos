@@ -2260,8 +2260,10 @@ Expected outcome:
 
 One reviewed `0.5.0` source tree owns absent-or-complete commit, early collision rejection, safe
 post-commit retirement, durability, and truthful residual-cleanup reporting. Servatus should be
-smaller overall after C1A-C4 despite adding retirement because Campaign/Workspace duplication is
-deleted.
+judged by the deletion test rather than a forced total-line target: Campaign/Workspace duplication
+is deleted, while any bounded POSIX growth must correspond to the newly proven trust-root and
+retirement contracts. The final measured source delta is recorded after review; safety is not
+weakened to obtain a net-negative count.
 
 #### External gate: Servatus 0.5.0
 
@@ -2508,7 +2510,12 @@ Execution authorization and run setup on 2026-08-11:
   verification behind a single-use wrapper. It also rejected the plan's optimistic cumulative
   “smaller overall” wording: measured C1A-C4 product source was net +126 versus v0.4.1. The same pair
   owns the deletion correction; the orchestrator must record the final measured outcome truthfully
-  after rereview. Release remains blocked.
+  after rereview. Correction `79ee407c431d1f9c0510e9462d5136fa7b58319d` removes the repeated
+  checks/wrapper and 18 net product lines. The correction candidate is net +108 product source lines
+  versus v0.4.1: Campaign `-98`, Slurm `-9`, Workspace `-1`, CLI `+3`, public exports `+2`, and POSIX
+  `+211`. The growth is concentrated in the new exact trust-root deletion and retained-tree
+  retirement implementation, not duplicated client-facing surface. Final rereview remains pending;
+  release remains blocked.
 
 ### Historical final deployment gates for the initial extraction
 

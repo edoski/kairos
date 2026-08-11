@@ -1778,6 +1778,52 @@ Recorded result:
   independent automation was read or mutated. No production configuration, branch push/merge, or
   cleanup is part of this accepted slice.
 
+### Slice 9: production target cutover
+
+Status: green; exact baseline is the accepted Slice 8/acceptance head
+`99b730b71ba3d9b79e7a2507e85b3bf519d03f62`
+
+Expected outcome:
+
+- Future KAIROS submissions use the accepted immutable `f49db0b` image. Already-submitted Slurm
+  jobs remain bound to the scripts and old image path captured at submission.
+
+Scope and non-goals:
+
+- Change only the production image in `REMOTE.toml` to
+  `/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-f49db0b.sif` and pin that exact parsed value
+  in the existing KAIROS production-profile test.
+- Keep partitions, paths, resource requests, caps, scripts, outputs, schemas, and every application
+  behavior unchanged. Do not rebuild the image: `REMOTE.toml` is workstation-side submission
+  configuration and the accepted SIF already contains exact product SHA `f49db0b`.
+- Preserve the old image and old lifecycle state while queued old-image jobs exist. Do not cancel,
+  release, reprioritize, rewrite, or otherwise mutate those jobs.
+- A fresh implementer commits the fixed slice; a distinct reviewer returns `GREEN LIGHT` only with
+  Standards 0 and Spec 0. Then reconcile the accepted commit into compact CUDA with exact delta
+  parity before branch publication.
+
+Cutover permission preparation:
+
+- Read-only exact-path preflight found only the core `studies` and `artifacts` parents present, both
+  owner `edoardo.galli3`, device `49`, and mode `0775`; all other six inferred core parents were
+  absent. Under the user's approval, nonrecursive `chmod go-w` changed only those two directory
+  modes to `0755`. Revalidation proved their paths, owners, devices, and inodes
+  (`1099895357882`, `1099906115439`) unchanged. No contents were listed or read.
+- This metadata change cannot disrupt queued same-account jobs: owner `rwx` is unchanged. Absent
+  parents will be created as `0755` by Slice 8. Benchmark-energy and mobile-export parents remain
+  user-supplied and were not guessed or mutated.
+
+Recorded result:
+
+- Fresh implementer commit `9e7349abee2d25bc0f6cbe9ba06b41db51552c2a`
+  (`config(remote): use accepted Servatus image`) changes only the production image path and adds
+  its exact parsed assertion to the existing production-profile test. Full root tests passed
+  (`109`), with Ruff check/format, strict Pyright, Vulture, lock, and diff gates green.
+- A distinct reviewer pinned the exact fixed range and returned `GREEN LIGHT`: Standards 0, Spec 0.
+  Resources, paths, caps, outputs, schemas, and runtime behavior are unchanged. The cluster, queue,
+  outputs, main checkout, compact branch, and external refs were untouched by implementation and
+  review.
+
 ### Final external deployment gates
 
 The clean break cannot deploy while queued jobs, running jobs, experiment drafts with old

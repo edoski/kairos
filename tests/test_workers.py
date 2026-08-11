@@ -116,6 +116,9 @@ def test_production_profiles_preserve_kairos_resource_contract() -> None:
     target = SlurmTarget.from_toml(_ROOT / "REMOTE.toml")
     resources = ResourceRequest.from_toml(_ROOT / "RESOURCES.toml")
 
+    assert target.image.as_posix() == (
+        "/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-f49db0b.sif"
+    )
     assert target.partitions == ("h100sxm5", "h100pcie", "a100", "l40s", "l40")
     assert target.max_script_bytes == 1_048_576
     assert target.max_tasks_per_allocation == 4

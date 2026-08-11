@@ -2521,6 +2521,18 @@ Execution authorization and run setup on 2026-08-11:
   `79ee407c431d1f9c0510e9462d5136fa7b58319d`. The user authorized the Servatus push, tag, GitHub
   Release, and PyPI publication gate; KAIROS C5 remains paused until published artifact hashes are
   verified.
+- Servatus `main` was fast-forwarded and pushed to exact reviewed head
+  `79ee407c431d1f9c0510e9462d5136fa7b58319d`. Main CI run `31487426717` and tag CI run
+  `31487474435` passed on Ubuntu and macOS. Annotated tag `v0.5.0` dereferences to that exact commit;
+  the public GitHub Release is `https://github.com/edoski/servatus/releases/tag/v0.5.0`.
+- Trusted-publishing run `31487570056` succeeded. PyPI published wheel
+  `servatus-0.5.0-py3-none-any.whl` with SHA-256
+  `1d1f0bc1a0d5d38b5d9e80d6b93799e30cf6395a050d6bd9524e5d0592d389eb` and sdist
+  `servatus-0.5.0.tar.gz` with SHA-256
+  `1874c8776e1db515f5249a3a80f67cc8cc2c82b1ca4a9074d9963b6d0c1f9015`. A fresh no-cache public
+  index install verified metadata version 0.5.0, zero runtime dependencies, `Campaign.load`,
+  `ValidationResult`, exact `publish(..., retire=...)` behavior, and both CLI entry points. The
+  release gate is complete. Work pauses before KAIROS C5 as requested.
 
 ### Historical final deployment gates for the initial extraction
 

@@ -2488,7 +2488,10 @@ Execution authorization and run setup on 2026-08-11:
   source lines and passed 255 tests with one platform skip plus all static/build/install gates.
   Standards review returned zero findings. Spec review rejected one P2 durable-ingress defect:
   Python numeric equality admitted float schema versions and bool/float allocation totals. The same
-  pair owns a focused exact-integer correction; C3 remains blocked.
+  pair corrected exact integer type/bounds at ingress in
+  `f5cb8afcc3cbe6ebacfb33da1b7d98fe713f9a0f` without restoring the duplicate decoder. Rereview
+  returned GREEN LIGHT with Standards 0 and Spec 0. Final C2 passed 262 tests with one platform
+  skip plus all static/build/install gates. C3 starts from exact `f5cb8af`.
 
 ### Historical final deployment gates for the initial extraction
 

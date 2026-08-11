@@ -130,7 +130,11 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(tmp_path: Pat
         for row in evaluation_rows
     ]
 
-    assert len(evaluation_rows) == 27
+    assert [row["cell"] for row in evaluation_rows] == [
+        f"{chain}.lstm.K{horizon}"
+        for chain in ("ethereum", "polygon", "avalanche")
+        for horizon in _HORIZONS
+    ]
     assert len({request.evaluation_id for request in evaluation_requests}) == 27
     assert [request.testing_window for request in evaluation_requests[:4]] == [
         BlockWindow(first_parent_block=701, last_parent_block=803),

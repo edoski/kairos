@@ -1,7 +1,7 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: extraction, CephFS correction, compact-CUDA integration, and isolated acceptance green;
-authorized branch publication and cleanup active
+Status: extraction, CephFS correction, isolated acceptance, and Slices 10-11 green; compact-CUDA
+ledger correction re-review active; final main integration, publication, and cleanup pending
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1831,6 +1831,100 @@ Recorded result:
   Final Slice 9 product delta is exactly one `REMOTE.toml` image-line replacement; full root tests
   (`109`) and all focused/static/lock/diff gates remain green.
 
+### Slice 10: selected-LSTM horizon contract alignment
+
+Status: complete and green; accepted head
+`76a1396a42bcfb0897bdf661a066bd030a0644d3`
+
+- Exact baseline: `e894870a886cd0585b32aed93f39f832eb2005db`
+- Initial implementation: `7660cf39241aebd50c651d9a02a4cf3183ccf310`
+
+Trigger and expected outcome:
+
+- Final main integration review found one P1 predating the merge: the intentional horizon-study
+  restriction authors exactly three chain-LSTM cells across nine horizons, while its active manual
+  still promised nine architecture-chain cells. The corrected K-study and held-out authoring
+  contract owns 27 records; its rolling report selects the three chain-LSTM groups over `K=2..5`,
+  for 12 records.
+- The inference cost/time benchmark is a separate consumer contract. It takes explicit completed
+  full-roster canonical manifests and requires nine manifest-derived chain-family groups over
+  `K=2..5`, for 36 artifacts and evaluations.
+
+Scope:
+
+- Keep `experiments/k_study.py` and `held_out.py` manifest-driven behavior unchanged. Prove their
+  exact ordered 27-label selected-LSTM authoring roster.
+- In inference benchmark resolution, require exactly nine complete groups over
+  `ROLLING_HORIZONS` without hard-coding chain or family names. Reject partial or surplus campaign
+  rosters and evaluation-to-artifact mismatches before model loading.
+- Use one realistic benchmark fixture with all three chains, all three model families, four rolling
+  horizons, and the five nonrolling horizon labels. Prove 36 protocol labels while retaining the
+  separate 27-label authoring proof. Do not duplicate reducer, loader, or publisher tests.
+- Align active `docs/KAIROS.md` with the selected-LSTM author and rolling-report contract. Preserve
+  the inference-benchmark planning contract at nine groups/36 records and document its distinct
+  full-roster manifest source boundary.
+- HPO remains nine architecture-chain Studies with 81 Method rows; that upstream contract is not
+  the horizon roster and must not change. No scientific outputs, schemas, IDs, resources, remote
+  state, user-owned main dirt, or queued jobs may be touched.
+
+Readiness:
+
+- The narrowed K-study author cannot generate the other 24 rolling benchmark models. Before the
+  inference campaign, verify the explicit completed full-roster K-study/held-out manifest pair and
+  its canonical objects. If that pair is unavailable or incompatible, separately scope a dedicated
+  benchmark-input author; do not widen the horizon-sensitivity author implicitly.
+- Implementer gates at `7660cf39241aebd50c651d9a02a4cf3183ccf310`: 16 focused tests and 109
+  full root tests passed; repository Ruff check/format, configured and explicit experiment
+  Pyright, Vulture, root/mobile lock checks, and diff/status hygiene were green.
+
+Implementation-review loop:
+
+- Initial independent review returned Standards green and one Spec finding: this ledger still
+  collapsed the benchmark to the selected-LSTM roster. The same implementer corrected only this
+  record at `76a1396a42bcfb0897bdf661a066bd030a0644d3`. The same reviewer returned `GREEN LIGHT`:
+  Standards 0, Spec 0.
+
+### Slice 11: final campaign path and production CPU profile
+
+Status: complete and green; compact ledger correction re-review active
+
+- Exact baseline: `76a1396a42bcfb0897bdf661a066bd030a0644d3`.
+- Initial implementation `44d9c7c89d137685cb38d1b866773370951f34c7` changed the campaign path and
+  production CPU profile. Independent review returned one Spec P2: two KAIROS bundle fixtures knew
+  Servatus's private `state.json` filename.
+- Correction `8840c049ab5ecb7c31d812631fa71833e0571660` replaced that private coupling with
+  opaque campaign-state sentinels. The same reviewer returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Compact merge `cb86c3c9` contains correction `8840c049` as its exact second parent. Later
+  ledger-only correction `0cc4ab1` was merged into compact at
+  `1a5dea51542e264fcea0e73e801c3a645d7f42e3`, with parents `cb86c3c9` and `0cc4ab1` and zero
+  product or resolution delta. Subsequent ledger-only correction syncs preserve that zero-product
+  delta. Compact has inherited all accepted extraction corrections, and the same-reviewer final
+  re-review is active; final main integration, branch publication, and cleanup follow only after it
+  is green.
+- New KAIROS experiment bundles store their Servatus campaign at `.servatus/`. This is a clean
+  break: there is no alias, fallback, migration, or parser for `.servatus-campaign/` or
+  `jobs.tsv`.
+- The active old-layout HPO bundle `dfd33e91-702e-46c5-8cb1-3c510af4c048` must finish, finalize,
+  and close entirely through image `004f951` and its existing `jobs.tsv` lifecycle. The first
+  Servatus campaign is the next new K-study artifact bundle. The old image and lifecycle state
+  remain preserved until that bundle is closed.
+- The production resource profile now requests 24 CPUs, 65536 MiB, one GPU, and three days per
+  task. Four packed tasks request 96 CPUs. The 24-CPU choice preserves headroom for the current
+  four-worker DataLoader while crossing the observed scheduling threshold that prevented a
+  128-CPU four-pack from fitting a node with 104 CPUs free. The target ceilings remain four tasks,
+  128 CPUs, 262144 MiB, four GPUs, and three days per allocation; every other target and resource
+  value remains unchanged.
+- Servatus receipts prove scheduler acceptance, not scientific completion. KAIROS continues to
+  derive completion from canonical Study, artifact, or evaluation evidence, and retries remain
+  explicit task keys. Queue awareness and the one-free-QOS-slot policy remain external operator or
+  heartbeat concerns; they do not enter Servatus.
+- TDD proved the profile and campaign-path changes through the public Servatus parsers and KAIROS
+  experiment seams. Seventeen focused and 109 full tests passed. Ruff check/format, configured
+  Pyright, Vulture, root and mobile lock/frozen-sync checks, both CLI help paths, source residue,
+  diff, and status gates passed.
+- No remote checkout, active job, queue, output, production scratch, image, or old campaign state
+  was read or mutated by this slice.
+
 ### Final external deployment gates
 
 The clean break cannot deploy while queued jobs, running jobs, experiment drafts with old
@@ -1857,8 +1951,9 @@ or remote checkout:
 7. Run one application publication smoke. Completed above for both Study and Artifact. Preserve the
    preceding image and old execution path until production cutover passes.
 8. Update remote image configuration only after acceptance. Acceptance and permission preparation
-   are complete; branch publication/merge and run-owned cleanup are authorized and active. Preserve
-   the old image and old lifecycle state while already-submitted jobs still reference them.
+   are complete; final branch merge/publication and run-owned cleanup are authorized but await the
+   compact ledger-correction re-review. Preserve the old image and old lifecycle state while
+   already-submitted jobs still reference them.
 
 ## Run records
 

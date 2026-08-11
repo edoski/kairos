@@ -684,7 +684,7 @@ The JSON is exactly the `EvaluateRequest`. The parquet schema is the canonical e
 
 `reduce_evaluation(storage_root, evaluation_id) -> polars.DataFrame` validates the exact Parquet schema and reduces only `observations.parquet`. Atomic publication owns its pairing with `evaluation.json`, ordered testing-origin coverage, and row values. `reduce_baselines(storage_root, evaluation_id) -> polars.DataFrame` derives the three economic metrics for the immediate and deadline policies under the same trust boundary. Neither reducer reloads the request, artifact, or Corpus or externally authenticates the horizon or source. Results have no evaluation ID, count, sums, supports, arrays, or auxiliary fields and are not persisted.
 
-Public `reduce_rolling(storage_root, roster) -> polars.DataFrame` reads only each named Evaluation's `observations.parquet`. Its in-memory roster maps human-readable architecture-chain cell names to the required horizon `2`, `3`, `4`, and `5` Evaluation UUIDs. The final experiment runner owns that scientific association and builds the nine declared cells. Reduction verifies exact schemas, consecutive origins, predicted-action ranges, and required decision-origin coverage. Its six-metric rows are transient and are not persisted.
+Public `reduce_rolling(storage_root, roster) -> polars.DataFrame` reads only each named Evaluation's `observations.parquet`. Its in-memory roster maps human-readable architecture-chain cell names to the required horizon `2`, `3`, `4`, and `5` Evaluation UUIDs. The final experiment runner owns that scientific association and builds the three selected chain-LSTM cells. Reduction verifies exact schemas, consecutive origins, predicted-action ranges, and required decision-origin coverage. Its six-metric rows are transient and are not persisted.
 
 ## Exact reference
 
@@ -860,7 +860,7 @@ the temporary bundle; `report` derives each chain/configuration mean from canoni
 Study bundles keep each complete Method roster inside its TuneRequest. Their `cells.tsv` rows
 carry the request path, zero-based `method_index`, and Study ID; they do not write separate Method
 JSON files. Packed launch maps the rows to opaque tasks and stores Servatus campaign state under
-`.servatus-campaign/` in the bundle. A repeated launch resumes from durable receipts and canonical
+`.servatus/` in the bundle. A repeated launch resumes from durable receipts and canonical
 completion checks; an explicit `--retry TASK_KEY` resubmits only named accepted work. Closure
 validates every referenced canonical record and publishes a manifest-only directory. The authored
 bundle and campaign state are removed only after the manifest commits.
@@ -882,7 +882,7 @@ varies capacity, dropout, learning rate, and weight decay. Transformer and Trans
 one attention-capacity table; the hybrid adds its fixed recurrent tail. The final selector chooses
 the earliest minimum validation objective.
 
-`experiments/k_study.py` derives each architecture-chain HPO result and authors 81 fresh
+`experiments/k_study.py` derives the selected LSTM HPO result for each chain and authors 27 fresh
 selected-Study Train requests for `K={2,3,4,5,10,25,50,100,200}`. It publishes the K-study
 manifest only after every artifact exists. `experiments/held_out.py` authors the corresponding
 held-out Evaluate requests. It derives complete-outcome separation and corpus-tail support from the
@@ -890,7 +890,7 @@ largest horizon in the loaded K-study roster, so all horizons share the same fir
 The explicit `K=2…5` rolling policy remains fixed: the `K=2…4` ranges extend their last origin by
 three, two, or one blocks so the fixed-deadline comparison has every reachable decision origin. Its
 report commands print, but do not persist, the ordinary and rolling reductions. Closure publishes
-the exact 81 evaluation references and removes the temporary bundle. `experiments/launch.py
+the exact 27 evaluation references and removes the temporary bundle. `experiments/launch.py
 workflows BUNDLE` packs Train or Evaluate cells with the same packed execution contract.
 
 Research figures remain outside `src/kairos` and outside the experiment command flow. The four
@@ -994,7 +994,7 @@ request JSON plus trailing line feed. `candidate_task()` does the same for a val
 and Method index. The hidden workers hydrate those bytes and call the direct KAIROS owner.
 
 The public CLI and experiment launcher load cwd-local `REMOTE.toml` and `RESOURCES.toml` directly
-through Servatus. The committed profiles request one GPU, 32 CPUs, 65536 MiB, and three days per
+through Servatus. The committed profiles request one GPU, 24 CPUs, 65536 MiB, and three days per
 process. Experiment launch accepts two to four tasks per allocation; direct request commands use
 one. KAIROS rejects any profile that does not request exactly one GPU per process.
 
@@ -1135,7 +1135,7 @@ ratios of sums. `p50_fee_inclusive_savings` is retrospective and does not claim 
 #### Rolling comparison result
 
 Destination: none. The rolling reduction returns one row per supplied architecture-chain cell.
-The held-out stage supplies the nine declared cells. Status: derived, transient, noncanonical,
+The held-out stage supplies the three selected chain-LSTM cells. Status: derived, transient, noncanonical,
 nonnull.
 
 | # | Field | Type | Unit/direction |

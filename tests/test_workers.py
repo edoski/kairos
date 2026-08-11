@@ -124,7 +124,7 @@ def test_production_profiles_preserve_kairos_resource_contract() -> None:
     assert target.max_gpus_per_allocation == 4
     assert target.max_time_limit == "3-00:00:00"
     assert target.max_allocations_per_submit == 64
-    assert resources.cpus_per_task == 32
+    assert resources.cpus_per_task == 24
     assert resources.memory_mib_per_task == 65_536
     assert resources.gpus_per_task == 1
     assert resources.time_limit == "3-00:00:00"

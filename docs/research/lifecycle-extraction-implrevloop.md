@@ -1,7 +1,7 @@
 # Generic lifecycle extraction implementation-review ledger
 
 Status: extraction, CephFS correction, compact-CUDA integration, and isolated acceptance green;
-production cutover awaiting final approval
+authorized branch publication and cleanup active
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1791,8 +1791,8 @@ Expected outcome:
 Scope and non-goals:
 
 - Change only the production image in `REMOTE.toml` to
-  `/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-f49db0b.sif` and pin that exact parsed value
-  in the existing KAIROS production-profile test.
+  `/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-f49db0b.sif`. `REMOTE.toml` remains the sole
+  deployment-image authority; do not mirror its rotating image value in a test.
 - Keep partitions, paths, resource requests, caps, scripts, outputs, schemas, and every application
   behavior unchanged. Do not rebuild the image: `REMOTE.toml` is workstation-side submission
   configuration and the accepted SIF already contains exact product SHA `f49db0b`.
@@ -1816,13 +1816,16 @@ Cutover permission preparation:
 Recorded result:
 
 - Fresh implementer commit `9e7349abee2d25bc0f6cbe9ba06b41db51552c2a`
-  (`config(remote): use accepted Servatus image`) changes only the production image path and adds
-  its exact parsed assertion to the existing production-profile test. Full root tests passed
-  (`109`), with Ruff check/format, strict Pyright, Vulture, lock, and diff gates green.
-- A distinct reviewer pinned the exact fixed range and returned `GREEN LIGHT`: Standards 0, Spec 0.
-  Resources, paths, caps, outputs, schemas, and runtime behavior are unchanged. The cluster, queue,
-  outputs, main checkout, compact branch, and external refs were untouched by implementation and
-  review.
+  (`config(remote): use accepted Servatus image`) changed the production image path and initially
+  mirrored it in the production-profile test. Full root tests passed (`109`), with Ruff
+  check/format, strict Pyright, Vulture, lock, and diff gates green.
+- The first extraction review returned Standards 0 and Spec 0. Compact integration review then
+  rejected the shared delta with two Standards findings: the exact-image assertion created
+  configuration/test shotgun surgery, and the ledger still described already-granted cutover
+  authority as pending. The same implementer removes the assertion; this ledger correction makes
+  `REMOTE.toml` the single rotating image authority and narrows remaining gates to publication,
+  merge, and cleanup. Resources, paths, caps, outputs, schemas, and runtime behavior remain
+  unchanged. External refs remain untouched until correction re-review is green.
 
 ### Final external deployment gates
 
@@ -1849,8 +1852,9 @@ or remote checkout:
    formal performance claim. The mixed production partition route is not valid A/B evidence.
 7. Run one application publication smoke. Completed above for both Study and Artifact. Preserve the
    preceding image and old execution path until production cutover passes.
-8. Update remote image configuration only after acceptance. Production parent permission metadata,
-   remote configuration, branch push/merge, and cleanup remain separately authorized mutations.
+8. Update remote image configuration only after acceptance. Acceptance and permission preparation
+   are complete; branch publication/merge and run-owned cleanup are authorized and active. Preserve
+   the old image and old lifecycle state while already-submitted jobs still reference them.
 
 ## Run records
 

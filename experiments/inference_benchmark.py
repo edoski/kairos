@@ -470,7 +470,7 @@ def _run_energy_unit(
     with torch.inference_mode():
         _warm(cell, warmup_iterations)
         subprocess.run(("/usr/bin/sudo", "-v"), check=True)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
         publish(path, lambda draft: _write_energy(draft.path, cell, settings))
 
 

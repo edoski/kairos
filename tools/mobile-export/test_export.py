@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple
@@ -85,6 +86,7 @@ def _install_artifact_fakes(
     monkeypatch.setattr(mobile_export, "load_corpus_request", load_corpus_request)
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_export_bundle_publishes_complete_stable_bundle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -96,10 +98,11 @@ def test_export_bundle_publishes_complete_stable_bundle(
         destination.write_bytes(cell.artifact_id.bytes)
 
     monkeypatch.setattr(mobile_export, "_export_model", export_model)
-    output = tmp_path / "models"
+    output = tmp_path / "assets" / "models"
 
     mobile_export.export_bundle(tmp_path / "storage", roster_path, output)
 
+    assert stat.S_IMODE(output.parent.stat().st_mode) == 0o755
     expected_files = {"manifest.json"} | {
         f"{chain}-k{horizon}.pte"
         for chain in mobile_export._CHAINS

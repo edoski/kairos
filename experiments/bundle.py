@@ -40,7 +40,9 @@ def bundle_path(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -
 
 
 def open_bundle(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -> Path:
-    bundle = bundle_path(storage_root, kind, experiment_id)
+    canonical = experiment_directory(storage_root, kind, experiment_id)
+    canonical.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    bundle = canonical.with_name(f".{canonical.name}")
     (bundle / "requests").mkdir(parents=True)
     return bundle
 

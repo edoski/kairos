@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 from uuid import UUID
 
@@ -218,6 +219,14 @@ def test_publish_study_rejects_missing_result(tmp_path: Path) -> None:
         publish_study(tmp_path, STUDY_ID)
 
     assert not study_json_path(tmp_path, STUDY_ID).exists()
+
+
+@pytest.mark.usefixtures("umask_0002")
+def test_publish_study_creates_safe_publication_parent(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        publish_study(tmp_path, STUDY_ID)
+
+    assert stat.S_IMODE((tmp_path / "studies").stat().st_mode) == 0o755
 
 
 def test_publish_study_rejects_mismatched_result_request(tmp_path: Path) -> None:

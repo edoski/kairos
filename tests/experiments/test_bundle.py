@@ -1,3 +1,4 @@
+import stat
 from pathlib import Path
 from uuid import UUID
 
@@ -49,6 +50,7 @@ def _request() -> TuneRequest:
     )
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_close_preserves_bundle_after_verifier_failure_then_retries(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -61,6 +63,7 @@ def test_close_preserves_bundle_after_verifier_failure_then_retries(
         path.relative_to(bundle): path.read_bytes() for path in bundle.rglob("*") if path.is_file()
     }
     canonical = bundle.with_name(str(_EXPERIMENT_ID))
+    assert stat.S_IMODE(canonical.parent.stat().st_mode) == 0o755
 
     def fail(_root: Path, _study_id: UUID) -> None:
         raise RuntimeError("record is incomplete")

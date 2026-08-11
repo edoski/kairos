@@ -76,7 +76,7 @@ def assemble_candidate_result(
 
 def publish_study(storage_root: Path, study_id: UUID4) -> None:
     canonical = study_directory(storage_root, study_id)
-    canonical.parent.mkdir(exist_ok=True)
+    canonical.parent.mkdir(mode=0o755, exist_ok=True)
     parent = Workspace(canonical, identity=study_id.bytes)
     with parent as workspace:
         first = _load_candidate_result_path(parent.path / "trial-0")

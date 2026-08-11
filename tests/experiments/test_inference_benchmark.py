@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import signal
+import stat
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -539,6 +540,7 @@ def test_powermetrics_failure_stops_collection(
     assert process.signal == signal.SIGTERM
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_energy_cell_publishes_atomically_and_resumes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -591,6 +593,7 @@ def test_energy_cell_publishes_atomically_and_resumes(
         )
 
     cell = output / "energy" / "ethereum.lstm"
+    assert stat.S_IMODE(cell.parent.stat().st_mode) == 0o755
     assert loads == captures == 1
     assert events == ["warm", "authorize", "collector"]
     assert {path.name for path in cell.iterdir()} == {

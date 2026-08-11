@@ -32,7 +32,7 @@ def evaluate(request: EvaluateRequest, storage_root: Path) -> None:
     """Publish canonical observations for one exact artifact/window request."""
 
     canonical = evaluation_directory(storage_root, request.evaluation_id)
-    canonical.parent.mkdir(exist_ok=True)
+    canonical.parent.mkdir(mode=0o755, exist_ok=True)
     with Workspace(canonical, identity=request.model_dump_json().encode()) as workspace:
         blocks = load_corpus_blocks(storage_root, request.corpus_id)
         association, model = load_artifact(storage_root, request.artifact_id)

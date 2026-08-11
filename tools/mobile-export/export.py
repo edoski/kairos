@@ -216,7 +216,7 @@ def export_bundle(
     roster = _load_roster(roster_path)
     cells = _load_cells(storage_root, roster)
 
-    output_directory.parent.mkdir(parents=True, exist_ok=True)
+    output_directory.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
 
     def build(draft: Draft) -> None:
         for chain in _CHAINS:

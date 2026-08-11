@@ -2532,7 +2532,10 @@ Execution authorization and run setup on 2026-08-11:
   `1874c8776e1db515f5249a3a80f67cc8cc2c82b1ca4a9074d9963b6d0c1f9015`. A fresh no-cache public
   index install verified metadata version 0.5.0, zero runtime dependencies, `Campaign.load`,
   `ValidationResult`, exact `publish(..., retire=...)` behavior, and both CLI entry points. The
-  release gate is complete. Work pauses before KAIROS C5 as requested.
+  release gate is complete. The run-owned `/private/tmp/servatus-consolidation-0.5` worktree and
+  `codex/servatus-consolidation-0.5` branch were removed only after `main` and the remote tag were
+  verified at the accepted head. Servatus now matches its pre-run one-worktree/one-main-branch
+  shape, clean at 0.5.0. Work pauses before KAIROS C5 as requested.
 
 ### Historical final deployment gates for the initial extraction
 

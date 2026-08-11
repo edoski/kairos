@@ -1,8 +1,8 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: extraction, CephFS correction, isolated acceptance, Slices 10-11, and compact-CUDA green;
-local main integration complete; independent final review is the publication gate; branch
-publication, stash restoration, and cleanup pending
+Status: implementation program complete; extraction, main, and compact-CUDA reviews green; both
+accepted branches published; protected user work restored; run-owned cleanup complete. The
+separate inference-benchmark scientific-readiness gate remains open.
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1887,8 +1887,8 @@ Implementation-review loop:
 
 ### Slice 11: final campaign path and production CPU profile
 
-Status: complete and green; compact final review green; local main integration complete;
-independent final review active
+Status: complete and green; extraction, main, and compact final reviews green; accepted branches
+published; protected user work restored; run-owned cleanup complete
 
 - Exact baseline: `76a1396a42bcfb0897bdf661a066bd030a0644d3`.
 - Initial implementation `44d9c7c89d137685cb38d1b866773370951f34c7` changed the campaign path and
@@ -1902,12 +1902,16 @@ independent final review active
   product or resolution delta. Subsequent ledger-only correction syncs preserve that zero-product
   delta. Compact inherited all accepted extraction corrections; its final same-reviewer review at
   `3f1926f4073b9f8febe81a347d8e381e1142a7c1` returned `GREEN LIGHT`: Standards 0, Spec 0.
-- Local main integration completed through normal non-fast-forward merge
-  `36069aa9f93c98d774f36b6df828f9e9b2a63195`, with parents `ccd3709a` and accepted extraction
-  `4d29e81f`. Its final tree exactly equals the extraction tree, and its remerge/resolution delta is
-  empty. User stash `98047c1e` remains unchanged. Thirty-three focused and 109 full tests plus all
-  static gates passed. Independent final review is the publication gate; branch publication, stash
-  restoration, and cleanup remain pending.
+- Final extraction, local-main integration, and compact-CUDA reviews all returned `GREEN LIGHT`
+  with Standards 0 and Spec 0. Accepted main
+  `e7b703509e40b03de317d5f9b80c7b3a913b92c8` and compact-CUDA
+  `bea658d51068615a407229c23405a7f34d2d3010` were atomically normal-fast-forwarded to both
+  `origin` and `research`; no force push was used.
+- User stash `98047c1edb3425506d561ba8f4fc56238337741e` was applied after publication. The sole
+  `docs/KAIROS.md` conflict was resolved by retaining both the accepted Servatus semantics and the
+  user's K-study figure changes. All eight nonoverlapping protected-file hashes matched their
+  pre-cutover values; all nine user-owned paths remain deliberately modified or untracked. The
+  exact stash was then dropped.
 - New KAIROS experiment bundles store their Servatus campaign at `.servatus/`. This is a clean
   break: there is no alias, fallback, migration, or parser for `.servatus-campaign/` or
   `jobs.tsv`.
@@ -1929,14 +1933,19 @@ independent final review active
   experiment seams. Seventeen focused and 109 full tests passed. Ruff check/format, configured
   Pyright, Vulture, root and mobile lock/frozen-sync checks, both CLI help paths, source residue,
   diff, and status gates passed.
-- No remote checkout, active job, queue, output, production scratch, image, or old campaign state
-  was read or mutated by this slice.
+- Run-owned local worktrees and temporary roots were removed. After owner and inode validation,
+  the exact run-owned roots carrying `f49db0b`, `ade5827`, and `9385753` under remote `build`,
+  `cache`, `acceptance`, and `logs` were permanently removed. Deployment images `004f951`,
+  `9385753`, `ade5827`, and `f49db0b` remain preserved.
+- The production `studies` and `artifacts` publication parents retain their owner and inode and are
+  now mode `0755`; only group/other write permission was removed. No thesis output, active or
+  queued job, queue state, production object content, or old campaign state was changed.
 
 ### Final external deployment gates
 
-The clean break cannot deploy while queued jobs, running jobs, experiment drafts with old
-`jobs.tsv`, or resumable old-layout scratch are still needed. Before changing the university image
-or remote checkout:
+The implementation and configuration cutover is complete. Old-layout work remains isolated on its
+captured checkout, image, and `jobs.tsv` lifecycle until it closes; new work uses the clean Servatus
+path. The completed deployment checklist is retained below:
 
 1. Read-only inventory the live queue, active immutable image paths, experiment drafts, canonical
    outputs, and scratch owners.
@@ -1957,10 +1966,14 @@ or remote checkout:
    formal performance claim. The mixed production partition route is not valid A/B evidence.
 7. Run one application publication smoke. Completed above for both Study and Artifact. Preserve the
    preceding image and old execution path until production cutover passes.
-8. Update remote image configuration only after acceptance. Acceptance and permission preparation
-   are complete; branch publication, stash restoration, and run-owned cleanup are authorized but
-   await independent final review. Preserve the old image and old lifecycle state while
-   already-submitted jobs still reference them.
+8. Update remote image configuration only after acceptance. Acceptance, publication, protected-work
+   restoration, and run-owned cleanup are complete. Preserve the old image and old lifecycle state
+   while already-submitted or unfinished old-layout work still references them.
+9. Before running the inference cost/time benchmark, verify a completed canonical full-roster
+   manifest pair containing all nine chain-family groups and 36 artifact/evaluation records over
+   `K=2..5`. This scientific-readiness gate is not complete. If the pair is absent or incompatible,
+   separately scope and authorize a dedicated benchmark-input author and GPU campaign; do not
+   silently widen the selected-LSTM horizon study.
 
 ## Run records
 

@@ -2496,8 +2496,11 @@ Execution authorization and run setup on 2026-08-11:
   platform skip plus all static/build/install gates. Its first review rejected one shared
   Standards/Spec defect: CLI plan bytes were written while the ordinary-umask stage was still
   `0644`, before chmod to `0600`. Standards also found validation messages coupled to submission
-  and a stale file-wide private-usage suppression. The same pair owns a focused correction; C4
-  remains blocked.
+  and a stale file-wide private-usage suppression. Correction
+  `e6028749c32436340b313d9eb3afecf22e63dced` makes the empty stage `0600` before writing, gives
+  validation/submission precise operation messages, and removes the suppression. Rereview returned
+  GREEN LIGHT with Standards 0 and Spec 0. Final C3 passed 268 tests with one platform skip plus all
+  static/build/install gates. C4 starts from exact `e602874`.
 
 ### Historical final deployment gates for the initial extraction
 

@@ -11,15 +11,27 @@ from typer.testing import CliRunner
 
 from kairos.config import BlockWindow
 
-REMOTE_YAML = """ssh: research-alias
-image: /opt/kairos image.sif
-storage_root: /remote/storage root
-log_root: /remote/log root
-partition: thesis-partition
-gres_name: gpu:a100
-cpus_per_task: 8
-memory_gb: 48
-time_limit: "17:23:45"
+REMOTE_TOML = """host = "research-alias"
+slurm_bin = "/opt/slurm/bin"
+apptainer = "/usr/bin/apptainer"
+image = "/opt/kairos image.sif"
+work_root = "/remote/storage root"
+log_root = "/remote/log root"
+partitions = ["thesis-partition"]
+gpu_gres = "gpu:a100"
+max_tasks_per_allocation = 4
+max_cpus_per_allocation = 32
+max_memory_mib_per_allocation = 196608
+max_gpus_per_allocation = 4
+max_time_limit = "3-00:00:00"
+max_allocations_per_submit = 64
+max_script_bytes = 1048576
+"""
+
+RESOURCES_TOML = """cpus_per_task = 8
+memory_mib_per_task = 49152
+gpus_per_task = 1
+time_limit = "17:23:45"
 """
 
 
@@ -37,8 +49,12 @@ def read_tsv_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(source, delimiter="\t"))
 
 
-def write_remote(path: Path, contents: str = REMOTE_YAML) -> None:
-    path.write_text(contents, encoding="utf-8")
+def write_servatus_config(root: Path) -> tuple[Path, Path]:
+    target = root / "REMOTE.toml"
+    resources = root / "RESOURCES.toml"
+    target.write_text(REMOTE_TOML, encoding="utf-8")
+    resources.write_text(RESOURCES_TOML, encoding="utf-8")
+    return target, resources
 
 
 def dispatch(app: Typer, *arguments: str, input: str | None = None) -> Result:

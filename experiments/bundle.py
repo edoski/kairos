@@ -1,4 +1,4 @@
-"""Generic mechanics for temporary experiment cell bundles."""
+"""KAIROS-authored experiment cell bundles."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from uuid import UUID
 
 import polars as pl
 import typer
+from servatus import Draft, publish
 
 from kairos.config import EvaluateRequest, TrainRequest, TuneRequest
 from kairos.experiments import (
@@ -40,6 +41,7 @@ def bundle_path(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -
 
 def open_bundle(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -> Path:
     bundle = bundle_path(storage_root, kind, experiment_id)
+    bundle.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     (bundle / "requests").mkdir(parents=True)
     return bundle
 
@@ -130,15 +132,13 @@ def publish_bundle(
     manifest = ExperimentManifest(root=cells)
     bundle = bundle_path(storage_root, kind, experiment_id)
     canonical = experiment_directory(storage_root, kind, experiment_id)
-    if canonical.exists():
-        raise FileExistsError(canonical)
 
-    with (bundle / "manifest.json").open("x", encoding="utf-8") as destination:
-        destination.write(manifest.model_dump_json())
-    shutil.rmtree(bundle / "requests")
-    (bundle / "cells.tsv").unlink()
-    (bundle / "jobs.tsv").unlink(missing_ok=True)
-    bundle.rename(canonical)
+    def assemble(draft: Draft) -> None:
+        (draft.path / "manifest.json").write_text(manifest.model_dump_json(), encoding="utf-8")
+
+    publish(canonical, assemble)
+
+    shutil.rmtree(bundle)
 
 
 def close_bundle(
@@ -161,9 +161,18 @@ def close_bundle(
     print(experiment_id)
 
 
-def print_study_metrics(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -> None:
+def print_metrics(
+    storage_root: Path,
+    kind: ExperimentKind,
+    experiment_id: UUID,
+    reducer: Callable[[Path, UUID], pl.DataFrame],
+) -> None:
     results = []
-    for cell, study_id in load_experiment_manifest(storage_root, kind, experiment_id).items():
-        metrics = reduce_study(storage_root, study_id)
+    for cell, record_id in load_experiment_manifest(storage_root, kind, experiment_id).items():
+        metrics = reducer(storage_root, record_id)
         results.append(pl.DataFrame({"cell": [cell] * metrics.height}).hstack(metrics))
     print(pl.concat(results).write_csv(None, separator="\t"), end="")
+
+
+def print_study_metrics(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -> None:
+    print_metrics(storage_root, kind, experiment_id, reduce_study)

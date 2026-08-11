@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import stat
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -12,6 +13,7 @@ import pytest
 import torch
 from lightning.pytorch.callbacks import Callback
 from pydantic import ValidationError
+from servatus import DestinationExists, Workspace
 from torch.utils.data import DataLoader
 
 import kairos.modeling as modeling
@@ -22,6 +24,7 @@ from kairos.addresses import (
     corpus_blocks_path,
     corpus_directory,
     corpus_json_path,
+    study_directory,
     study_json_path,
     study_trial_checkpoint_path,
     study_trial_observations_path,
@@ -153,6 +156,7 @@ def test_transformer_lstm_uses_exportable_float32_recurrence() -> None:
     inputs = torch.zeros((2, 3, 2))
     torch.export.export(model, (inputs,), strict=True)
     input_dtypes: list[torch.dtype] = []
+    assert model.lstm is not None
     model.lstm.register_forward_pre_hook(
         lambda _module, inputs: input_dtypes.append(inputs[0].dtype)
     )
@@ -284,6 +288,7 @@ def test_validation_logs_weight_short_batches_in_float64(monkeypatch: pytest.Mon
     assert weighted_gap == pytest.approx(expected_gap)
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_lstm_trains_loads_and_applies_direct_loss(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -297,6 +302,7 @@ def test_lstm_trains_loads_and_applies_direct_loss(
     train(request, tmp_path)
     association, loaded_model = load_artifact(tmp_path, artifact_id)
 
+    assert stat.S_IMODE((tmp_path / "artifacts").stat().st_mode) == 0o755
     assert association.request == request
     assert checkpoint == tmp_path / "artifacts" / str(artifact_id) / "artifact.ckpt"
     assert checkpoint.is_file()
@@ -342,23 +348,24 @@ def test_train_preserves_canonical_created_during_publication(
     _write_selected_study(tmp_path, request, _METHOD)
     _use_cpu_trainer(monkeypatch)
     canonical = artifact_checkpoint_path(tmp_path, artifact_id).parent
-    real_rename = Path.rename
+    real_fit = modeling._fit
 
-    def create_collision(source: Path, target: Path) -> Path:
-        if target == canonical:
-            canonical.mkdir()
-            (canonical / "occupied").write_text("occupied", encoding="utf-8")
-        return real_rename(source, target)
+    def create_collision(*args: Any, **kwargs: Any) -> tuple[Path, pl.DataFrame, RetainedResult]:
+        fitted = real_fit(*args, **kwargs)
+        canonical.mkdir()
+        (canonical / "occupied").write_text("occupied", encoding="utf-8")
+        return fitted
 
-    monkeypatch.setattr(Path, "rename", create_collision)
+    monkeypatch.setattr(modeling, "_fit", create_collision)
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(DestinationExists):
         train(request, tmp_path)
 
     assert (canonical / "occupied").read_text(encoding="utf-8") == "occupied"
-    assert (canonical.parent / f".{artifact_id}").is_dir()
+    assert Workspace(canonical, identity=request.model_dump_json().encode()).path.is_dir()
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -382,7 +389,10 @@ def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
     fit_kwargs: list[dict[str, object]] = []
 
     class InterruptAfterEpoch(Callback):
-        def on_train_batch_start(self, trainer: Any, *_args: object) -> None:
+        def on_train_batch_start(
+            self, trainer: Any, pl_module: Any, batch: Any, batch_idx: int
+        ) -> None:
+            del pl_module, batch, batch_idx
             if trainer.current_epoch == 1:
                 raise RuntimeError("simulated interruption")
 
@@ -401,7 +411,6 @@ def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
             return getattr(self._trainer, name)
 
     monkeypatch.setattr(modeling.pl, "Trainer", TrainerSpy)
-    scratch = tmp_path / "studies" / f".{request.study_id}" / "candidate-0"
 
     def progress() -> list[tuple[int, float, float]]:
         lines = [line for line in capsys.readouterr().out.splitlines() if line.startswith("epoch=")]
@@ -416,17 +425,19 @@ def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
 
     with pytest.raises(RuntimeError, match="simulated interruption"):
         run_candidate(tmp_path, request, 0)
+    assert stat.S_IMODE((tmp_path / "studies").stat().st_mode) == 0o755
     first_progress = progress()
-    assert (scratch / "last.ckpt").is_file()
-    last_checkpoint = torch.load(scratch / "last.ckpt", map_location="cpu", weights_only=True)
+    definition = TrainingDefinition(experiment=request.experiment, method=method)
+    parent = Workspace(study_directory(tmp_path, request.study_id), identity=request.study_id.bytes)
+    work = parent.child("trial-0", identity=request.model_dump_json().encode()).path
+    assert (work / "last.ckpt").is_file()
+    last_checkpoint = torch.load(work / "last.ckpt", map_location="cpu", weights_only=True)
     assert "optimizer_states" in last_checkpoint
-    assert last_checkpoint["hyper_parameters"]["association"] == TrainingDefinition(
-        experiment=request.experiment, method=method
-    ).model_dump(mode="json")
+    assert last_checkpoint["hyper_parameters"]["association"] == definition.model_dump(mode="json")
 
     run_candidate(tmp_path, request, 0)
     second_progress = progress()
-    assert not scratch.exists()
+    assert not work.exists()
     publish_study(tmp_path, request.study_id)
     second = load_study(tmp_path, request.study_id).trials[0]
 
@@ -443,4 +454,4 @@ def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
         epoch for epoch, _, gap in validation_progress if gap == second.objective
     )
     assert fit_kwargs[0]["ckpt_path"] is None
-    assert fit_kwargs[1]["ckpt_path"] == scratch / "last.ckpt"
+    assert fit_kwargs[1]["ckpt_path"] == work / "last.ckpt"

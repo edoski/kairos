@@ -80,9 +80,9 @@ Scientific output should be immutable and explicit, for example:
   tables/
 ```
 
-Create each result through a hidden sibling or temporary file and rename it only after validation.
-Never overwrite an existing scientific output. Setup output uses a separate disposable directory
-and never enters `report.json`. Slice 1 `protocol.json` records only the two experiment IDs, derived
+Publish each result through a Servatus file or directory transaction after validation. Never
+overwrite an existing scientific output. Setup output uses a separate disposable directory and
+never enters `report.json`. Slice 1 `protocol.json` records only the two experiment IDs, derived
 rolling horizons, selected artifact/evaluation UUID roster, warmup count, and sweep count. Host and
 runtime conditions are controlled manually and stated once in the thesis methodology.
 
@@ -524,11 +524,11 @@ All benchmark slices belong on the local M2 Max:
 | 3 reduction | local Mac | It is deterministic CPU reduction over transferred canonical objects and local raw measurements. |
 | 4 MPS | local Mac | MPS and its synchronization/fallback checks are Apple-GPU-specific. |
 
-The configured remote is a heterogeneous CUDA Slurm target. Its current allocation packing and
+The configured remote is a heterogeneous CUDA Slurm target. Its current allocation route and
 resource values are execution details rather than a benchmark deployment contract
-([`REMOTE.yaml:1-10`](../../REMOTE.yaml#L1)). ADR 0007 defines it as the narrow immutable-image
-boundary for independent training and evaluation workflows, not as the thesis deployment target
-([`docs/adr/0007-native-external-execution-boundary.md:9-30`](../adr/0007-native-external-execution-boundary.md#L9)).
+([`REMOTE.toml`](../../REMOTE.toml), [`RESOURCES.toml`](../../RESOURCES.toml)). ADR 0008 keeps it as
+the narrow immutable-image boundary for independent training and evaluation workflows, not as the
+thesis deployment target ([ADR 0008](../adr/0008-servatus-lifecycle-boundary.md)).
 
 The remote should finish canonical training and held-out evaluation. Completed artifacts,
 evaluations, and corpora are then transferred through the existing boundary before local

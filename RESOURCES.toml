@@ -1,0 +1,4 @@
+cpus_per_task = 32
+memory_mib_per_task = 65536
+gpus_per_task = 1
+time_limit = "3-00:00:00"

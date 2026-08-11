@@ -16,6 +16,7 @@ From: python:3.11-slim-trixie
     export PYTHONUNBUFFERED=1
 
 %runscript
+    export STORAGE_ROOT="$PWD"
     exec kairos "$@"
 
 %test

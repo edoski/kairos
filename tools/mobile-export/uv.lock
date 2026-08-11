@@ -546,7 +546,7 @@ dependencies = [
     { name = "numpy" },
     { name = "polars" },
     { name = "pydantic" },
-    { name = "pyyaml" },
+    { name = "servatus" },
     { name = "torch" },
     { name = "typer" },
 ]
@@ -557,7 +557,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.5" },
     { name = "pydantic", specifier = ">=2.12" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "servatus", specifier = "==0.4.1" },
     { name = "torch", marker = "platform_machine != 'x86_64' or sys_platform != 'linux'", specifier = "==2.7.1" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", specifier = "==2.7.1", index = "https://download.pytorch.org/whl/cu118" },
     { name = "typer", specifier = ">=0.16" },
@@ -581,6 +581,7 @@ dependencies = [
     { name = "kairos" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "servatus" },
     { name = "torch" },
     { name = "typer" },
 ]
@@ -596,6 +597,7 @@ requires-dist = [
     { name = "kairos", editable = "../../" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "servatus", specifier = "==0.4.1" },
     { name = "torch", specifier = "==2.11.0" },
     { name = "typer", specifier = ">=0.16" },
 ]
@@ -1352,6 +1354,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/06/5f/9117bf854aef817ad0d0ee9310eed0308a7e529e7eaf2e80ad9cd281ef82/sentencepiece-0.2.2-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1416b92f2f010333786fe6306ed2631121d5ea492219b0841e967b6765e64107", size = 1394242, upload-time = "2026-07-12T08:38:22.976Z" },
     { url = "https://files.pythonhosted.org/packages/ab/62/9e2569867e3dcff7ad6d89642a9615b9801b5cd698abe7df3b490361f66e/sentencepiece-0.2.2-cp311-cp311-win_amd64.whl", hash = "sha256:70d4ca6f4d06df7f0ccab6fe4f49c8a712c8c8b6847b4f0af9a0e1dbb0e0337e", size = 1246268, upload-time = "2026-07-12T08:38:24.857Z" },
     { url = "https://files.pythonhosted.org/packages/96/c9/5d781d4ef1124564a45c98b9ff25d531c10cdf568ec6314a2d1946f9251c/sentencepiece-0.2.2-cp311-cp311-win_arm64.whl", hash = "sha256:252908153eeec06c3ca3a32077e64a49d572e3d89881475b4e0f02d99d9fcc7c", size = 1190702, upload-time = "2026-07-12T08:38:26.789Z" },
+]
+
+[[package]]
+name = "servatus"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/95/b80d856ea24228bc7792f07b726dece9bf59991c420243bba62c4a4db4a4/servatus-0.4.1.tar.gz", hash = "sha256:1e8148d4c9c98acf896a91fa0f1c7b754b0d30634154a51b495f450e7ff1b582", size = 62314, upload-time = "2026-08-10T19:04:20.653Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/65/21c6669f8d2d966248112ed17a8a52e7cf00ad342d8ff309caea99d8ea61/servatus-0.4.1-py3-none-any.whl", hash = "sha256:2ec0509cfdfca4f097f4010984a674b1c771a8403aa7e80f82d6369540a5ae66", size = 36275, upload-time = "2026-08-10T19:04:19.412Z" },
 ]
 
 [[package]]

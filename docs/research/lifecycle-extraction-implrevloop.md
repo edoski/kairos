@@ -1,6 +1,7 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: Slice 2 complete and green; authorized live production preflight in progress
+Status: extraction, CephFS correction, compact-CUDA integration, and isolated acceptance green;
+authorized branch publication and cleanup active
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -46,11 +47,18 @@ lifecycle into a reusable standalone repository.
   experiment drafts, scratch, or other existing work. Do not contact or mutate currently running or
   queued research-cluster jobs. They finish through their existing checkout, scripts, and immutable
   image before any cutover.
-- Preserve the exact canonical KAIROS output paths, filenames, schemas, associations, ordering, and
-  byte formats. Servatus changes future staging and commit mechanics only. Existing finalized
-  outputs remain valid and readable. Incomplete old-layout work stays untouched and, if it must be
-  resumed or finalized, uses the old checkout before clean-break cutover; Servatus adds no legacy
-  parser.
+- Within this Servatus extraction, preserve the exact canonical KAIROS output paths, filenames,
+  schemas, associations, ordering, and byte formats. Servatus changes future staging and commit
+  mechanics only. Existing finalized outputs remain valid and readable. Incomplete old-layout work
+  stays untouched and, if it must be resumed or finalized, uses the old checkout before clean-break
+  cutover; Servatus adds no legacy parser.
+- The separately planned Blockweaver--KAIROS dataset alignment in task
+  `019fea93-223d-7d42-bcfc-c4a499b59dd0` is outside this run. It may later replace only the external
+  corpus boundary under its own ledger and migration authorization. This run neither implements nor
+  alters that plan, touches `outputs/corpora` or `outputs/datasets`, nor makes Servatus understand
+  datasets, corpus UUIDs, Blockweaver manifests, or migration. Studies, trials, artifacts,
+  evaluations, experiments, figures, and other KAIROS-owned outputs retain the exact-preservation
+  rule.
 - Use a clean break. After KAIROS adopts the new module, delete replaced KAIROS infrastructure and
   tests instead of retaining wrappers, compatibility modes, migrations, or parallel execution
   paths.
@@ -250,10 +258,15 @@ class Workspace:
     @property
     def path(self) -> Path: ...
 
+    def child(self, name: str, *, identity: bytes) -> "Workspace": ...
+
     def publish(self, build: Callable[[Draft], None]) -> Publication: ...
 
 
 def publish(destination: Path, build: Callable[[Draft], None]) -> Publication: ...
+
+
+def publish_file(destination: Path, write: Callable[[Path], None]) -> Publication: ...
 ```
 
 Only these application-facing values and a compact error hierarchy are exported from
@@ -270,15 +283,22 @@ destination, binds it to the SHA-256 digest of the opaque identity, and exposes 
 exclusive writer lock. A worker failure preserves the workspace; another same-key worker fails
 immediately instead of concurrently mutating checkpoints.
 
-Nested workspaces cover Study fan-in without a generic workflow engine. KAIROS opens the canonical
-Study workspace, then opens one nested workspace whose private destination is the KAIROS-owned
-`trial-<method_index>` result. The nested workspace retains that complete private result. KAIROS
-later validates the exact ordered trial set and publishes the canonical Study through the parent
-workspace. Servatus knows neither Method indices nor the number or meaning of trials.
+Concurrent child workspaces cover Study fan-in without a generic workflow engine. KAIROS constructs
+the canonical Study workspace and opens one `child(name, identity=...)` per Method without entering
+the parent as an exclusive writer. A child holds a shared parent lifecycle lease and its own
+exclusive writer lock, so different children run concurrently while a duplicate child fails
+immediately. Parent entry remains exclusive and fails while any child is active. Each child retains
+one complete private result; KAIROS later enters the parent, validates the exact ordered trial set,
+and publishes the canonical Study. Servatus knows neither Method indices nor the number, readiness,
+order, or meaning of children.
 
-`publish(destination, build)` is the disposable sibling for mobile export and benchmark units. It
-uses the same staged commit but always removes its private stage after failure. It has no resumable
-workspace or identity binding.
+`publish(destination, build)` is the disposable directory sibling for mobile export and benchmark
+directory units. `publish_file(destination, write)` is its explicit regular-file sibling: Servatus
+passes one already-created empty adjacent stage file, the application writes and validates it in
+place, and Servatus rejects inode substitution or a non-regular result. Both use the same durable
+no-replace transaction and always remove their private stage after failure. Neither has a resumable
+workspace or identity binding. Do not overload `publish()` with shape inference, add a `kind` flag,
+or introduce a KAIROS wrapper.
 
 ### Resource and planning contract
 
@@ -340,9 +360,9 @@ variance make no static grouping policy universally optimal. `tasks_per_allocati
 operator tuning knob and may only lower the legal cap.
 
 The source-backed Slurm rationale, failure boundaries, exact arithmetic, and operator acceptance
-criteria are recorded in
-[`servatus-production-resource-model.md`](servatus-production-resource-model.md). That record is
-evidence for this ledger; the public contract above remains the implementation authority.
+criteria were absorbed into this ledger and the standalone Servatus repository. The duplicated
+KAIROS research note was deleted in Slice 6; the public contract above remains the implementation
+authority.
 
 Raw `#SBATCH`, SSH, shell, `srun`, Apptainer, environment, and arbitrary option passthrough are not
 interfaces. Strict TOML rejects unknown keys, booleans as integers, controls, NULs, relative remote
@@ -410,6 +430,24 @@ publication remains the final data-safety backstop.
   destination, and requires the caller not to mutate the source inode after linking.
 - Builders may use `Draft.path` for ordinary application-native writers such as Polars and Torch.
   Symlinks and special files are rejected before commit.
+- `publish_file()` gives its writer an existing empty regular file and requires in-place mutation.
+  The pinned inode must remain a regular file on the destination filesystem through validation and
+  sync. Application bytes, schema, and validation remain entirely caller-owned.
+- `Workspace.child(name, identity=...)` accepts one safe leaf, verifies the opaque parent identity,
+  and returns a normal resumable Workspace under the parent's private work. Different children hold
+  shared parent lifecycle leases and may overlap; the same child remains a nonblocking exclusive
+  writer. Parent finalization uses the existing nonblocking exclusive lifecycle lock and fails
+  `WorkspaceBusy` while any child is active. Servatus never waits for or interprets child readiness.
+- Workspace open and cleanup take a short exclusive coordination lock on the verified stable
+  destination-parent directory descriptor. This prevents a removable lock pathname from being
+  unlinked and recreated as a different inode while another opener still holds the old lock. Never
+  block on the parent lifecycle lock while holding coordination: unavailable shared/exclusive leases
+  fail immediately, avoiding deadlock with child cleanup.
+- The owner-only private Workspace container is the lifecycle trust root. Active handles pin and
+  verify that parent entry; the durable identity inside it binds the lifecycle lock and work inode
+  across normal reopens. Servatus does not claim isolation from arbitrary code running as the same
+  Unix account that renames and recreates the entire owner-only container: such code can also read or
+  rewrite every user-owned artifact and is outside this unprivileged library's security boundary.
 - Every publication attempt gets a unique stage. Concurrent attempts cannot delete each other's
   state.
 - A builder exception exposes no destination. Disposable stages are removed; resumable Workspace
@@ -451,7 +489,8 @@ new module's ceiling.
 
 `cells.tsv`, typed request files, `ExperimentKind`, and canonical manifests remain in KAIROS.
 `jobs.tsv` leaves KAIROS and is replaced by Servatus-owned campaign state. Corpus production remains
-external; there is no KAIROS Corpus publisher to extract.
+external; there is no KAIROS Corpus publisher to extract. The later Blockweaver dataset-alignment
+plan therefore requires no Servatus product change.
 
 `CandidateProcessInput` moves from `kairos.execution` to KAIROS request/worker ownership. Hidden
 `kairos remote workflow` and `kairos remote candidate` leaves remain KAIROS application adapters.
@@ -618,8 +657,8 @@ opaque task
 
 Servatus V1 has no scheduler-library dependency. Its private Campaign adapter invokes OpenSSH and
 Slurm's stable command-line interfaces directly. Submitit is prior art, not a dependency, optional
-backend, or public interface. The full source-pinned decision is recorded in
-[`servatus-submitit-decision.md`](servatus-submitit-decision.md).
+backend, or public interface. The source-pinned decision was absorbed into this ledger and the
+standalone Servatus repository; the duplicated KAIROS research note was deleted in Slice 6.
 
 A real Submitit 1.5.4 fake-Slurm probe proved the strongest case for adoption: one allocation could
 launch three ranks, give each one GPU and a distinct opaque payload, and enter through an Apptainer
@@ -1033,9 +1072,105 @@ Live record, 2026-08-10, candidate `0c454bd38da4f3d5b0ba4f0777b708f8a2eb011c`:
   `f8bb055c83ad033aaf5433f4b87f4160fe4f86d97a8f3b49ebaed335c8f6aa10`. A strict isolated install
   from the PyPI index imported the package and returned metadata version `0.1.0`.
 
+### Prerequisite Slice 2A: Servatus atomic regular-file publication
+
+Status: complete and green; exact baseline `c494182cd6f036a253d41a00df5447b867b719b3`;
+accepted head `f60335416b549fdc252c56152af2b9678e94bb72`
+
+Implementer: `/root/slice2a_file_publication_impl`; sole writer in the Servatus `main` worktree.
+
+Reviewer: `/root/slice2a_file_publication_review`, with fresh parallel Standards and Spec lanes.
+
+Reason:
+
+- Slice 3's read-only implementation pass found that KAIROS publishes two immutable canonical
+  regular files, `protocol.json` and `sweep-NNN.parquet`, while Servatus 0.1 publishes only complete
+  directory trees. Changing those destinations or retaining a KAIROS rename shim would violate the
+  clean extraction boundary.
+- Three independent interface designs and one disposable writer probe converged on one explicit
+  addition: `publish_file(destination, write)`. The existing `publish()` and `Workspace` interfaces
+  remain unchanged. A polymorphic Draft, output-kind flag, auto-detection, resumable file workspace,
+  filesystem adapter, or KAIROS wrapper adds concepts without another real caller and is rejected.
+
+Scope:
+
+- Add `publish_file()` to the compact public interface and reuse the private POSIX transaction.
+- Create one uniquely named destination-adjacent empty regular-file stage with exclusive creation,
+  pin its descriptor and inode, pass its path to the application writer, and require in-place
+  writing and validation. Use ordinary `0o666` creation subject to the process umask so the
+  published file has normal writer-compatible permissions; preserve an explicit writer `chmod`.
+- After the writer returns, reject substitution, symlink, directory, special-file, or filesystem
+  change; sync the file; commit through the existing descriptor-relative kernel no-replace rename;
+  sync the destination parent; and clean only this attempt's exact stage on failure.
+- Preserve `DestinationExists`, `CrossDevicePublication`, `UnsafePublication`, and
+  `UnsupportedPlatform`; propagate application exceptions unchanged and do not turn a committed
+  result into apparent failure because of private residue.
+- Document the narrow file contract and prepare a backward-compatible `0.2.0` candidate. A new
+  public API is a minor release, not a `0.1.1` bug-fix release.
+
+Non-goals:
+
+- Directory or Workspace behavior changes; streams; copies; object stores; Windows; overwrite;
+  multi-file transactions; validators; ML types; Blockweaver integration; datasets; corpus
+  migration; KAIROS edits; external release or publication before its explicit gate.
+
+Expected outcome:
+
+> Any application can atomically expose either one validated immutable regular file or one validated
+> immutable directory tree through two explicit operations backed by one durable transaction.
+
+Checks:
+
+- Existing-empty-stage writer ergonomics for ordinary `pathlib` and binary writers; successful
+  bytes and mode; builder exception; missing/substituted/wrong-type stage; destination race;
+  same-filesystem enforcement; file and parent sync ordering; cleanup ownership and failures;
+  Linux/macOS exclusive rename; existing directory and Workspace suite unchanged.
+- Full Pytest, Ruff check/format, strict Pyright, Vulture, lock check, wheel/sdist build and content
+  inspection, installed-wheel import/version/API smoke, CLI help, and clean fixed-range diff.
+- Fresh implementer and distinct reviewer under the same ordered correction loop. No KAIROS output,
+  Blockweaver file, SSH, Slurm, Apptainer, GPU, push, tag, GitHub Release, or PyPI mutation.
+
+Dependencies and gates:
+
+- The accepted and published Servatus `0.1.0` head is the exact implementation baseline.
+- Slice 3 was paused until the resulting Servatus release became reproducibly installable. The user
+  authorized the `0.2.0` push, tag, GitHub Release, and PyPI publication after the green review.
+
+Recorded result:
+
+- Implementation commit `f60335416b549fdc252c56152af2b9678e94bb72`
+  (`feature(publication): add atomic regular files`) added the explicit regular-file transaction,
+  shared no-replace commit path, public export, documentation, focused adversarial coverage, and
+  synchronized `0.2.0` metadata without a runtime dependency.
+- The fresh reviewer returned `GREEN LIGHT`: Standards 0 findings and Spec 0 findings for the exact
+  `c494182...f603354` range.
+- Accepted gates: 179 tests passed and one platform-specific skip; Ruff check/format, strict
+  Pyright, Vulture, lock check, wheel/sdist build and content inspection, isolated wheel install,
+  `0.2.0` metadata and `publish_file` smoke, installed CLI help, and fixed-range diff check.
+- Worktree clean. No push, tag, release, PyPI, GitHub, KAIROS, Blockweaver, SSH, Slurm, Apptainer,
+  GPU, output, or external-state mutation occurred.
+- The reviewed head was pushed to `main`; GitHub CI run `31389354062` passed on Ubuntu and macOS.
+  Annotated tag `v0.2.0` points exactly to `f603354`; tag CI run `31389412085` passed on both
+  platforms. GitHub Release `https://github.com/edoski/servatus/releases/tag/v0.2.0` triggered
+  Trusted Publishing run `31389483759`, which succeeded without a long-lived upload token.
+- PyPI exposes `servatus==0.2.0` with provenance. Wheel SHA-256:
+  `122a26ac97b266595ba9aedb2350569b4f5970b7b067de38ddb4c3c9f170df19`; source archive SHA-256:
+  `cfaa6a9829d25a8e15cd1c556af60cc60c25588f77d42186bd42dab1fb677fdf`. A fresh empty-cache index
+  install returned `0.2.0`, imported `publish_file`, and passed the installed CLI smoke.
+
 ### Slice 3: KAIROS disposable publication adoption
 
-Status: planned; depends on accepted, installable Servatus 0.1.0
+Status: complete and green; exact baseline `79428b5db28e05082976732eaf882ed67640c984`;
+accepted head `87f09c09f0441af49990c7c9be296e3286783ed2`
+
+Checkout: run-owned `/Users/edo/dev/python/kairos-servatus-extraction` worktree on
+`codex/servatus-extraction`, created from the clean committed local `main` baseline. The pre-existing
+main worktree remains on `main` with its user-owned `app/package.json` edit and four untracked thesis
+notes untouched. No run-owned change may be made in that main worktree.
+
+Implementer: `/root/slice3_kairos_publication_impl`; sole writer in the run-owned worktree.
+
+Reviewer: `/root/slice3_kairos_publication_review`, with fresh parallel Standards and Spec lanes.
 
 Scope:
 
@@ -1069,14 +1204,169 @@ Checks:
   export installed-environment smoke, and KAIROS status/diff/residue checks.
 - No native device, generated model, energy campaign, Slurm, SSH, image, push, or PR gate.
 
+Recorded result:
+
+- Initial implementation `52574968d9035728c92f33c6bdeaf988ea509e94`
+  (`refactor(publication): adopt Servatus transactions`) pinned `servatus==0.2.0` in root and mobile
+  exporter projects, adopted `publish_file()` for exact protocol and Parquet destinations, adopted
+  `publish()` for energy and mobile directories, and deleted local generic mechanics/tests.
+- The first review rejected one P2 Standards finding and returned Spec green: the protocol writer
+  lambda returned `Path.write_text()`'s integer instead of the callback contract's `None`; configured
+  root Pyright did not include the experiment file, while an explicit file check exposed it.
+- Correction `87f09c09f0441af49990c7c9be296e3286783ed2`
+  (`fix(publication): return none from protocol writer`) added one typed writer without suppression or
+  interface widening. The same reviewer and lanes returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Accepted gates: 112 root tests, 15 benchmark tests, 9 mobile-export tests including host XNNPACK
+  export, Ruff check/format, strict root and explicit experiment Pyright, Vulture, root/mobile lock
+  checks, installed Servatus API and mobile CLI smokes, residue/diff/status checks. Worktree clean.
+- No canonical output, data, scratch, checkpoint, protected main-worktree dirt, remote system, GPU,
+  GitHub, PyPI, corpus, dataset, or future Blockweaver plan was touched.
+
+### Prerequisite Slice 3A: Servatus concurrent child workspaces
+
+Status: complete and green; exact Servatus baseline
+`f60335416b549fdc252c56152af2b9678e94bb72`; accepted head
+`b8eb73f33d54a67efd9f192739223d8103877939`
+
+Implementer: `/root/slice3a_child_workspace_impl`; sole writer in the Servatus `main` worktree.
+
+Reviewer: `/root/slice3a_child_workspace_review`, with fresh parallel Standards and Spec lanes.
+
+Reason:
+
+- Slice 4's read-only mapping proved evaluation and artifact training fit one ordinary Workspace,
+  but the planned nested Study composition does not preserve real HPO concurrency. Entering the
+  parent takes its exclusive lock for the whole context, while KAIROS intentionally runs nine
+  Methods for one Study in concurrent `4 + 4 + 1` allocations. Holding the parent during `_fit()`
+  would reject or serialize sibling GPU work.
+- KAIROS must not regain generic parent initialization, retry, lock, or scratch coordination. The
+  missing concurrency lease belongs in Servatus because every application using concurrent private
+  children before one final publication has the same lifecycle race.
+
+Design evidence:
+
+- Independent minimal-interface and adversarial audits converged on one additive method:
+  `Workspace.child(name, identity=...) -> Workspace`. A child holds a shared parent lifecycle lease
+  and its own exclusive lock; parent entry remains exclusive and nonblocking.
+- A third design considered first-class `Parts`, `Assembly`, contribution registries, incomplete
+  state, and lane leases. Those designs are valid but add a class, errors, registries, readiness-like
+  state, and roughly 180--280 production lines for one known caller. Reject them until a second real
+  need proves the one-method hierarchy insufficient.
+- A deleted throwaway spawned-process prototype on macOS proved different-child overlap,
+  duplicate-child exclusion, parent exclusion/retry, cleanup/open ordering, and 30 simultaneous
+  first-initialization/finalization races. Negative controls proved that unlinking and recreating a
+  lock pathname without stable-parent coordination permits two exclusive locks on different inodes.
+  Blocking parent acquisition while holding coordination deadlocks and is forbidden.
+
+Scope:
+
+- Add only `Workspace.child(name, *, identity) -> Workspace`; `name` is one safe opaque leaf. Reuse
+  existing errors and Workspace path/publish behavior. No new public class or readiness value.
+- Child entry verifies the parent identity and canonical-destination absence under a short exclusive
+  coordination flock on the pinned destination-parent directory, then holds the parent lifecycle
+  lock shared and the child lock exclusive/nonblocking for the whole context. Lock order is stable
+  parent coordination, parent lifecycle, child lifecycle.
+- Different children overlap; duplicate child, child during parent finalization, or parent during an
+  active child raises `WorkspaceBusy` immediately. A conflicting parent or child identity raises
+  `WorkConflict`. A canonical parent destination prevents new child state.
+- Child failure preserves only its resumable work. Child success atomically retains one immutable
+  private result under parent work and cleans only its child workspace. Parent validation/build
+  failure or destination collision preserves all child results/work. Parent success publishes the
+  canonical object and then removes the complete private hierarchy.
+- Harden Workspace open/cleanup around the removable lifecycle-lock inode: use the verified stable
+  destination-parent directory descriptor as the short coordination lock; check finalized state;
+  pin the active container; durably bind and verify the lifecycle lock and work inode inside the
+  authentic owner-only container; never unlink or recreate lifecycle locks outside that choreography.
+- Document the contract and prepare additive `0.3.0` metadata. Slurm, Campaign, publication formats,
+  dependencies, and existing root Workspace semantics otherwise remain unchanged.
+
+Non-goals:
+
+- Expected-child lists, status, polling, waiting, automatic readiness, registries, `Parts` or
+  `Assembly`, workflow topology, KAIROS Method knowledge, lock-mode flags, arbitrary relative child
+  paths, multi-level recursion without a real caller, scheduler changes, corpus/dataset work,
+  compatibility shims, or isolation from hostile/arbitrary mutation by the same Unix account that
+  owns the private container.
+
+Expected outcome:
+
+> Independent children can resume and complete concurrently under one future immutable destination,
+> while the application alone decides when and how their validated results become one canonical
+> object.
+
+Checks:
+
+- Real spawned-process tests on Linux and macOS: simultaneous first sibling children overlap;
+  duplicate child is busy; parent is busy during a child and succeeds afterward; child is busy
+  during parent entry; identity mismatch; failed-child resume; parent validation failure preserves
+  completed children; canonical destination blocks stale children; cleanup/open and
+  cleanup/finalization barrier races admit only valid outcomes; replacement lock/work entries inside
+  an authentic container fail before application entry; an active handle rejects container path
+  replacement before publication or cleanup.
+- Existing Workspace/file/directory/Campaign suites, Ruff check/format, strict Pyright, Vulture, lock
+  check, wheel/sdist inspection, installed-wheel version/API/CLI smokes, clean fixed-range diff.
+- After local green and separate authorization, one isolated CPU-only shared-scratch smoke should
+  prove coherent shared/exclusive `flock` across distinct research-cluster nodes. No GPU smoke is
+  needed because no Campaign, Slurm renderer, resource, image, or application hot path changes.
+
+Dependencies and gates:
+
+- The released `0.2.0` head is the exact implementation baseline. Use a fresh Servatus implementer
+  and distinct two-lane reviewer; rejected findings return to the same workers.
+- The user authorized push, annotated tag, GitHub Release, and PyPI `0.3.0` after green review.
+- A cross-node shared-filesystem smoke is a site deployment gate rather than a package-release gate:
+  `flock` coherence depends on the selected shared filesystem and mount configuration, while this
+  release changes no scheduler or application execution code. KAIROS remote cutover remains blocked
+  until the smoke passes; local adoption may proceed once `0.3.0` is reproducibly installable.
+
+Recorded result:
+
+- Initial implementation `c21c6fe62f9e4814591581b89693804e86458f2b`
+  (`feature(workspace): add concurrent children`) added one public method, shared-parent/exclusive-
+  child leases, stable-parent coordination, real spawned-process tests, ADR/docs, and `0.3.0`
+  metadata with zero new dependencies.
+- Review round 1 returned Standards 0 and one P1 Spec finding: replacing an active named lifecycle
+  lock could give a later opener a different inode and bypass exclusion. Correction
+  `97059b47c34b0a9d49b4e24ba8573a72cd135e0a`
+  (`fix(workspace): pin lifecycle lock identity`) durably bound container, lock, and work pins and
+  closed both root and child lock-replacement repros.
+- Correction review then exposed that a trust record inside a wholesale replaced owner-only
+  container cannot authenticate the old container to a fresh opener. The ledger and implementation
+  now state the honest unprivileged boundary: the private owner-only container is the trust root;
+  same-account arbitrary whole-root recreation is outside scope, while active-handle replacement and
+  lock/work substitution inside an authentic container fail closed. Documentation correction
+  `b8eb73f33d54a67efd9f192739223d8103877939` recorded that boundary without removing the prior fix.
+- The same reviewer and lanes returned final `GREEN LIGHT`: Standards 0, Spec 0; both P1s closed
+  within the explicit trust boundary. Accepted gates: 202 tests and one platform skip, repeated real
+  process races, Ruff check/format, strict Pyright, Vulture, lock/diff checks, wheel/sdist inspection,
+  and fresh Python 3.11 installed `0.3.0` API/CLI smokes. Worktree clean.
+- An authorized read-only queue preflight found the user's existing jobs unchanged. Immediate
+  two-node CPU acceptance request `44619` obtained no allocation and was cancelled by Slurm at zero
+  runtime because nodes/QOS were unavailable; it left no queued job. Only a fresh isolated path
+  `/scratch.hpc/edoardo.galli3/servatus-flock-0.3.0-b8eb73f` was created. The cross-node proof remains
+  required before remote KAIROS cutover and must not be retried while current queue pressure remains.
+- The reviewed head was pushed to public `main`; GitHub CI run `31397290192` passed on Ubuntu and
+  macOS. Annotated tag `v0.3.0` points exactly to `b8eb73f`; tag CI run `31397359840` passed on both
+  platforms. GitHub Release `https://github.com/edoski/servatus/releases/tag/v0.3.0` triggered
+  Trusted Publishing run `31397445672`, which succeeded without a long-lived token.
+- PyPI exposes `servatus==0.3.0` with provenance. Wheel SHA-256:
+  `699535487fd1947fa00bb817ca066f66ee3e625424192df82d13cd37159c3bdb`; source archive SHA-256:
+  `8e396b5d123b670f49acae136a5e27364a5ec80e7e28c110f3a8111ac46cc88c`. A fresh empty-cache index
+  install returned `0.3.0`, exposed `Workspace.child`, and passed the installed CLI smoke.
+
 ### Slice 4: KAIROS resumable ML object lifecycle adoption
 
-Status: planned; depends on Slice 3 green
+Status: complete and green; exact baseline `03e95e41486fcdafbb12d2f889759d77047e0df7`;
+accepted head `7d31bcbaf9a61a69003f6fd7bfbb694fb041011e`
+
+Implementer: `/root/slice4_kairos_workspace_impl`; sole writer in the run-owned worktree.
+
+Reviewer: `/root/slice4_kairos_workspace_review`, with fresh parallel Standards and Spec lanes.
 
 Scope:
 
 - Replace evaluation, artifact, candidate-result, and Study hidden workspace/staging/rename/cleanup
-  mechanics with nested Servatus Workspaces.
+  mechanics with ordinary and concurrent child Servatus Workspaces.
 - Pass Servatus-owned stable work paths into `_fit()` while leaving Lightning `last.ckpt`, callback,
   `ckpt_path`, selected checkpoint, validation observations, objective equality, and full-state resume
   entirely in KAIROS.
@@ -1112,9 +1402,37 @@ Checks:
   canonical tree and semantic residue audit.
 - No GPU training, SSH, Slurm, or image claim from local CPU tests.
 
+Recorded result:
+
+- Initial implementation `8055724e629fd69e424af44432edd035dd15137f`
+  (`refactor(lifecycle): adopt Servatus workspaces`) pinned `servatus==0.3.0`, moved evaluation and
+  artifact training to ordinary Workspaces, moved candidates to concurrent child Workspaces, moved
+  Study finalization to the exclusive parent, passed stable paths into `_fit`, and deleted local
+  scratch/stage/rename/link/cleanup mechanics.
+- Review round 1 rejected one P3 Standards and one P2 Spec finding. Two tests reconstructed Servatus
+  child locks without exercising KAIROS; `publish_study` inspected trial 0 before acquiring parent
+  exclusivity, so an active unpublished child raised `FileNotFoundError` instead of `WorkspaceBusy`.
+- Correction `7d31bcbaf9a61a69003f6fd7bfbb694fb041011e`
+  (`fix(lifecycle): lock study before inspection`) uses the known Study UUID as parent identity,
+  acquires the exclusive parent before any child read, binds each indexed child to the exact full
+  TuneRequest, deletes dependency-copy tests, and strengthens the production finalizer-busy test.
+  The same reviewer and lanes returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Accepted gates: 23 focused and 113 full tests; real Lightning interruption/resume; reverse Study
+  completion with exact order; Ruff check/format; configured and explicit touched-file Pyright;
+  Vulture; lock/API/version/residue/diff/status checks. Worktree clean.
+- No canonical output, data, scratch, checkpoint, corpus, dataset, protected main dirt, remote job,
+  GPU, Slurm, Apptainer, or external system was touched.
+
 ### Slice 5: KAIROS campaign and experiment lifecycle adoption
 
-Status: planned; depends on Slice 4 green
+Status: complete and green; exact baseline `6f2d4a2486f37216268d7ebf2f3984529f2f97c9`;
+accepted head `b8afc22ff37640bcd72af2bba5098fae43c4bfb4`
+
+Implementer: `/root/slice5_kairos_campaign_impl`; sole writer in the run-owned KAIROS worktree and
+the Servatus prerequisite correction.
+
+Reviewer: `/root/slice5_kairos_campaign_review`, with the same parallel Standards and Spec lanes
+through both correction loops.
 
 Scope:
 
@@ -1188,9 +1506,48 @@ Checks:
   or duplicate target/resource schema remains.
 - No live SSH, scheduler, queue, image, or file-transfer mutation.
 
+Recorded result:
+
+- Initial implementation `efbfdc770fdce55176b2b954b38fe7a7dc4d156b`
+  (`refactor(execution): adopt Servatus campaigns`) deleted `kairos.execution`, `jobs.tsv`, and
+  `REMOTE.yaml`; added KAIROS-owned worker/task translation; moved packing, native submission,
+  receipts, ambiguity, retry, and restart to Servatus; replaced the target with strict TOML
+  profiles; retained cells, typed requests, completion probes, and manifest meaning in KAIROS; and
+  preserved the exact production resource request and canonical output layout.
+- Review round 1 returned Standards 0 and two Spec findings. The immutable Campaign roster broke the
+  real prepare -> launch -> `hpo extend` -> relaunch flow, and Servatus had changed protected log
+  semantics from job-ID/zero-based combined logs to allocation-ID/one-based split logs.
+- The same implementer produced reviewed Servatus `0.4.0` candidate commits
+  `836d6c857776f1bb638c176faf0447f4f10e348e` and
+  `81ab533f6e680f457a4501cbff9b8c09a75a8c76`. Exact-prefix append-only Campaign growth preserves
+  durable receipts, retry, ambiguity, and accepted-prefix skipping; durable state owns the roster
+  across stale handles and submission races; `%j.out` and zero-based `%j-<slot>.out` combine both
+  streams. The prerequisite correction review returned Standards 0 and Spec 0 after closing one
+  stale-handle P1/P2 round.
+- Authorized release `v0.4.0` completed from exact reviewed head `81ab533f`: main CI
+  `31406203457`, tag CI `31406276870`, and Trusted Publishing `31406342319` passed. PyPI records
+  owner `edoski`; wheel SHA-256 is
+  `e26dd21451a87a12dfc961259534cc12da45ddf2ea6dc99ed465ae8431029af5` and sdist SHA-256 is
+  `1d8f17a39a5e33a47b00daa69405c81c29bbff81da5538cf6c58b1529b64e196`.
+- KAIROS correction `b8afc22ff37640bcd72af2bba5098fae43c4bfb4`
+  (`fix(experiments): support HPO campaign extension`) pins the published artifacts. Its real
+  author/launch integration accepts an ordered 27-task prefix, extends to 54, submits the 27-task
+  suffix exactly once in seven allocations, retains all 54 receipt keys, and leaves zero pending.
+  The same reviewer returned final `GREEN LIGHT`: Standards 0, Spec 0.
+- Accepted KAIROS gates: 41 focused and 125 full tests; Ruff check/format; strict Pyright; Vulture;
+  lock and offline frozen sync; installed Servatus API; CLI; dependency/source residue; exact diff
+  and clean status. No compatibility or migration path was added.
+- No canonical output, data, scratch, checkpoint, corpus, dataset, protected main dirt, remote job,
+  queue, GPU, Slurm, SSH, Apptainer runtime, or deployment was touched.
+
 ### Slice 6: KAIROS clean-break documentation and integration gate
 
-Status: planned; depends on Slice 5 green
+Status: complete and green; exact baseline `002335ee9c226ab410b7d025e3594366be5cf609`;
+accepted head `f5391bbb5c157e2b94e08807c0dee5430c2bb5ad`
+
+Implementer: `/root/slice6_kairos_docs_impl`; sole writer in the run-owned KAIROS worktree.
+
+Reviewer: `/root/slice6_kairos_docs_review`, with fresh parallel Standards and Spec lanes.
 
 Scope:
 
@@ -1231,9 +1588,43 @@ Checks:
   transfer, Apptainer image build/test, mobile simulator/device, native model assets, visual checks,
   push, package publication, and PR.
 
+Recorded result:
+
+- Initial implementation `d92b37a46850f4dccad46570aa9321677f2f98c2`
+  (`refactor(servatus): complete KAIROS integration`) added ADR 0008, superseded ADR 0007's local
+  implementation ownership, narrowed ADR 0006 to KAIROS object authority plus Servatus mechanics,
+  rewrote active execution/publication documentation, deleted two duplicated generic Servatus
+  research notes, removed dependency-internal tests, and aligned the isolated mobile exporter on
+  published `servatus==0.4.0`.
+- Review round 1 returned Standards 0 and one Spec P1: pruning removed the only exact assertion of
+  KAIROS's committed production target/resource profile. The same review found no removable wrapper,
+  middle-man, or duplicated generic mechanism in the remaining launcher, worker, CLI, or bundle
+  lines; those lines own KAIROS task meaning, canonical completion, user intent, and presentation.
+- Correction `f5391bbb5c157e2b94e08807c0dee5430c2bb5ad` restores one public-parser config contract for ordered
+  partitions, script and submit caps, exact one-task resources, and four-task ceilings without
+  retesting Servatus planning or rendering. The same reviewer returned `GREEN LIGHT`: Standards 0,
+  Spec 0.
+- Accepted gates: 116 root tests, 9 mobile-export tests, 43 App tests; App typecheck; Ruff
+  check/format; strict Pyright; Vulture; root/mobile locks and frozen syncs; npm dry install with
+  package/lock hashes preserved; CLI/import/profile/canonical-layout/residue/diff/status checks.
+- Physical production Python from planning baseline `56f24ae` is 4,222 -> 4,166 (`-56`): `src/`
+  is `-92`, `experiments/` is `+43`, and mobile exporter production is `-7`. Tests are `+110` after
+  retaining typed task, completion, extension, restart, retry, and profile integration contracts.
+  Excluding this run's 1,752-line execution ledger, active documentation is approximately flat
+  after removing 650 lines of duplicated generic research. The planning LOC estimate was too
+  optimistic and was not used as a correctness target.
+- No canonical output, data, scratch, checkpoint, corpus, dataset, protected main dirt, remote job,
+  queue, GPU, Slurm, SSH, Apptainer runtime, device, or external deployment was touched.
+
 ### Slice 7: compact-CUDA reconciliation
 
-Status: planned; depends on Slice 6 green
+Status: complete and green; extraction baseline `f193a223a1264213706fd08e4ce3e274e518802f`;
+main-synced base `f00ef948fb670b3e86163e0dc6aa73e67594053c`; accepted compact head
+`68262eb8b2de96adef4c27d25ed1acc8c8675970`
+
+Implementer: `/root/slice7_compact_cuda_impl`; sole writer in the run-owned compact worktree.
+
+Reviewer: `/root/slice7_compact_cuda_review`, with fresh parallel Standards and Spec lanes.
 
 Scope:
 
@@ -1267,7 +1658,180 @@ Checks:
   gates proportionate to touched files, and independent fixed-range Standards/Spec review.
 - GPU/image/Slurm smoke remains an explicit external gate.
 
-## Final external deployment gates
+Recorded result:
+
+- Main advanced after the extraction fork by one user commit,
+  `274a4dd3ea7f5ae65e576de539f85ee29c6c3ba8` (`Restrict horizon study to selected LSTMs`). It was
+  carried onto the green extraction as `f00ef948fb670b3e86163e0dc6aa73e67594053c`; range-diff and
+  stable patch ID `c051d1ea` are exact.
+- The pre-existing compact branch was reconciled non-destructively with merge commit
+  `68262eb8b2de96adef4c27d25ed1acc8c8675970`. Its only nonmerge commits above the integrated base
+  remain the original `32758207` and `3a1fe154`; no rebase, reset, force move, or branch deletion
+  occurred.
+- Conflicts were limited to modeling's Servatus work path versus CUDA loader setup and corresponding
+  test imports. Resolution preserves Workspace/full-state resume and publication while retaining
+  the approved `.to(device).loader(...)` historical batching path.
+- Independent review returned `GREEN LIGHT`: Standards 0, Spec 0. Original and reconciled CUDA
+  deltas have the same 10-file roster, per-file numstat, and all 249 added/deleted lines; only index
+  hashes, hunk offsets, and integration context differ.
+- Accepted gates: 32 CUDA-focused and 117 full root tests; 9 mobile-export tests including host
+  XNNPACK; 43 App tests; Ruff check/format; strict Pyright; Vulture; root/mobile locks; App typecheck;
+  npm dry install; CLI/import/topology/hunk/conflict/residue/diff/status checks.
+- No real CUDA/GPU, image, Slurm, SSH, remote, output, data, checkpoint, corpus, dataset, device, or
+  deployment claim or mutation was made. Those remain final external gates.
+
+### Slice 8: KAIROS directory-publication parent permissions
+
+Status: green; exact extraction baseline `01046b4b7f7f73177c2cb3d7d528c439c870dd77`
+
+Trigger:
+
+- Final-image A/B job `44718` completed both old and new synthetic GPU fits, then the new image
+  failed during Study finalization. CephFS does not support native no-replace directory rename, so
+  Servatus correctly selected its coherent-lock fallback and rejected the group-writable
+  `studies/` parent.
+- The exact cluster condition is deterministic: account umask `0002` plus KAIROS's default
+  `Path.mkdir()` creates mode `0775`; Servatus directory fallback requires an owner-owned parent
+  without group/other write. A fast local umask-`0002` repro produces the same mode and failure
+  precondition.
+- This is a KAIROS integration defect, not a reason to weaken Servatus. An ordinary directory
+  rename inside a group-writable parent cannot preserve the package's no-clobber guarantee against
+  a non-cooperating writer.
+
+Scope:
+
+- Request mode `0755` when KAIROS creates each direct parent used for directory publication:
+  Studies, Artifacts, Evaluations, experiment manifests, inference-energy units, and mobile export.
+  Experiment authoring must create the exact canonical experiment-kind parent explicitly; a
+  recursive `requests/` mkdir otherwise leaves the intermediate parent at `0775`.
+- Leave regular-file publication parents unchanged: Servatus's hard-link fallback already provides
+  kernel-enforced create-if-absent semantics there.
+- Keep Servatus `0.4.1`, every output path, file roster, schema, hard link, request, and scientific
+  validation unchanged. Add no wrapper, compatibility path, storage initializer, chmod helper, or
+  new configuration surface.
+- Add lean umask-`0002` tests at the KAIROS caller seams. They prove newly created direct parents are
+  `0755`; they do not retest Servatus fallback internals.
+
+Cutover boundary:
+
+- Explicit mkdir modes do not modify an already-existing `0775` directory. After all old jobs and
+  old-layout closure work finish, the final cutover preflight may inspect only owner/mode metadata
+  for exact known publication parents and remove group/other write from those exact directories.
+- No recursive chmod, glob, output traversal, content read, copy, rewrite, inode/path change, or
+  schema migration is allowed. If an exact parent is not owned by the KAIROS account or shared
+  write is intentional, fail closed and choose a per-owner namespace rather than weakening
+  Servatus. This is bounded permission preparation, not output migration.
+
+Implementation-review loop:
+
+- A fresh implementer changes only the KAIROS callers/tests/docs required above in the isolated
+  extraction worktree. A distinct reviewer runs parallel Standards and Spec lanes against the
+  exact fixed range. Findings return to the same workers until zero-finding `GREEN LIGHT`.
+- After local green, reconcile the accepted extraction head into compact CUDA while proving its
+  original ten-file CUDA delta remains patch-identical. Build a fresh exact-SHA image in new
+  isolated paths; never overwrite `004f951` or `ade5827`.
+- Re-run only the affected isolated CephFS publication and final KAIROS functional gates. The
+  successful old/new compute evidence from `44718`/`44720` remains valid: request, epochs,
+  objective, and metrics were identical; `116.63s` old versus `118.39s` new is ratio `1.015`.
+
+Recorded result:
+
+- The fresh implementer committed `0f70ead03359c94f2d5ab479c89c63becbc9b64c`
+  (`fix(publication): create safe directory parents`). Seven direct directory-publication parent
+  creators now request mode `0755`; regular-file publishers, paths, schemas, hard links, and
+  scientific validation are unchanged. The same implementer closed one review finding in separate
+  commit `223cfacf7f0a2eee02ebdbcea9f61555500d1c24` by restoring `bundle_path()` as the sole bundle
+  address owner. The same independent reviewer returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Extraction gates passed: 109 root tests, 9 mobile-export tests including host XNNPACK, 43 App
+  tests, Ruff check/format, strict Pyright, Vulture, root/mobile locks, App typecheck, npm dry
+  install, and clean diff/status checks.
+- Compact CUDA was reconciled without rewriting its history at
+  `f49db0b712845632f6a5457159b628e635a00f9f`. Its only nonmerge CUDA commits remain `32758207` and
+  `3a1fe154`; the ten-file roster, per-file numstat, and all 249 changed lines remain patch-identical.
+  Independent review returned `GREEN LIGHT`: Standards 0, Spec 0. Gates passed: 110 root tests, 32
+  CUDA-focused tests, 9 mobile-export tests, 43 App tests, and all static, lock, CLI, App, npm,
+  topology, conflict, residue, and clean-status checks.
+- Build job `44721` created and tested the exact clean `f49db0b` image at
+  `/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-f49db0b.sif` through `sbuild` with 8 CPUs,
+  30 GiB, and one hour. The prior `004f951`, `9385753`, and `ade5827` images remain untouched.
+- Exact-production-shape job `44722` requested 128 CPUs, 256 GiB, and four GPUs but never obtained a
+  node. After the user authorized a smaller equivalent functional gate, it was cancelled while
+  pending with zero elapsed time and no node. Replacement `44828` reduced CPU and memory to 8 CPUs
+  and 32 GiB while retaining four GPUs; it proved the active constraint was four-GPU availability,
+  not CPU or memory, and was likewise cancelled pending with zero elapsed time and no node.
+- The user then authorized the minimal gate for the changed seam. Synthetic candidate job `44829`
+  completed in 27 seconds with exact `cpu=2,mem=8G,gres/gpu=1`; CPU finalizer `44830` atomically
+  published and strictly loaded Study `f45717de-df84-4c10-b203-083b4a80c6a3`. Synthetic
+  `TrainRequest` job `44831` completed in 12 seconds with the same TRES; CPU validator `44832`
+  strictly loaded Artifact `f70c4af8-323e-4d57-81b2-9a1415262c18`.
+- Both changed directory parents are mode `0755`; each immutable Study/Artifact directory is mode
+  `0700`. Validators proved exact canonical file rosters, one Study reduction row with finite
+  metrics, one completed epoch, a loadable non-training LSTM Artifact, and request-bound identities.
+  Servatus logs are exactly `%j.out` plus zero-based `%j-0.out` for both GPU jobs. Every path and
+  output is under the isolated `kairos-f49db0b-small` acceptance namespace.
+- The smaller final smoke is sufficient for Slice 8 because the reviewed delta changes only parent
+  creation modes. Four-task concurrent launch, distinct GPU isolation, aggregate exit behavior,
+  TRES arithmetic, and zero-based combined log rendering were already proven live before this
+  correction and their source paths did not change. The prior same-GPU A/B remains the performance
+  evidence; it showed equal requests, epochs, objectives, and metrics with new/old ratio `1.01509`.
+- No thesis input, canonical production output, production scratch, existing science job, or
+  independent automation was read or mutated. No production configuration, branch push/merge, or
+  cleanup is part of this accepted slice.
+
+### Slice 9: production target cutover
+
+Status: green; exact baseline is the accepted Slice 8/acceptance head
+`99b730b71ba3d9b79e7a2507e85b3bf519d03f62`
+
+Expected outcome:
+
+- Future KAIROS submissions use the accepted immutable `f49db0b` image. Already-submitted Slurm
+  jobs remain bound to the scripts and old image path captured at submission.
+
+Scope and non-goals:
+
+- Change only the production image in `REMOTE.toml` to
+  `/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-f49db0b.sif`. `REMOTE.toml` remains the sole
+  deployment-image authority; do not mirror its rotating image value in a test.
+- Keep partitions, paths, resource requests, caps, scripts, outputs, schemas, and every application
+  behavior unchanged. Do not rebuild the image: `REMOTE.toml` is workstation-side submission
+  configuration and the accepted SIF already contains exact product SHA `f49db0b`.
+- Preserve the old image and old lifecycle state while queued old-image jobs exist. Do not cancel,
+  release, reprioritize, rewrite, or otherwise mutate those jobs.
+- A fresh implementer commits the fixed slice; a distinct reviewer returns `GREEN LIGHT` only with
+  Standards 0 and Spec 0. Then reconcile the accepted commit into compact CUDA with exact delta
+  parity before branch publication.
+
+Cutover permission preparation:
+
+- Read-only exact-path preflight found only the core `studies` and `artifacts` parents present, both
+  owner `edoardo.galli3`, device `49`, and mode `0775`; all other six inferred core parents were
+  absent. Under the user's approval, nonrecursive `chmod go-w` changed only those two directory
+  modes to `0755`. Revalidation proved their paths, owners, devices, and inodes
+  (`1099895357882`, `1099906115439`) unchanged. No contents were listed or read.
+- This metadata change cannot disrupt queued same-account jobs: owner `rwx` is unchanged. Absent
+  parents will be created as `0755` by Slice 8. Benchmark-energy and mobile-export parents remain
+  user-supplied and were not guessed or mutated.
+
+Recorded result:
+
+- Fresh implementer commit `9e7349abee2d25bc0f6cbe9ba06b41db51552c2a`
+  (`config(remote): use accepted Servatus image`) changed the production image path and initially
+  mirrored it in the production-profile test. Full root tests passed (`109`), with Ruff
+  check/format, strict Pyright, Vulture, lock, and diff gates green.
+- The first extraction review returned Standards 0 and Spec 0. Compact integration review then
+  rejected the shared delta with two Standards findings: the exact-image assertion created
+  configuration/test shotgun surgery, and the ledger still described already-granted cutover
+  authority as pending. The same implementer removes the assertion; this ledger correction makes
+  `REMOTE.toml` the single rotating image authority and narrows remaining gates to publication,
+  merge, and cleanup. Resources, paths, caps, outputs, schemas, and runtime behavior remain
+  unchanged. External refs remain untouched until correction re-review is green.
+- Same-implementer correction `83cc092b145f12c8e4defa7fab9f76a4451c562e` removed only the
+  mirrored assertion. The same compact reviewer returned `GREEN LIGHT`: Standards 0, Spec 0.
+  Final Slice 9 product delta is exactly one `REMOTE.toml` image-line replacement; full root tests
+  (`109`) and all focused/static/lock/diff gates remain green.
+
+### Final external deployment gates
 
 The clean break cannot deploy while queued jobs, running jobs, experiment drafts with old
 `jobs.tsv`, or resumable old-layout scratch are still needed. Before changing the university image
@@ -1281,20 +1845,20 @@ or remote checkout:
    do not add legacy parsing to new KAIROS or Servatus.
 4. Build a new immutable KAIROS image through the documented `sbuild` partition procedure from an
    isolated exact-SHA checkout. Run `apptainer build` then `apptainer test`.
-5. Run separately authorized new-path KAIROS smokes with the same immutable application image and
-   request bytes. Verify the one-task and four-packed-task scripts request exactly one GPU, 32 CPUs,
-   65536 MiB, and three days per process; four steps run concurrently with distinct physical GPU
-   UUIDs; nine tasks remain `3 + 3 + 3`; sibling failures are aggregated without cancelling
-   successful siblings; and canonical KAIROS validation remains the only completion authority.
+5. Run separately authorized new-path KAIROS smokes. Completed above: final-image candidate,
+   Study publication/load, TrainRequest, Artifact publication/load, TRES, and log-shape gates are
+   green. Existing live evidence remains authoritative for unchanged four-pack, UUID isolation,
+   failure aggregation, `3 + 3 + 3`, and exact production-profile rendering.
 6. Compare old/new `ReqTRES`, `AllocTRES`, logs, results, and one representative task's
    elapsed/throughput behavior using the same immutable image, input, dedicated partition, and GPU
    model, preferably the same node. This lean A/B is a gross-regression check, not a statistical
    performance study; repeated trials or a thesis-scale campaign are unnecessary unless making a
    formal performance claim. The mixed production partition route is not valid A/B evidence.
-7. Run one application publication smoke. Preserve the preceding image and old execution path until
-   the GPU and publication gates pass.
-8. Update remote image configuration only after acceptance. File transfer, remote pushes, package
-   release, and deployment each require explicit authorization.
+7. Run one application publication smoke. Completed above for both Study and Artifact. Preserve the
+   preceding image and old execution path until production cutover passes.
+8. Update remote image configuration only after acceptance. Acceptance and permission preparation
+   are complete; branch publication/merge and run-owned cleanup are authorized and active. Preserve
+   the old image and old lifecycle state while already-submitted jobs still reference them.
 
 ## Run records
 
@@ -1309,8 +1873,8 @@ common-case, flexible-interface, packing-adversarial, and ownership audits conve
 production model in this ledger. A throwaway pure planner demonstrated exact homogeneous resource
 arithmetic and current KAIROS groupings (`1`, `4`, `9 -> 3 + 3 + 3`, and
 `102 -> 24*4 + 3 + 3`), plus CPU-only and whole-multi-GPU handling and rejection of heterogeneous
-tasks or unsafe explicit caps. Its result was absorbed and the prototype was deleted. The
-source-backed record is [`servatus-production-resource-model.md`](servatus-production-resource-model.md).
+tasks or unsafe explicit caps. Its result was absorbed and the prototype and duplicated research
+record were deleted.
 
 Final read-only KAIROS-parity, interface-leanness, and administrator-readiness reviews found and
 closed planning defects in the KAIROS allocation cap and controlled A/B conditions; eager
@@ -1342,3 +1906,60 @@ The user confirmed that remote-job drain constrains cutover, not local implement
 Servatus dependency gate is satisfied, local KAIROS slices continue without contacting the GPUs or
 altering the old remote checkout/image; final deployment remains blocked until protected remote
 work is safe.
+
+Slice 3's first read-only implementation pass stopped without product edits at
+`3018733b79bf98ae63e71d2592eee307e11f86d8`: Servatus 0.1's directory-only publication cannot
+preserve the benchmark's exact standalone `protocol.json` and `sweep-NNN.parquet` destinations.
+Three independent interface designs favored the narrow explicit `publish_file()` operation over a
+polymorphic publication API or KAIROS shim. Prerequisite Slice 2A now closes that generic contract
+before the same KAIROS implementer resumes Slice 3.
+
+The separate future plan in task `019fea93-223d-7d42-bcfc-c4a499b59dd0` was consulted read-only on
+2026-08-10. Its committed Blockweaver ledger remains unchanged and paused until this Servatus run
+finishes. Only its relevant ownership rule is carried here: Blockweaver will later own the external
+dataset artifact under a separately authorized clean-break migration, while Servatus remains an
+opaque path transaction and KAIROS retains scientific interpretation. This run makes no corpus or
+dataset change and does not pre-empt that future plan.
+
+Prerequisite Slice 2A then completed at `f60335416b549fdc252c56152af2b9678e94bb72` through a fresh
+implementation and independent two-lane review. The accepted `publish_file()` operation preserves
+the ordinary file mode selected by `0o666` plus the process umask, pins the stage inode, and reuses
+the same exclusive durable commit transaction as directory publication. The reviewer returned
+`GREEN LIGHT` with zero Standards and Spec findings. The clean local `0.2.0` candidate is not yet
+pushed, tagged, released, or published; Slice 3 remains paused until that separately authorized
+external gate makes the reviewed dependency reproducibly installable.
+
+The user then authorized that external gate. Servatus `main`, annotated tag `v0.2.0`, GitHub Release,
+and PyPI Trusted Publishing all completed from exact head `f60335416b549fdc252c56152af2b9678e94bb72`.
+Branch and tag CI passed on Ubuntu and macOS, the publish workflow succeeded, and a fresh index
+install verified version, API, and CLI. This closes prerequisite Slice 2A and permits the same paused
+KAIROS Slice 3 implementer to resume locally without contacting outputs or the research cluster.
+
+Slice 3 completed at `87f09c09f0441af49990c7c9be296e3286783ed2`. Its first review found one
+callback return-type defect; the same implementer corrected it in a separate commit and the same
+two-lane reviewer returned `GREEN LIGHT` with Standards 0 and Spec 0. KAIROS now directly delegates
+disposable file and directory transactions to Servatus while preserving benchmark/mobile paths,
+formats, validation, and restart meaning. No protected or external state was touched.
+
+Slice 4's fresh implementer paused read-only at `77922ac597f17a19e9eeecd269612f7339863235`
+after proving that ordinary nested Workspaces would break concurrent Study candidate throughput.
+Evaluation and artifact mappings remain direct; no product edit was made. Three independent designs,
+an adversarial lock audit, and a deleted spawned-process prototype established the lean generic fix:
+one `Workspace.child()` method with shared parent/exclusive child leases and short stable-parent
+coordination. Prerequisite Slice 3A now owns that Servatus change before the same KAIROS implementer
+resumes. No repository outside this ledger, output, or external system was changed by the design or
+prototype work.
+
+Prerequisite Slice 3A completed at `b8eb73f33d54a67efd9f192739223d8103877939` after two P1
+review corrections: durable lifecycle-lock/work inode binding, then an explicit owner-only-container
+trust boundary for arbitrary same-account whole-root replacement. The same reviewer returned final
+`GREEN LIGHT` with Standards 0 and Spec 0. An immediate two-node CPU filesystem smoke obtained no
+allocation and left no queued job; it is deferred to remote deployment because shared `flock`
+coherence is site/mount configuration, not a package-release property. The user authorized the
+reviewed `0.3.0` release; no KAIROS product code resumed before an installable package exists.
+
+Servatus `0.3.0` was then pushed, tagged, released, and published from the exact reviewed head.
+Branch/tag CI and Trusted Publishing succeeded, PyPI provenance/hashes were recorded, and a fresh
+index install verified version, `Workspace.child`, and CLI. This closes prerequisite Slice 3A for
+local development and permits the same paused KAIROS Slice 4 implementer to resume. The deferred
+cross-node filesystem smoke remains a hard remote-deployment gate.

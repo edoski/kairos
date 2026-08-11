@@ -1,15 +1,11 @@
+import stat
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 
-from experiments.bundle import (
-    close_bundle,
-    load_roster,
-    open_bundle,
-    publish_bundle,
-    write_tune_cells,
-)
+import experiments.bundle as bundle_module
+from experiments.bundle import close_bundle, load_roster, open_bundle, write_tune_cells
 from kairos.config import (
     BlockWindow,
     ExperimentSemantics,
@@ -54,16 +50,20 @@ def _request() -> TuneRequest:
     )
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_close_preserves_bundle_after_verifier_failure_then_retries(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     bundle = open_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID)
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
-    (bundle / "jobs.tsv").write_text("temporary", encoding="utf-8")
+    campaign = bundle / ".servatus-campaign"
+    campaign.mkdir()
+    (campaign / "state.json").write_text("temporary", encoding="utf-8")
     inputs = {
         path.relative_to(bundle): path.read_bytes() for path in bundle.rglob("*") if path.is_file()
     }
     canonical = bundle.with_name(str(_EXPERIMENT_ID))
+    assert stat.S_IMODE(canonical.parent.stat().st_mode) == 0o755
 
     def fail(_root: Path, _study_id: UUID) -> None:
         raise RuntimeError("record is incomplete")
@@ -99,14 +99,30 @@ def test_close_preserves_bundle_after_verifier_failure_then_retries(
     assert not bundle.exists()
 
 
-def test_publish_refuses_an_existing_canonical_directory(tmp_path: Path) -> None:
-    bundle = open_bundle(tmp_path, ExperimentKind.HPO, _EXPERIMENT_ID)
-    write_tune_cells(bundle, [("ethereum.lstm", _request())])
-    canonical = bundle.with_name(str(_EXPERIMENT_ID))
-    canonical.mkdir()
+def test_publication_failure_preserves_authored_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = open_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID)
+    write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
+    campaign = bundle / ".servatus-campaign"
+    campaign.mkdir()
+    (campaign / "state.json").write_text("retry", encoding="utf-8")
 
-    with pytest.raises(FileExistsError):
-        publish_bundle(tmp_path, ExperimentKind.HPO, _EXPERIMENT_ID, {"ethereum.lstm": _STUDY_ID})
+    def fail_publication(_destination: object, _assemble: object) -> None:
+        raise RuntimeError("publication failed")
 
+    monkeypatch.setattr(bundle_module, "publish", fail_publication)
+
+    with pytest.raises(RuntimeError, match="publication failed"):
+        close_bundle(
+            tmp_path,
+            ExperimentKind.FEATURE_ABLATION,
+            _EXPERIMENT_ID,
+            "study_id",
+            lambda _root, _study_id: None,
+        )
+
+    assert not bundle.with_name(str(_EXPERIMENT_ID)).exists()
     assert (bundle / "cells.tsv").is_file()
-    assert not (bundle / "manifest.json").exists()
+    assert (bundle / "requests").is_dir()
+    assert (campaign / "state.json").read_text() == "retry"

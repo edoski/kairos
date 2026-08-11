@@ -4,11 +4,12 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+from servatus import SlurmTarget, _slurm
 
 import kairos.cli as cli
 from kairos.cli import app
 from kairos.config import EvaluateRequest, ExperimentSemantics, SelectedStudySource, TrainRequest
-from tests.helpers import dispatch, window
+from tests.helpers import dispatch, window, write_servatus_config
 
 CORPUS_ID = UUID("10000000-0000-4000-8000-000000000001")
 ARTIFACT_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -41,6 +42,40 @@ def _evaluate_request() -> EvaluateRequest:
         corpus_id=CORPUS_ID,
         testing_window=window(300),
     )
+
+
+def test_submit_uses_one_durable_campaign_per_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = _evaluate_request()
+    request_path = tmp_path / "request.json"
+    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+    target, resources = write_servatus_config(tmp_path)
+    calls: list[tuple[tuple[str, ...], bytes]] = []
+
+    def submit(_target: SlurmTarget, argv: tuple[str, ...], script: bytes) -> _slurm.Result:
+        calls.append((argv, script))
+        return _slurm.Result(0, b"456;research\n", b"")
+
+    monkeypatch.setattr(_slurm, "_run_ssh", submit)
+    arguments = (
+        "submit",
+        str(request_path),
+        "--target",
+        str(target),
+        "--resources",
+        str(resources),
+    )
+
+    first = dispatch(app, *arguments)
+    repeated = dispatch(app, *arguments)
+
+    assert first.exit_code == 0
+    assert first.output == "456;research\n"
+    assert repeated.exit_code == 0
+    assert repeated.output == ""
+    assert len(calls) == 1
+    assert (tmp_path / f".request.json.evaluation-{EVALUATION_ID}.campaign").is_dir()
 
 
 def test_remote_workflow_dispatches_train_and_evaluate_requests(

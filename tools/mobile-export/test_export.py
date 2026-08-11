@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple
@@ -85,6 +86,7 @@ def _install_artifact_fakes(
     monkeypatch.setattr(mobile_export, "load_corpus_request", load_corpus_request)
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_export_bundle_publishes_complete_stable_bundle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -96,10 +98,11 @@ def test_export_bundle_publishes_complete_stable_bundle(
         destination.write_bytes(cell.artifact_id.bytes)
 
     monkeypatch.setattr(mobile_export, "_export_model", export_model)
-    output = tmp_path / "models"
+    output = tmp_path / "assets" / "models"
 
     mobile_export.export_bundle(tmp_path / "storage", roster_path, output)
 
+    assert stat.S_IMODE(output.parent.stat().st_mode) == 0o755
     expected_files = {"manifest.json"} | {
         f"{chain}-k{horizon}.pte"
         for chain in mobile_export._CHAINS
@@ -190,29 +193,6 @@ def test_export_bundle_rejects_feature_mismatch_without_publication(
     assert not output.exists()
 
 
-def test_export_bundle_cleans_scratch_after_export_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    roster_path = tmp_path / "MOBILE.yaml"
-    artifact_ids = _write_roster(roster_path)
-    _install_artifact_fakes(monkeypatch, artifact_ids)
-    failing_artifact_id = artifact_ids[("ethereum", 3)]
-
-    def export_model(cell: mobile_export._Cell, destination: Path) -> None:
-        if cell.artifact_id == failing_artifact_id:
-            raise RuntimeError("lowering failed")
-        destination.write_bytes(b"pte")
-
-    monkeypatch.setattr(mobile_export, "_export_model", export_model)
-    output = tmp_path / "models"
-
-    with pytest.raises(RuntimeError, match="lowering failed"):
-        mobile_export.export_bundle(tmp_path / "storage", roster_path, output)
-
-    assert not output.exists()
-    assert list(tmp_path.glob(".models.*")) == []
-
-
 def test_export_bundle_preserves_existing_output(tmp_path: Path) -> None:
     roster_path = tmp_path / "MOBILE.yaml"
     output = tmp_path / "models"
@@ -224,29 +204,6 @@ def test_export_bundle_preserves_existing_output(tmp_path: Path) -> None:
         mobile_export.export_bundle(tmp_path / "storage", roster_path, output)
 
     assert marker.read_text(encoding="utf-8") == "preserve"
-
-
-def test_export_bundle_refuses_output_directory_created_during_export(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    roster_path = tmp_path / "MOBILE.yaml"
-    artifact_ids = _write_roster(roster_path)
-    _install_artifact_fakes(monkeypatch, artifact_ids)
-    output = tmp_path / "models"
-
-    def export_model(cell: mobile_export._Cell, destination: Path) -> None:
-        del cell
-        destination.write_bytes(b"pte")
-        output.mkdir(exist_ok=True)
-
-    monkeypatch.setattr(mobile_export, "_export_model", export_model)
-
-    with pytest.raises(FileExistsError):
-        mobile_export.export_bundle(tmp_path / "storage", roster_path, output)
-
-    assert output.is_dir()
-    assert list(output.iterdir()) == []
-    assert list(tmp_path.glob(".models.*")) == []
 
 
 class _Output(NamedTuple):

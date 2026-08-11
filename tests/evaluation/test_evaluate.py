@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 from typing import Any, Self
 from uuid import UUID
@@ -9,6 +10,7 @@ import numpy as np
 import polars as pl
 import pytest
 import torch
+from servatus import DestinationExists, Workspace
 from torch import nn
 
 import kairos.evaluation as evaluation_module
@@ -216,6 +218,7 @@ class _Model(nn.Module):
         )
 
 
+@pytest.mark.usefixtures("umask_0002")
 def test_evaluate_publishes_exact_observations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -230,6 +233,7 @@ def test_evaluate_publishes_exact_observations(
 
     evaluation_module.evaluate(request, tmp_path)
 
+    assert stat.S_IMODE((tmp_path / "evaluations").stat().st_mode) == 0o755
     assert model.transfers == 1
     assert model.batch_sizes == [5]
     assert evaluation_json_path(tmp_path, _EVALUATION_ID).read_text() == request.model_dump_json()
@@ -256,8 +260,12 @@ def test_evaluate_rejects_owned_association(
         evaluation_module, "load_artifact", lambda storage_root, artifact_id: (association, model)
     )
     monkeypatch.setattr(evaluation_module, "_DEVICE", torch.device("cpu"))
+    request = _request(corpus_id=corpus_id)
     with pytest.raises(ValueError, match="artifact source Corpus"):
-        evaluation_module.evaluate(_request(corpus_id=corpus_id), tmp_path)
+        evaluation_module.evaluate(request, tmp_path)
+
+    canonical = evaluation_directory(tmp_path, request.evaluation_id)
+    assert Workspace(canonical, identity=request.model_dump_json().encode()).path.is_dir()
 
 
 def test_evaluate_rejects_known_collision_before_loading(
@@ -273,14 +281,13 @@ def test_evaluate_rejects_known_collision_before_loading(
 
     monkeypatch.setattr(evaluation_module, "load_artifact", load_artifact)
 
-    with pytest.raises(FileExistsError, match="evaluations"):
+    with pytest.raises(DestinationExists, match="evaluations"):
         evaluation_module.evaluate(_request(), tmp_path)
 
     assert not loaded
-    assert not (tmp_path / "evaluations" / f".{_EVALUATION_ID}").exists()
 
 
-def test_evaluate_preserves_scratch_when_canonical_appears_before_publication(
+def test_evaluate_preserves_forensic_work_when_canonical_appears_before_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _write_corpus(tmp_path, _CORPUS_ID)
@@ -302,12 +309,14 @@ def test_evaluate_preserves_scratch_when_canonical_appears_before_publication(
 
     monkeypatch.setattr(evaluation_module, "collect_observations", create_collision)
 
-    with pytest.raises(FileExistsError, match="evaluations"):
-        evaluation_module.evaluate(_request(), tmp_path)
+    request = _request()
+    canonical.parent.mkdir()
+    work = Workspace(canonical, identity=request.model_dump_json().encode()).path
+    with pytest.raises(DestinationExists):
+        evaluation_module.evaluate(request, tmp_path)
 
     assert (canonical / "occupied").read_text(encoding="utf-8") == "occupied"
-    scratch = tmp_path / "evaluations" / f".{_EVALUATION_ID}"
-    assert sorted(path.name for path in scratch.iterdir()) == [
+    assert sorted(path.name for path in work.iterdir()) == [
         "evaluation.json",
         "observations.parquet",
     ]

@@ -893,23 +893,25 @@ report commands print, but do not persist, the ordinary and rolling reductions. 
 the exact 27 evaluation references and removes the temporary bundle. `experiments/launch.py
 workflows BUNDLE` packs Train or Evaluate cells with the same packed execution contract.
 
-Research figures remain outside `src/kairos` and outside the experiment command flow. The four
-self-contained scripts load completed manifests and canonical Studies or Evaluations through their
-owning KAIROS loaders, derive presentation-only percentages and deltas in memory, and write vector
+Research figures remain outside `src/kairos` and outside the experiment command flow. The five
+self-contained scripts load completed manifests and canonical Studies, Artifacts, or Evaluations
+through their owning KAIROS loaders, derive presentation-only values in memory, and write vector
 PDFs under `outputs/figures/`:
 
 ```text
 uv run python experiments/figure_feature_ablation.py STORAGE_ROOT EXPERIMENT_ID
 uv run python experiments/figure_context_study.py STORAGE_ROOT EXPERIMENT_ID
 uv run python experiments/figure_hpo.py STORAGE_ROOT EXPERIMENT_ID
+uv run python experiments/figure_k_study.py STORAGE_ROOT EXPERIMENT_ID
 uv run python experiments/figure_held_out.py STORAGE_ROOT EXPERIMENT_ID
 ```
 
 `figure_style.py` owns their shared typography, architecture colors, dimensions, and deterministic
-PDF metadata. The held-out script owns both horizon economics and rolling-minus-one-shot deltas;
-the K-study manifest alone contains artifacts and therefore has no independent result figure. The
-scripts never persist derived metrics or parse experiment work state. A manuscript may copy a
-selected final PDF and owns only its caption, label, placement, and discussion.
+PDF metadata. The K-study script owns the predictive, full-range economic, and $K\leq25$ economic
+detail validation plots from canonical Artifact observations. The held-out script owns both
+horizon economics and rolling-minus-one-shot deltas. The scripts never persist derived metrics or
+parse experiment work state. A manuscript may copy a selected final PDF and owns only its caption,
+label, placement, and discussion.
 
 #### Study object
 

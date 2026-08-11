@@ -1780,7 +1780,7 @@ Recorded result:
 
 ### Slice 9: production target cutover
 
-Status: authorized; exact baseline is the accepted Slice 8/acceptance head
+Status: green; exact baseline is the accepted Slice 8/acceptance head
 `99b730b71ba3d9b79e7a2507e85b3bf519d03f62`
 
 Expected outcome:
@@ -1812,6 +1812,17 @@ Cutover permission preparation:
 - This metadata change cannot disrupt queued same-account jobs: owner `rwx` is unchanged. Absent
   parents will be created as `0755` by Slice 8. Benchmark-energy and mobile-export parents remain
   user-supplied and were not guessed or mutated.
+
+Recorded result:
+
+- Fresh implementer commit `9e7349abee2d25bc0f6cbe9ba06b41db51552c2a`
+  (`config(remote): use accepted Servatus image`) changes only the production image path and adds
+  its exact parsed assertion to the existing production-profile test. Full root tests passed
+  (`109`), with Ruff check/format, strict Pyright, Vulture, lock, and diff gates green.
+- A distinct reviewer pinned the exact fixed range and returned `GREEN LIGHT`: Standards 0, Spec 0.
+  Resources, paths, caps, outputs, schemas, and runtime behavior are unchanged. The cluster, queue,
+  outputs, main checkout, compact branch, and external refs were untouched by implementation and
+  review.
 
 ### Final external deployment gates
 

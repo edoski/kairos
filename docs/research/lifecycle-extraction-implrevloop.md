@@ -1,7 +1,7 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: extraction, CephFS correction, compact-CUDA integration, and isolated acceptance green;
-authorized branch publication and cleanup active
+Status: extraction, CephFS correction, isolated acceptance, and Slices 10-11 green; compact-CUDA
+correction sync and re-review active; final main integration, publication, and cleanup pending
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1833,7 +1833,8 @@ Recorded result:
 
 ### Slice 10: selected-LSTM horizon contract alignment
 
-Status: correction complete; independent re-review pending
+Status: complete and green; accepted head
+`76a1396a42bcfb0897bdf661a066bd030a0644d3`
 
 - Exact baseline: `e894870a886cd0585b32aed93f39f832eb2005db`
 - Initial implementation: `7660cf39241aebd50c651d9a02a4cf3183ccf310`
@@ -1880,14 +1881,22 @@ Implementation-review loop:
 
 - Initial independent review returned Standards green and one Spec finding: this ledger still
   collapsed the benchmark to the selected-LSTM roster. The same implementer corrected only this
-  record. The same reviewer must return `GREEN LIGHT` at zero findings before compact CUDA and main
-  integration are reconciled with exact tree/parity proofs.
+  record at `76a1396a42bcfb0897bdf661a066bd030a0644d3`. The same reviewer returned `GREEN LIGHT`:
+  Standards 0, Spec 0.
 
 ### Slice 11: final campaign path and production CPU profile
 
-Status: implementation complete; independent review pending
+Status: complete and green; compact correction sync and re-review pending
 
 - Exact baseline: `76a1396a42bcfb0897bdf661a066bd030a0644d3`.
+- Initial implementation `44d9c7c89d137685cb38d1b866773370951f34c7` changed the campaign path and
+  production CPU profile. Independent review returned one Spec P2: two KAIROS bundle fixtures knew
+  Servatus's private `state.json` filename.
+- Correction `8840c049ab5ecb7c31d812631fa71833e0571660` replaced that private coupling with
+  opaque campaign-state sentinels. The same reviewer returned `GREEN LIGHT`: Standards 0, Spec 0.
+- Compact CUDA was reconciled through `cb86c3c9` before the correction. Syncing `8840c049` into
+  compact CUDA and re-reviewing the corrected integration remain the next gates; final main
+  integration, branch publication, and cleanup follow only after they are green.
 - New KAIROS experiment bundles store their Servatus campaign at `.servatus/`. This is a clean
   break: there is no alias, fallback, migration, or parser for `.servatus-campaign/` or
   `jobs.tsv`.
@@ -1938,8 +1947,9 @@ or remote checkout:
 7. Run one application publication smoke. Completed above for both Study and Artifact. Preserve the
    preceding image and old execution path until production cutover passes.
 8. Update remote image configuration only after acceptance. Acceptance and permission preparation
-   are complete; branch publication/merge and run-owned cleanup are authorized and active. Preserve
-   the old image and old lifecycle state while already-submitted jobs still reference them.
+   are complete; final branch merge/publication and run-owned cleanup are authorized but await the
+   compact correction re-review. Preserve the old image and old lifecycle state while
+   already-submitted jobs still reference them.
 
 ## Run records
 

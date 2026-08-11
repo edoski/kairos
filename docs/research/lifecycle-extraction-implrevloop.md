@@ -1826,6 +1826,10 @@ Recorded result:
   `REMOTE.toml` the single rotating image authority and narrows remaining gates to publication,
   merge, and cleanup. Resources, paths, caps, outputs, schemas, and runtime behavior remain
   unchanged. External refs remain untouched until correction re-review is green.
+- Same-implementer correction `83cc092b145f12c8e4defa7fab9f76a4451c562e` removed only the
+  mirrored assertion. The same compact reviewer returned `GREEN LIGHT`: Standards 0, Spec 0.
+  Final Slice 9 product delta is exactly one `REMOTE.toml` image-line replacement; full root tests
+  (`109`) and all focused/static/lock/diff gates remain green.
 
 ### Final external deployment gates
 

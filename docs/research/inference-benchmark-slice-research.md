@@ -12,6 +12,10 @@ evaluation-to-artifact join, exact nine-group/36-label campaign cardinality, wor
 resume-protocol checks at the benchmark boundary. It intentionally omits host probes, observation
 parity, artifact hashes, and repeated canonical association validation.
 
+The benchmark consumes explicitly selected completed full-roster canonical manifests. The current
+selected-LSTM horizon-sensitivity author is a separate contract with 27 records over nine horizons;
+it does not redefine this benchmark roster.
+
 ## Verdict
 
 All four slices are implementable from the current repository. The CPU study should remain the

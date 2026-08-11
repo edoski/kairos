@@ -52,6 +52,9 @@ and [inference-economic-assumptions.md](inference-economic-assumptions.md).
 - The final manifests are expected to resolve the thesis roster of nine architecture-chain cells
   and 36 native PyTorch checkpoints. The benchmark does not hard-code chain or family names; it
   groups canonical manifest cells and derives each artifact horizon from its association.
+- These explicit benchmark inputs are completed full-roster canonical manifests. They are separate
+  from the current selected-LSTM horizon-sensitivity author, which produces 27 records across nine
+  horizons for its own K-study and held-out contract.
 - The fixed rolling horizon sequence is policy, not model metadata. Define it once as
   `ROLLING_HORIZONS` in the existing rolling evaluator and reuse that owner in held-out reporting
   and benchmarking. Standalone workloads and the descending cascade derive from this one sequence.
@@ -187,9 +190,10 @@ directory. It never infers a latest object. Resolution must:
 
 1. load both completed manifests;
 2. derive rolling cells from their canonical labels and the evaluator-owned rolling horizons;
-3. strictly parse every canonical `evaluation.json`;
-4. require each selected evaluation to name the K-study artifact for that cell; and
-5. load artifacts and prepare datasets through their existing canonical loaders.
+3. require exactly nine groups, each complete over all four rolling horizons, in both manifests;
+4. strictly parse every selected canonical `evaluation.json`;
+5. require each selected evaluation to name the K-study artifact for that cell; and
+6. load artifacts and prepare datasets through their existing canonical loaders.
 
 The output is immutable and resumable at independent measurement-unit boundaries:
 

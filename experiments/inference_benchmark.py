@@ -265,18 +265,43 @@ def _resolve(
     held_out = load_experiment_manifest(
         storage_root, ExperimentKind.HELD_OUT, held_out_experiment_id
     )
+
+    def rolling_roster(manifest: Mapping[str, UUID]) -> dict[str, dict[int, UUID]]:
+        roster: dict[str, dict[int, UUID]] = {}
+        labels = 0
+        for label, object_id in sorted(manifest.items()):
+            group, horizon_label = label.rsplit(".", maxsplit=1)
+            horizon = int(horizon_label.removeprefix("K"))
+            if horizon not in ROLLING_HORIZONS:
+                continue
+            labels += 1
+            horizons = roster.setdefault(group, {})
+            if horizon in horizons:
+                raise ValueError("manifests must contain exactly nine complete rolling groups")
+            horizons[horizon] = object_id
+        if (
+            labels != 9 * len(ROLLING_HORIZONS)
+            or len(roster) != 9
+            or any(set(horizons) != set(ROLLING_HORIZONS) for horizons in roster.values())
+        ):
+            raise ValueError("manifests must contain exactly nine complete rolling groups")
+        return roster
+
+    artifacts = rolling_roster(k_study)
+    evaluations = rolling_roster(held_out)
+    if artifacts.keys() != evaluations.keys():
+        raise ValueError("manifests must contain exactly nine complete rolling groups")
+
     resolved: dict[str, dict[int, EvaluateRequest]] = {}
-    for label, evaluation_id in sorted(held_out.items()):
-        group, horizon_label = label.rsplit(".", maxsplit=1)
-        horizon = int(horizon_label.removeprefix("K"))
-        if horizon not in ROLLING_HORIZONS:
-            continue
-        request = EvaluateRequest.model_validate_json(
-            evaluation_json_path(storage_root, evaluation_id).read_bytes()
-        )
-        if request.artifact_id != k_study[label]:
-            raise ValueError(f"{label} evaluation does not name its K-study artifact")
-        resolved.setdefault(group, {})[horizon] = request
+    for group, group_evaluations in evaluations.items():
+        for horizon, evaluation_id in group_evaluations.items():
+            label = f"{group}.K{horizon}"
+            request = EvaluateRequest.model_validate_json(
+                evaluation_json_path(storage_root, evaluation_id).read_bytes()
+            )
+            if request.artifact_id != artifacts[group][horizon]:
+                raise ValueError(f"{label} evaluation does not name its K-study artifact")
+            resolved.setdefault(group, {})[horizon] = request
     return resolved
 
 

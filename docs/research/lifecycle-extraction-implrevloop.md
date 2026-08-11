@@ -1,8 +1,9 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: implementation program complete; extraction, main, and compact-CUDA reviews green; both
-accepted branches published; protected user work restored; run-owned cleanup complete. The
-separate inference-benchmark scientific-readiness gate remains open.
+Status: implementation program complete; extraction, main, and compact-CUDA reviews green; product
+refs published; protected user work restored. Final choreography reviews and fast-forwards
+ledger-only completion commits, then removes the lifecycle-scoped final compact review worktree
+before handoff. The separate inference-benchmark scientific-readiness gate remains open.
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1887,8 +1888,9 @@ Implementation-review loop:
 
 ### Slice 11: final campaign path and production CPU profile
 
-Status: complete and green; extraction, main, and compact final reviews green; accepted branches
-published; protected user work restored; run-owned cleanup complete
+Status: complete and green; extraction, main, and compact final reviews green; product refs
+published; protected user work restored; closing ledger-only work follows the final choreography
+recorded below
 
 - Exact baseline: `76a1396a42bcfb0897bdf661a066bd030a0644d3`.
 - Initial implementation `44d9c7c89d137685cb38d1b866773370951f34c7` changed the campaign path and
@@ -1906,7 +1908,9 @@ published; protected user work restored; run-owned cleanup complete
   with Standards 0 and Spec 0. Accepted main
   `e7b703509e40b03de317d5f9b80c7b3a913b92c8` and compact-CUDA
   `bea658d51068615a407229c23405a7f34d2d3010` were atomically normal-fast-forwarded to both
-  `origin` and `research`; no force push was used.
+  `origin` and `research`; no force push was used. These are the published product refs. Any later
+  docs-only completion commits receive final review and normal fast-forward publication before
+  handoff.
 - User stash `98047c1edb3425506d561ba8f4fc56238337741e` was applied after publication. The sole
   `docs/KAIROS.md` conflict was resolved by retaining both the accepted Servatus semantics and the
   user's K-study figure changes. All eight nonoverlapping protected-file hashes matched their
@@ -1933,10 +1937,13 @@ published; protected user work restored; run-owned cleanup complete
   experiment seams. Seventeen focused and 109 full tests passed. Ruff check/format, configured
   Pyright, Vulture, root and mobile lock/frozen-sync checks, both CLI help paths, source residue,
   diff, and status gates passed.
-- Run-owned local worktrees and temporary roots were removed. After owner and inode validation,
-  the exact run-owned roots carrying `f49db0b`, `ade5827`, and `9385753` under remote `build`,
-  `cache`, `acceptance`, and `logs` were permanently removed. Deployment images `004f951`,
-  `9385753`, `ade5827`, and `f49db0b` remain preserved.
+- Prior extraction, acceptance, and cutover-check worktrees and the local temporary root were
+  removed. The lifecycle-scoped `/private/tmp/kairos-servatus-final-compact` review worktree is
+  intentionally excluded: final choreography retains it through completion-record correction
+  review and publication, then removes it before handoff. After owner and inode validation, the
+  exact run-owned roots carrying `f49db0b`, `ade5827`, and `9385753` under remote `build`, `cache`,
+  `acceptance`, and `logs` were permanently removed. Deployment images `004f951`, `9385753`,
+  `ade5827`, and `f49db0b` remain preserved.
 - The production `studies` and `artifacts` publication parents retain their owner and inode and are
   now mode `0755`; only group/other write permission was removed. No thesis output, active or
   queued job, queue state, production object content, or old campaign state was changed.
@@ -1966,9 +1973,11 @@ path. The completed deployment checklist is retained below:
    formal performance claim. The mixed production partition route is not valid A/B evidence.
 7. Run one application publication smoke. Completed above for both Study and Artifact. Preserve the
    preceding image and old execution path until production cutover passes.
-8. Update remote image configuration only after acceptance. Acceptance, publication, protected-work
-   restoration, and run-owned cleanup are complete. Preserve the old image and old lifecycle state
-   while already-submitted or unfinished old-layout work still references them.
+8. Update remote image configuration only after acceptance. Acceptance, product publication,
+   protected-work restoration, and the bounded cleanup above are complete. Ledger-only completion
+   corrections follow the final review and normal-fast-forward choreography; the excluded final
+   compact review worktree is then removed before handoff. Preserve the old image and old lifecycle
+   state while already-submitted or unfinished old-layout work still references them.
 9. Before running the inference cost/time benchmark, verify a completed canonical full-roster
    manifest pair containing all nine chain-family groups and 36 artifact/evaluation records over
    `K=2..5`. This scientific-readiness gate is not complete. If the pair is absent or incompatible,

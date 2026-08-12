@@ -2639,7 +2639,33 @@ C6A main-integration record:
   App install/typecheck; Ruff check/format; configured Pyright; Vulture; installed Servatus 0.6.0
   API/CLI/hard-link publication; Blockweaver 0.3.2 dataset boundary; residue/protected-path/diff and
   status checks. Exact accepted main integration head is `68d2d60467b95768eb5236f0732472717c150a96`.
-  C6B compact integration remains pending; no KAIROS ref has been pushed.
+  No KAIROS ref had been pushed at this review point.
+
+C6B compact-integration record:
+
+- Existing compact head `05ca43b1c51d2c68fd61065cf69b41e7548ca58a` and the ledger-recorded
+  main head `e031e00d56b48072d3d7712754aa4837546502ae` were combined by normal
+  non-fast-forward merge `6d18b056a05738558b5cc222149b329e664a0013`, with parents in that order.
+  All 11 existing compact commits remain ancestors in the same order with matching patch IDs. The
+  logical CUDA delta relative to main remains the same ten-file implementation/test/documentation
+  surface. Three conflicts were resolved by preserving the compact runtime path while deleting
+  obsolete CPU-loader test fixtures already displaced by the accepted main cleanup.
+- Review found one Standards issue: that resolution left the now-unused `single_process_loader`
+  helper and three imports in `tests/helpers.py`. Correction
+  `8d94357d3e129d61e113462c25c4f6288dccba46` deletes only those eight dead test lines.
+  Same-reviewer rereview returned GREEN with Standards 0 and Spec 0. The integration-only helper
+  deletion does not change CUDA or product behavior.
+- Final C6B gates passed 105 root, 9 mobile, and 43 App tests; root/mobile lock and frozen-sync;
+  App install/typecheck; Ruff check/format; configured Pyright; Vulture; installed Servatus 0.6.0
+  API/CLI/hard-link publication; Blockweaver 0.3.2 dataset boundary; residue, protected-path, diff,
+  and status checks. The Blockweaver 0.3.2 CLI is incompatible with the locked Typer 0.24.1 on both
+  the fixed baseline and candidate (`typer._click` is absent); this pre-existing dependency issue
+  is unchanged and belongs to the separately owned Blockweaver 0.3.3 adoption.
+- C6 is complete locally. Exact reviewed product heads are main
+  `68d2d60467b95768eb5236f0732472717c150a96` and compact
+  `8d94357d3e129d61e113462c25c4f6288dccba46`. Subsequent ledger-only synchronization may advance
+  their object IDs without changing either product tree; record the final published refs after that
+  bounded sync instead of embedding a volatile active-head claim here.
 
 #### External gate: immutable image build and isolated acceptance
 

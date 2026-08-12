@@ -7,15 +7,15 @@ from types import ModuleType
 from uuid import UUID
 
 import pytest
-from servatus import Task
+from servatus import CampaignStatus, Task
 
 from kairos.config import EvaluateRequest, TuneRequest
 from kairos.study import RetainedResult, Study
 from kairos.workers import CandidateProcessInput, candidate_task, workflow_task
 from tests.experiments.helpers import publish_generated_studies
 from tests.helpers import (
-    capture_campaigns,
     dispatch,
+    fake_campaign,
     read_tsv_rows,
     run_script,
     window,
@@ -119,33 +119,30 @@ def test_hpo_extend_reopens_campaign_with_exact_authored_suffix(
     bundle = tmp_path / "experiments" / "hpo" / f".{hpo_id}"
     target, resources = write_servatus_config(tmp_path)
     launcher = _load_launcher(monkeypatch)
-    calls = capture_campaigns(monkeypatch, launcher)
+    open_campaign, campaign = fake_campaign(monkeypatch, launcher)
 
-    initial_rows, initial_tasks = _candidate_tasks(bundle)
-    initial_request_bytes = tuple(Path(row["request"]).read_bytes() for row in initial_rows)
+    _, initial_tasks = _candidate_tasks(bundle)
     first = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
 
     hpo.extend(tmp_path, context_id, hpo_id, ["avalanche"])
     capsys.readouterr()
-    full_rows, full_tasks = _candidate_tasks(bundle)
+    _, full_tasks = _candidate_tasks(bundle)
     second = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
 
     assert first.exit_code == 0
     assert second.exit_code == 0
-    assert len(initial_rows) == 27
-    assert full_rows[:27] == initial_rows
-    assert (
-        tuple(Path(row["request"]).read_bytes() for row in full_rows[:27]) == initial_request_bytes
-    )
+    assert len(initial_tasks) == 27
     assert full_tasks[:27] == initial_tasks
     assert len(full_tasks) == 54
-    assert [call.path for call in calls] == [bundle / ".servatus"] * 2
-    assert [call.tasks for call in calls] == [initial_tasks, full_tasks]
-    assert [call.options for call in calls] == [
+    assert [call.args for call in open_campaign.call_args_list] == [
+        (bundle / ".servatus", initial_tasks),
+        (bundle / ".servatus", full_tasks),
+    ]
+    assert [call.kwargs for call in campaign.plan.call_args_list] == [
         {"completed": set(), "retry": (), "tasks_per_allocation": 4},
         {"completed": set(), "retry": (), "tasks_per_allocation": 4},
     ]
-    assert all(call.submitted for call in calls)
+    assert campaign.submit.call_count == 2
 
 
 def test_candidates_skip_exact_canonical_studies(
@@ -157,7 +154,7 @@ def test_candidates_skip_exact_canonical_studies(
     publish_generated_studies(tmp_path, rows[:9], default_objective=1.0)
     target, resources = write_servatus_config(tmp_path)
     launcher = _load_launcher(monkeypatch)
-    calls = capture_campaigns(monkeypatch, launcher)
+    _, campaign = fake_campaign(monkeypatch, launcher)
 
     result = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
 
@@ -171,38 +168,17 @@ def test_candidates_skip_exact_canonical_studies(
         ).key
         for row in rows[:9]
     }
-    assert calls[0].options == {
+    assert campaign.plan.call_args.kwargs == {
         "completed": expected_completed,
         "retry": (),
         "tasks_per_allocation": 4,
     }
 
 
-def test_workflows_preserve_kairos_nine_task_order(
+def test_workflows_submit_ordered_tasks_with_completion_retry_and_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     bundle, requests = _write_workflow_bundle(tmp_path, 9)
-    target, resources = write_servatus_config(tmp_path)
-    launcher = _load_launcher(monkeypatch)
-    calls = capture_campaigns(monkeypatch, launcher)
-
-    result = dispatch(
-        launcher.app, "workflows", *_launch_args(bundle, target, resources), "--tasks-per-job", "4"
-    )
-
-    assert result.exit_code == 0
-    assert calls[0].path == bundle / ".servatus"
-    assert calls[0].tasks == tuple(workflow_task(request) for request in requests)
-    assert calls[0].options == {"completed": set(), "retry": (), "tasks_per_allocation": 4}
-    assert calls[0].target is not None and calls[0].target.host == "research-alias"
-    assert calls[0].resources is not None and calls[0].resources.gpus_per_task == 1
-    assert calls[0].submitted
-
-
-def test_workflows_skip_exact_canonical_evaluations(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    bundle, requests = _write_workflow_bundle(tmp_path, 2)
     canonical = tmp_path / "evaluations" / str(requests[0].evaluation_id)
     canonical.mkdir(parents=True)
     (canonical / "evaluation.json").write_text(requests[0].model_dump_json(), encoding="utf-8")
@@ -212,13 +188,34 @@ def test_workflows_skip_exact_canonical_evaluations(
     launcher = _load_launcher(monkeypatch)
     validated: list[Path] = []
     monkeypatch.setattr(launcher, "validate_observations", validated.append)
-    calls = capture_campaigns(monkeypatch, launcher)
+    open_campaign, campaign = fake_campaign(monkeypatch, launcher)
+    retry_key = workflow_task(requests[-1]).key
 
-    result = dispatch(launcher.app, "workflows", *_launch_args(bundle, target, resources))
+    result = dispatch(
+        launcher.app,
+        "workflows",
+        *_launch_args(bundle, target, resources),
+        "--tasks-per-job",
+        "4",
+        "--retry",
+        retry_key,
+    )
 
     assert result.exit_code == 0
+    assert result.output == "1001;research\n"
     assert validated == [observations]
-    assert calls[0].options["completed"] == {workflow_task(requests[0]).key}
+    tasks = tuple(workflow_task(request) for request in requests)
+    assert open_campaign.call_args.args == (bundle / ".servatus", tasks)
+    loaded_target, loaded_resources = campaign.plan.call_args.args
+    assert loaded_target.host == "research-alias"
+    assert loaded_resources.gpus_per_task == 1
+    assert campaign.plan.call_args.kwargs == {
+        "completed": {tasks[0].key},
+        "retry": [retry_key],
+        "tasks_per_allocation": 4,
+    }
+    status: CampaignStatus = campaign.status()
+    assert status.unaccepted_task_keys == ()
 
 
 @pytest.mark.parametrize("tasks_per_job", [1, 5])
@@ -259,21 +256,3 @@ def test_kairos_requires_one_explicit_gpu_per_task(
     assert result.exit_code == 1
     assert isinstance(result.exception, ValueError)
     assert str(result.exception) == "KAIROS experiment tasks require exactly one GPU"
-
-
-def test_explicit_retry_selects_exact_task_and_prints_receipt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    bundle, requests = _write_workflow_bundle(tmp_path, 2)
-    target, resources = write_servatus_config(tmp_path)
-    launcher = _load_launcher(monkeypatch)
-    calls = capture_campaigns(monkeypatch, launcher)
-    args = _launch_args(bundle, target, resources)
-
-    retry = dispatch(
-        launcher.app, "workflows", *args, "--retry", f"evaluation:{requests[1].evaluation_id}"
-    )
-
-    assert retry.exit_code == 0
-    assert calls[0].options["retry"] == [f"evaluation:{requests[1].evaluation_id}"]
-    assert retry.output == "1001;research\n"

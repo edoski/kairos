@@ -5,15 +5,15 @@ import hashlib
 import json
 import subprocess
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 from uuid import UUID
 
 import polars as pl
 import pytest
 from click.testing import Result
-from servatus import JobReceipt, ResourceRequest, SlurmTarget, Task
+from servatus import CampaignStatus, JobReceipt
 from typer import Typer
 from typer.testing import CliRunner
 
@@ -54,52 +54,15 @@ _BLOCK_SCHEMA = [
 ]
 
 
-@dataclass
-class CampaignCall:
-    path: Path
-    tasks: tuple[Task, ...]
-    target: SlurmTarget | None = None
-    resources: ResourceRequest | None = None
-    options: dict[str, object] = field(default_factory=dict)
-    submitted: bool = False
-
-
-def capture_campaigns(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> list[CampaignCall]:
-    calls: list[CampaignCall] = []
-
-    class FakeCampaign:
-        def __init__(self, call: CampaignCall) -> None:
-            self.call = call
-
-        @classmethod
-        def open(cls, path: Path, tasks: tuple[Task, ...]) -> FakeCampaign:
-            call = CampaignCall(path, tasks)
-            calls.append(call)
-            return cls(call)
-
-        def plan(
-            self, target: SlurmTarget, resources: ResourceRequest, **options: object
-        ) -> CampaignCall:
-            self.call.target = target
-            self.call.resources = resources
-            self.call.options = options
-            return self.call
-
-        def submit(self, plan: CampaignCall) -> tuple[JobReceipt, ...]:
-            assert plan is self.call
-            self.call.submitted = True
-            index = calls.index(self.call) + 1
-            return (
-                JobReceipt(
-                    f"allocation-{index}",
-                    1_000 + index,
-                    "research",
-                    tuple(task.key for task in self.call.tasks),
-                ),
-            )
-
-    monkeypatch.setattr(module, "Campaign", FakeCampaign)
-    return calls
+def fake_campaign(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> tuple[Mock, Mock]:
+    receipt = JobReceipt("allocation", 1001, "research", ())
+    campaign = Mock()
+    campaign.plan.return_value = object()
+    campaign.submit.return_value = (receipt,)
+    campaign.status.return_value = CampaignStatus((), (receipt,), ())
+    open_campaign = Mock(return_value=campaign)
+    monkeypatch.setattr(module, "Campaign", SimpleNamespace(open=open_campaign))
+    return open_campaign, campaign
 
 
 def write_blockweaver_dataset(

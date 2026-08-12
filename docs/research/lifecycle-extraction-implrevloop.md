@@ -2279,7 +2279,9 @@ or its scratch, Campaign, jobs, or outputs.
 
 #### Post-release source audit S1: Servatus owned-seam deletion
 
-Status: evidence-approved; implementation and a possible `0.5.1` release are not yet authorized.
+Status: user-approved for local implementation and independent review. Because S2 is also approved
+and changes a documented behavior contract, S1 and S2 prepare one clean `0.6.0` candidate rather
+than an intermediate `0.5.1`. Publication remains a separate external gate.
 
 Baseline: exact reviewed and published Servatus 0.5.0 head
 `79ee407c431d1f9c0510e9462d5136fa7b58319d`.
@@ -2325,7 +2327,7 @@ behavior, or KAIROS ownership seam. Each retained check has one owning raw/racy 
 
 #### Post-release source audit S2: quiescent-source linearization
 
-Status: decision-required and deferred; not approved for implementation.
+Status: user-approved for local implementation and independent review after S1 GREEN.
 
 Candidate scope:
 
@@ -2343,6 +2345,13 @@ Expected outcome if later approved:
 Roughly 25-40 more source lines and two misleading partial-concurrency concepts disappear. This is
 not a mechanical cleanup: it deliberately narrows the same-account threat model and must be
 decided, documented, implemented, and reviewed separately from S1.
+
+Approved decision: the atomic hard-link operation is the source-inode linearization point, and a
+trusted builder must stop mutating draft inputs before returning. Servatus continues to reject
+unsafe linked entries, verify pathname/inode identity, sync published contents, commit without
+clobber, and sync the publication parent. S2 updates package/docs/lock to `0.6.0`; build and inspect
+artifacts locally, but do not push, tag, release, publish, or repin KAIROS until separately
+authorized.
 
 The still larger proposal to delete regular-file cleanup hard-link pinning is rejected for this
 run. It can save another roughly 35-40 lines, but it weakens exact cleanup-target retention for a

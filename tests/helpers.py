@@ -5,11 +5,15 @@ import hashlib
 import json
 import subprocess
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import ModuleType
 from uuid import UUID
 
 import polars as pl
+import pytest
 from click.testing import Result
+from servatus import JobReceipt, ResourceRequest, SlurmTarget, Task
 from typer import Typer
 from typer.testing import CliRunner
 
@@ -48,6 +52,54 @@ _BLOCK_SCHEMA = [
     {"name": "effective_priority_fee_per_gas_p50", "type": "Int64", "unit": "wei/gas"},
     {"name": "effective_priority_fee_per_gas_p90", "type": "Int64", "unit": "wei/gas"},
 ]
+
+
+@dataclass
+class CampaignCall:
+    path: Path
+    tasks: tuple[Task, ...]
+    target: SlurmTarget | None = None
+    resources: ResourceRequest | None = None
+    options: dict[str, object] = field(default_factory=dict)
+    submitted: bool = False
+
+
+def capture_campaigns(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> list[CampaignCall]:
+    calls: list[CampaignCall] = []
+
+    class FakeCampaign:
+        def __init__(self, call: CampaignCall) -> None:
+            self.call = call
+
+        @classmethod
+        def open(cls, path: Path, tasks: tuple[Task, ...]) -> FakeCampaign:
+            call = CampaignCall(path, tasks)
+            calls.append(call)
+            return cls(call)
+
+        def plan(
+            self, target: SlurmTarget, resources: ResourceRequest, **options: object
+        ) -> CampaignCall:
+            self.call.target = target
+            self.call.resources = resources
+            self.call.options = options
+            return self.call
+
+        def submit(self, plan: CampaignCall) -> tuple[JobReceipt, ...]:
+            assert plan is self.call
+            self.call.submitted = True
+            index = calls.index(self.call) + 1
+            return (
+                JobReceipt(
+                    f"allocation-{index}",
+                    1_000 + index,
+                    "research",
+                    tuple(task.key for task in self.call.tasks),
+                ),
+            )
+
+    monkeypatch.setattr(module, "Campaign", FakeCampaign)
+    return calls
 
 
 def write_blockweaver_dataset(

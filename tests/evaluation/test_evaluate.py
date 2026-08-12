@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 import pytest
 import torch
-from servatus import DestinationExists, Workspace
+from servatus import DestinationExists
 from torch import nn
 
 import kairos.evaluation as evaluation_module
@@ -251,7 +251,8 @@ def test_evaluate_rejects_owned_association(
         evaluation_module.evaluate(request, tmp_path)
 
     canonical = evaluation_directory(tmp_path, request.evaluation_id)
-    assert Workspace(canonical, identity=request.model_dump_json().encode()).path.is_dir()
+    assert not canonical.exists()
+    assert list(canonical.parent.iterdir()) == []
 
 
 def test_evaluate_rejects_known_collision_before_loading(
@@ -273,7 +274,7 @@ def test_evaluate_rejects_known_collision_before_loading(
     assert not loaded
 
 
-def test_evaluate_preserves_forensic_work_when_canonical_appears_before_publication(
+def test_evaluate_discards_work_when_canonical_appears_during_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _write_corpus(tmp_path, _CORPUS_ID)
@@ -297,12 +298,32 @@ def test_evaluate_preserves_forensic_work_when_canonical_appears_before_publicat
 
     request = _request()
     canonical.parent.mkdir()
-    work = Workspace(canonical, identity=request.model_dump_json().encode()).path
     with pytest.raises(DestinationExists):
         evaluation_module.evaluate(request, tmp_path)
 
     assert (canonical / "occupied").read_text(encoding="utf-8") == "occupied"
-    assert sorted(path.name for path in work.iterdir()) == [
-        "evaluation.json",
-        "observations.parquet",
-    ]
+    assert sorted(path.name for path in canonical.parent.iterdir()) == [str(_EVALUATION_ID)]
+
+
+def test_evaluate_discards_failed_publication_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_corpus(tmp_path, _CORPUS_ID)
+    association = _association()
+    monkeypatch.setattr(
+        evaluation_module,
+        "load_artifact",
+        lambda storage_root, artifact_id: (association, _Model()),
+    )
+    monkeypatch.setattr(
+        evaluation_module,
+        "collect_observations",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("evaluation failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="evaluation failed"):
+        evaluation_module.evaluate(_request(), tmp_path)
+
+    evaluations = tmp_path / "evaluations"
+    assert evaluations.is_dir()
+    assert list(evaluations.iterdir()) == []

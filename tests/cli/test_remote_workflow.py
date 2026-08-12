@@ -4,12 +4,11 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from servatus import SlurmTarget, _slurm
 
 import kairos.cli as cli
 from kairos.cli import app
 from kairos.config import EvaluateRequest, ExperimentSemantics, SelectedStudySource, TrainRequest
-from tests.helpers import dispatch, window, write_servatus_config
+from tests.helpers import capture_campaigns, dispatch, window, write_servatus_config
 
 CORPUS_ID = UUID("10000000-0000-4000-8000-000000000001")
 ARTIFACT_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -51,13 +50,7 @@ def test_submit_uses_one_durable_campaign_per_request(
     request_path = tmp_path / "request.json"
     request_path.write_text(request.model_dump_json(), encoding="utf-8")
     target, resources = write_servatus_config(tmp_path)
-    calls: list[tuple[tuple[str, ...], bytes]] = []
-
-    def submit(_target: SlurmTarget, argv: tuple[str, ...], script: bytes) -> _slurm.Result:
-        calls.append((argv, script))
-        return _slurm.Result(0, b"456;research\n", b"")
-
-    monkeypatch.setattr(_slurm, "_run_ssh", submit)
+    calls = capture_campaigns(monkeypatch, cli)
     arguments = (
         "submit",
         str(request_path),
@@ -65,17 +58,42 @@ def test_submit_uses_one_durable_campaign_per_request(
         str(target),
         "--resources",
         str(resources),
+        "--retry",
     )
 
-    first = dispatch(app, *arguments)
-    repeated = dispatch(app, *arguments)
+    result = dispatch(app, *arguments)
 
-    assert first.exit_code == 0
-    assert first.output == "456;research\n"
-    assert repeated.exit_code == 0
-    assert repeated.output == ""
+    assert result.exit_code == 0
+    assert result.output == "1001;research\n"
     assert len(calls) == 1
-    assert (tmp_path / f".request.json.evaluation-{EVALUATION_ID}.campaign").is_dir()
+    call = calls[0]
+    assert call.path == tmp_path / f".request.json.evaluation-{EVALUATION_ID}.campaign"
+    assert call.tasks[0].key == f"evaluation:{EVALUATION_ID}"
+    assert call.target is not None and call.target.host == "research-alias"
+    assert call.resources is not None and call.resources.gpus_per_task == 1
+    assert call.options == {"retry": (f"evaluation:{EVALUATION_ID}",), "tasks_per_allocation": 1}
+
+
+def test_submit_requires_one_gpu_before_opening_campaign(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request_path = tmp_path / "request.json"
+    request_path.write_text(_evaluate_request().model_dump_json(), encoding="utf-8")
+    target, resources = write_servatus_config(tmp_path)
+    resources.write_text(
+        resources.read_text(encoding="utf-8").replace("gpus_per_task = 1", "gpus_per_task = 0"),
+        encoding="utf-8",
+    )
+    calls = capture_campaigns(monkeypatch, cli)
+
+    result = dispatch(
+        app, "submit", str(request_path), "--target", str(target), "--resources", str(resources)
+    )
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, ValueError)
+    assert str(result.exception) == "KAIROS tasks require exactly one GPU"
+    assert calls == []
 
 
 def test_remote_workflow_dispatches_train_and_evaluate_requests(

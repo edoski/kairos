@@ -672,8 +672,8 @@ Evaluation separates canonical self-contained observations from transient metric
 
 For every eligible origin the evaluation publisher owns construction of one ordered, nonnull observation containing `h_i`, `hat{k}_i`,
 `k_i*`, `hat{ell}_i`, `B_i(0)`, `P_i(0)`, `B_i(hat{k}_i)`, `P_i(hat{k}_i)`,
-`B_i(K-1)`, `P_i(K-1)`, and `m_i` under the canonical field names. A request-bound Servatus
-workspace publishes the validated pair to:
+`B_i(K-1)`, `P_i(K-1)`, and `m_i` under the canonical field names. One disposable Servatus
+publication attempt builds and publishes the validated pair to:
 
 ```text
 evaluations/<evaluation_id>/
@@ -849,8 +849,9 @@ reference. Hour and day-of-week sine/cosine coordinates each remain one indivisi
 `experiments/launch.py candidates BUNDLE` submits its cells at a selected two- to four-GPU node
 capacity. It uses the fewest balanced allocations and avoids singleton tails when possible: nine
 pending cells at capacity four become `3 + 3 + 3`. After all canonical
-Studies exist, `close STORAGE_ROOT EXPERIMENT_ID` publishes the canonical manifest and removes
-the temporary bundle; `report` derives each chain/configuration mean from canonical Studies.
+Studies exist, `close STORAGE_ROOT EXPERIMENT_ID` publishes the canonical manifest and retires the
+owner-only authored bundle in the same post-commit transaction; `report` derives each
+chain/configuration mean from canonical Studies.
 
 Study bundles keep each complete Method roster inside its TuneRequest. Their `cells.tsv` rows
 carry the request path, zero-based `method_index`, and Study ID; they do not write separate Method
@@ -858,7 +859,8 @@ JSON files. Packed launch maps the rows to opaque tasks and stores Servatus camp
 `.servatus/` in the bundle. A repeated launch resumes from durable receipts and canonical
 completion checks; an explicit `--retry TASK_KEY` resubmits only named accepted work. Closure
 validates every referenced canonical record and publishes a manifest-only directory. The authored
-bundle and campaign state are removed only after the manifest commits.
+bundle and opaque campaign state are retired only after the manifest commits; failed verification
+or publication preserves the whole authored bundle for retry.
 
 Before closure, an experiment author's hidden `cells.tsv` is its active cell-to-record roster;
 consumers use it only to locate records that are already canonical. After closure, the manifest
@@ -955,7 +957,9 @@ load_artifact(
 
 #### Evaluation object
 
-`evaluation.json` is exactly the `EvaluateRequest`. `observations.parquet` is the canonical schema below. Reductions are transient views over this directory.
+`evaluation.json` is exactly the `EvaluateRequest`. `observations.parquet` is the canonical schema
+below. Reductions are transient views over this directory. Failed evaluation publication is
+disposable and recomputed; Artifact and Study work remain resumable.
 
 ### CLI
 

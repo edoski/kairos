@@ -5,12 +5,11 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from servatus import JobReceipt, ResourceRequest, SlurmTarget, Task
 
 import kairos.cli as cli
 from kairos.cli import app
 from kairos.config import ExperimentSemantics, FitMethod, LstmDefinition, Method, TuneRequest
-from tests.helpers import dispatch, window, write_servatus_config
+from tests.helpers import capture_campaigns, dispatch, window, write_servatus_config
 
 STUDY_ID = UUID("10000000-0000-4000-8000-000000000001")
 CORPUS_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -51,28 +50,7 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
     request_path = tmp_path / "TUNE_REQUEST.json"
     request_path.write_text(REQUEST.model_dump_json(), encoding="utf-8")
     target_path, resource_path = write_servatus_config(tmp_path)
-    calls: list[tuple[Path, tuple[Task, ...], SlurmTarget, ResourceRequest]] = []
-
-    class FakeCampaign:
-        def __init__(self, path: Path, tasks: tuple[Task, ...]) -> None:
-            self.path = path
-            self.tasks = tasks
-
-        @classmethod
-        def open(cls, path: Path, tasks: tuple[Task, ...]) -> FakeCampaign:
-            return cls(path, tasks)
-
-        def plan(
-            self, target: SlurmTarget, resources: ResourceRequest, **options: object
-        ) -> object:
-            assert options == {"retry": (), "tasks_per_allocation": 1}
-            calls.append((self.path, self.tasks, target, resources))
-            return object()
-
-        def submit(self, _plan: object) -> tuple[JobReceipt, ...]:
-            return (JobReceipt("allocation", 123, None, (self.tasks[0].key,)),)
-
-    monkeypatch.setattr(cli, "Campaign", FakeCampaign)
+    calls = capture_campaigns(monkeypatch, cli)
 
     result = dispatch(
         app,
@@ -87,22 +65,23 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
     )
 
     assert result.exit_code == 0
-    assert result.output == "123\n"
+    assert result.output == "1001;research\n"
     assert len(calls) == 1
-    campaign_path, tasks, target, resources = calls[0]
-    assert campaign_path == request_path.with_name(
+    call = calls[0]
+    assert call.path == request_path.with_name(
         f".{request_path.name}.study-{STUDY_ID}-method-0.campaign"
     )
-    assert tasks[0].key == f"study:{STUDY_ID}:method:0"
-    assert tasks[0].args == ("remote", "candidate")
-    assert tasks[0].stdin == (
+    assert call.tasks[0].key == f"study:{STUDY_ID}:method:0"
+    assert call.tasks[0].args == ("remote", "candidate")
+    assert call.tasks[0].stdin == (
         json.dumps(
             {"request": REQUEST.model_dump(mode="json"), "method_index": 0}, separators=(",", ":")
         ).encode()
         + b"\n"
     )
-    assert target.host == "research-alias"
-    assert resources.gpus_per_task == 1
+    assert call.target is not None and call.target.host == "research-alias"
+    assert call.resources is not None and call.resources.gpus_per_task == 1
+    assert call.options == {"retry": (), "tasks_per_allocation": 1}
 
 
 def test_remote_candidate_dispatches_input(monkeypatch: pytest.MonkeyPatch) -> None:

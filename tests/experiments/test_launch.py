@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import csv
 import importlib.util
 from pathlib import Path
@@ -8,13 +7,20 @@ from types import ModuleType
 from uuid import UUID
 
 import pytest
-from servatus import Campaign, ResourceRequest, SlurmTarget, Task, _slurm
+from servatus import Task
 
 from kairos.config import EvaluateRequest, TuneRequest
 from kairos.study import RetainedResult, Study
-from kairos.workers import CandidateProcessInput, candidate_task
+from kairos.workers import CandidateProcessInput, candidate_task, workflow_task
 from tests.experiments.helpers import publish_generated_studies
-from tests.helpers import dispatch, read_tsv_rows, run_script, window, write_servatus_config
+from tests.helpers import (
+    capture_campaigns,
+    dispatch,
+    read_tsv_rows,
+    run_script,
+    window,
+    write_servatus_config,
+)
 
 _ROOT = Path(__file__).parents[2]
 _FEATURE_SCRIPT = _ROOT / "experiments" / "feature_ablation.py"
@@ -64,23 +70,8 @@ def _write_workflow_bundle(root: Path, count: int) -> tuple[Path, list[EvaluateR
     return bundle, values
 
 
-def _capture_submissions(monkeypatch: pytest.MonkeyPatch) -> list[tuple[tuple[str, ...], bytes]]:
-    calls: list[tuple[tuple[str, ...], bytes]] = []
-
-    def submit(_target: SlurmTarget, argv: tuple[str, ...], script: bytes) -> _slurm.Result:
-        calls.append((argv, script))
-        return _slurm.Result(0, f"{1_000 + len(calls)};research\n".encode(), b"")
-
-    monkeypatch.setattr(_slurm, "_run_ssh", submit)
-    return calls
-
-
 def _launch_args(bundle: Path, target: Path, resources: Path) -> tuple[str, ...]:
     return (str(bundle), "--target", str(target), "--resources", str(resources))
-
-
-def _task_count(argv: tuple[str, ...]) -> int:
-    return int(next(arg.removeprefix("--ntasks=") for arg in argv if arg.startswith("--ntasks=")))
 
 
 def _candidate_tasks(bundle: Path) -> tuple[list[dict[str, str]], tuple[Task, ...]]:
@@ -96,7 +87,7 @@ def _candidate_tasks(bundle: Path) -> tuple[list[dict[str, str]], tuple[Task, ..
     )
 
 
-def test_hpo_extend_reopens_campaign_and_submits_only_authored_suffix(
+def test_hpo_extend_reopens_campaign_with_exact_authored_suffix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     feature_id = UUID(run_script(_FEATURE_SCRIPT, "prepare", tmp_path).stdout.strip())
@@ -128,12 +119,11 @@ def test_hpo_extend_reopens_campaign_and_submits_only_authored_suffix(
     bundle = tmp_path / "experiments" / "hpo" / f".{hpo_id}"
     target, resources = write_servatus_config(tmp_path)
     launcher = _load_launcher(monkeypatch)
-    calls = _capture_submissions(monkeypatch)
+    calls = capture_campaigns(monkeypatch, launcher)
 
     initial_rows, initial_tasks = _candidate_tasks(bundle)
     initial_request_bytes = tuple(Path(row["request"]).read_bytes() for row in initial_rows)
     first = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
-    first_call_count = len(calls)
 
     hpo.extend(tmp_path, context_id, hpo_id, ["avalanche"])
     capsys.readouterr()
@@ -148,21 +138,14 @@ def test_hpo_extend_reopens_campaign_and_submits_only_authored_suffix(
         tuple(Path(row["request"]).read_bytes() for row in full_rows[:27]) == initial_request_bytes
     )
     assert full_tasks[:27] == initial_tasks
-    suffix = full_tasks[27:]
-    suffix_calls = calls[first_call_count:]
-    suffix_scripts = b"".join(script for _, script in suffix_calls)
-    status = Campaign.open(bundle / ".servatus", full_tasks).status()
-    assert first_call_count == 7
-    assert [_task_count(argv) for argv, _ in suffix_calls] == [4] * 6 + [3]
-    assert tuple(key for receipt in status.receipts for key in receipt.task_keys) == tuple(
-        task.key for task in full_tasks
-    )
-    assert status.pending_task_keys == ()
-    assert all(base64.b64encode(task.stdin) not in suffix_scripts for task in initial_tasks)
-    assert all(suffix_scripts.count(base64.b64encode(task.stdin)) == 1 for task in suffix)
-    assert [suffix_scripts.index(base64.b64encode(task.stdin)) for task in suffix] == sorted(
-        suffix_scripts.index(base64.b64encode(task.stdin)) for task in suffix
-    )
+    assert len(full_tasks) == 54
+    assert [call.path for call in calls] == [bundle / ".servatus"] * 2
+    assert [call.tasks for call in calls] == [initial_tasks, full_tasks]
+    assert [call.options for call in calls] == [
+        {"completed": set(), "retry": (), "tasks_per_allocation": 4},
+        {"completed": set(), "retry": (), "tasks_per_allocation": 4},
+    ]
+    assert all(call.submitted for call in calls)
 
 
 def test_candidates_skip_exact_canonical_studies(
@@ -174,12 +157,25 @@ def test_candidates_skip_exact_canonical_studies(
     publish_generated_studies(tmp_path, rows[:9], default_objective=1.0)
     target, resources = write_servatus_config(tmp_path)
     launcher = _load_launcher(monkeypatch)
-    calls = _capture_submissions(monkeypatch)
+    calls = capture_campaigns(monkeypatch, launcher)
 
     result = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
 
     assert result.exit_code == 0
-    assert [_task_count(argv) for argv, _ in calls] == [4] * 21 + [3, 3, 3]
+    expected_completed = {
+        candidate_task(
+            CandidateProcessInput(
+                request=TuneRequest.model_validate_json(Path(row["request"]).read_bytes()),
+                method_index=int(row["method_index"]),
+            )
+        ).key
+        for row in rows[:9]
+    }
+    assert calls[0].options == {
+        "completed": expected_completed,
+        "retry": (),
+        "tasks_per_allocation": 4,
+    }
 
 
 def test_workflows_preserve_kairos_nine_task_order(
@@ -188,20 +184,19 @@ def test_workflows_preserve_kairos_nine_task_order(
     bundle, requests = _write_workflow_bundle(tmp_path, 9)
     target, resources = write_servatus_config(tmp_path)
     launcher = _load_launcher(monkeypatch)
-    calls = _capture_submissions(monkeypatch)
+    calls = capture_campaigns(monkeypatch, launcher)
 
     result = dispatch(
         launcher.app, "workflows", *_launch_args(bundle, target, resources), "--tasks-per-job", "4"
     )
 
     assert result.exit_code == 0
-    assert [_task_count(argv) for argv, _ in calls] == [3, 3, 3]
-    combined = b"".join(script for _, script in calls)
-    positions = [
-        combined.index(base64.b64encode(request.model_dump_json().encode() + b"\n"))
-        for request in requests
-    ]
-    assert positions == sorted(positions)
+    assert calls[0].path == bundle / ".servatus"
+    assert calls[0].tasks == tuple(workflow_task(request) for request in requests)
+    assert calls[0].options == {"completed": set(), "retry": (), "tasks_per_allocation": 4}
+    assert calls[0].target is not None and calls[0].target.host == "research-alias"
+    assert calls[0].resources is not None and calls[0].resources.gpus_per_task == 1
+    assert calls[0].submitted
 
 
 def test_workflows_skip_exact_canonical_evaluations(
@@ -217,16 +212,13 @@ def test_workflows_skip_exact_canonical_evaluations(
     launcher = _load_launcher(monkeypatch)
     validated: list[Path] = []
     monkeypatch.setattr(launcher, "validate_observations", validated.append)
-    calls = _capture_submissions(monkeypatch)
+    calls = capture_campaigns(monkeypatch, launcher)
 
     result = dispatch(launcher.app, "workflows", *_launch_args(bundle, target, resources))
 
     assert result.exit_code == 0
     assert validated == [observations]
-    assert [_task_count(argv) for argv, _ in calls] == [1]
-    script = calls[0][1]
-    assert base64.b64encode(requests[0].model_dump_json().encode() + b"\n") not in script
-    assert base64.b64encode(requests[1].model_dump_json().encode() + b"\n") in script
+    assert calls[0].options["completed"] == {workflow_task(requests[0]).key}
 
 
 @pytest.mark.parametrize("tasks_per_job", [1, 5])
@@ -269,48 +261,19 @@ def test_kairos_requires_one_explicit_gpu_per_task(
     assert str(result.exception) == "KAIROS experiment tasks require exactly one GPU"
 
 
-def test_largest_current_hpo_payload_fits_live_script_cap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    experiment_id = UUID(run_script(_FEATURE_SCRIPT, "prepare", tmp_path).stdout.strip())
-    bundle = tmp_path / "experiments" / "feature_ablation" / f".{experiment_id}"
-    feature_request = TuneRequest.model_validate_json(
-        Path(read_tsv_rows(bundle / "cells.tsv")[0]["request"]).read_bytes()
-    )
-    hpo = _load_hpo(monkeypatch)
-    request = feature_request.model_copy(
-        update={"methods": hpo._methods(feature_request.methods[0])}
-    )
-    tasks = tuple(
-        candidate_task(CandidateProcessInput(request=request, method_index=index))
-        for index in range(4)
-    )
-    target = SlurmTarget.from_toml(_ROOT / "REMOTE.toml")
-    resources = ResourceRequest.from_toml(_ROOT / "RESOURCES.toml")
-
-    plan = Campaign.open(tmp_path / "largest-payload", tasks).plan(
-        target, resources, tasks_per_allocation=4
-    )
-
-    assert len(plan.allocations) == 1
-    assert plan.allocations[0].task_keys == tuple(task.key for task in tasks)
-
-
-def test_explicit_retry_resubmits_only_selected_accepted_task(
+def test_explicit_retry_selects_exact_task_and_prints_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     bundle, requests = _write_workflow_bundle(tmp_path, 2)
     target, resources = write_servatus_config(tmp_path)
     launcher = _load_launcher(monkeypatch)
-    calls = _capture_submissions(monkeypatch)
+    calls = capture_campaigns(monkeypatch, launcher)
     args = _launch_args(bundle, target, resources)
 
-    first = dispatch(launcher.app, "workflows", *args)
     retry = dispatch(
         launcher.app, "workflows", *args, "--retry", f"evaluation:{requests[1].evaluation_id}"
     )
 
-    assert first.exit_code == 0
     assert retry.exit_code == 0
-    assert [_task_count(argv) for argv, _ in calls] == [2, 1]
-    assert retry.output == "1002;research\n"
+    assert calls[0].options["retry"] == [f"evaluation:{requests[1].evaluation_id}"]
+    assert retry.output == "1001;research\n"

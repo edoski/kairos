@@ -2438,7 +2438,7 @@ Scope:
   the separate Blockweaver task owns later v0.3.3/K1 adoption after this handoff.
 - Update directly affected active dependency documentation only. Do not add transition tests or
   mirror artifact hashes in product tests.
-- Run root/mobile locks and frozen syncs, root/mobile/App tests, Ruff check/format, strict Pyright,
+- Run root/mobile locks and frozen syncs, root/mobile/App tests, Ruff check/format, configured Pyright,
   manually verified Vulture, installed Servatus 0.6.0 public API/CLI/link publication smoke,
   residue/diff/status checks, and independent fixed-range review.
 - Do not integrate main/compact, push KAIROS, build an image, edit `REMOTE.toml`, touch outputs/data/
@@ -2449,6 +2449,23 @@ Expected outcome:
 One reviewed KAIROS client head uses the public Servatus 0.6.0 contract with exact reproducible
 locks and no source behavior change. C6 may then integrate that head into current main and
 compact-CUDA while the Blockweaver task remains paused.
+
+Implementation and review record:
+
+- C5B implementation `1756a93b66b82803b11dac0d2fc9bc115f586f8d` is one clean commit from
+  exact C5A head `919e93bb`; only root/mobile `pyproject.toml` and `uv.lock` changed, net zero lines.
+  Both pins are `servatus==0.6.0` and both locks contain the exact published wheel/sdist hashes.
+  Blockweaver remains 0.3.2 and every dataset/corpus boundary remains untouched. Independent review
+  returned GREEN with Standards 0 and Spec 0. Gates passed 104 root, 9 mobile, and 43 App tests;
+  root/mobile lock and frozen-sync checks; Ruff check/format; repository-configured Pyright;
+  Vulture; App typecheck/dry install; installed public 0.6.0 API/CLI/hard-link publication smokes;
+  residue, protected-diff, and status checks.
+- Accuracy correction: `pyrightconfig.json` explicitly uses `typeCheckingMode: standard`; historical
+  ledger wording calling the gate “strict Pyright” was inaccurate. Literal strict mode currently
+  reports 34 pre-existing source errors and is a separate cleanup, not a C5B defect or integration
+  gate. Final records use “configured Pyright.” Reviewer smoke attempts first assumed nonexistent
+  convenience attributes before the corrected public metadata/`cleanup_pending` smoke passed;
+  those command mistakes were not product findings.
 
 #### Rejected consolidation findings
 

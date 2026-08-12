@@ -23,9 +23,10 @@ uv sync
 
 ## Quick start
 
-Place each completed canonical Corpus pair at
-`STORAGE_ROOT/corpora/<UUID>/corpus.json` and `blocks.parquet`. Corpus production is external to
-KAIROS. Create workflow requests from the [request reference](docs/KAIROS.md#requests-and-definitions).
+Place each completed Blockweaver dataset at
+`STORAGE_ROOT/datasets/<UUID>/manifest.json` and `blocks.parquet`. KAIROS uses the dataset UUID as
+its Corpus ID and reads the artifact through Blockweaver's strict public loader. Create workflow
+requests from the [request reference](docs/KAIROS.md#requests-and-definitions).
 
 Submit one or more training or evaluation requests:
 

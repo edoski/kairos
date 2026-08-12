@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Accepted for Study, artifact, and evaluation objects. The Corpus clause is superseded by
+[ADR 0009](0009-blockweaver-dataset-authority.md).
 
 ## Context
 
@@ -10,15 +11,15 @@ KAIROS objects must preserve enough authority to interpret corpora, studies, art
 
 ## Decision
 
-UUIDv4 values identify instances. Each completed object owns its exact typed request once at a direct canonical address:
+UUIDv4 values identify instances. Corpus authority is external under ADR 0009. Each remaining
+completed object owns its exact typed request once at a direct canonical address:
 
-- `corpora/<corpus_id>/corpus.json` and `blocks.parquet`;
 - `studies/<study_id>/study.json`, with each ordered trial's `selected.ckpt` and
   `validation.parquet` under `trials/<method_index>/`;
 - `artifacts/<artifact_id>/artifact.ckpt`, `validation.parquet`, and `result.json`;
 - `evaluations/<evaluation_id>/evaluation.json` and `observations.parquet`.
 
-Typed requests, embedded associations, and the selected Study result index plus exact Method establish meaning. Corpus, Study, and artifact loaders validate the requested UUID and association. Each completed fit retains its selected checkpoint and one deterministic pass over the exact validation window. Validation and testing use the same observation schema and transient reducer. Evaluation publication validates its inputs before atomically publishing the request and observations at the requested evaluation address.
+Typed requests, embedded associations, and the selected Study result index plus exact Method establish meaning. Study and artifact loaders validate the requested UUID and association. Each completed fit retains its selected checkpoint and one deterministic pass over the exact validation window. Validation and testing use the same observation schema and transient reducer. Evaluation publication validates its inputs before atomically publishing the request and observations at the requested evaluation address.
 
 Before an experiment closes, another experiment author may read its hidden authored `cells.tsv`
 to identify canonical records that already exist. After closure, the manifest is authoritative.

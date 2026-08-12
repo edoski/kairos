@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from uuid import UUID
+
+import numpy as np
+import polars as pl
 
 from kairos.config import (
     BlockWindow,
@@ -17,7 +19,7 @@ from kairos.config import (
 from kairos.experiments import ExperimentKind, ExperimentManifest, experiment_manifest_path
 from kairos.study import RetainedResult, Study
 from tests.experiments.helpers import publish_test_study
-from tests.helpers import read_tsv_rows, run_script
+from tests.helpers import read_tsv_rows, run_script, write_blockweaver_dataset
 
 _ROOT = Path(__file__).parents[2]
 _K_STUDY_SCRIPT = _ROOT / "experiments" / "k_study.py"
@@ -103,19 +105,22 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(tmp_path: Pat
     canonical_path = experiment_manifest_path(tmp_path, ExperimentKind.K_STUDY, k_experiment_id)
     canonical_path.parent.mkdir(parents=True)
     canonical_path.write_text(k_manifest.model_dump_json(), encoding="utf-8")
-    corpus_path = tmp_path / "corpora" / str(_CORPUS_ID) / "corpus.json"
-    corpus_path.parent.mkdir(parents=True)
-    corpus_path.write_text(
-        json.dumps(
+    blocks = np.arange(1_001, dtype=np.int64)
+    write_blockweaver_dataset(
+        tmp_path,
+        _CORPUS_ID,
+        pl.DataFrame(
             {
-                "request": {
-                    "corpus_id": str(_CORPUS_ID),
-                    "definition": {"chain_id": 1, "first_block": 0, "last_block": 1_000},
-                },
-                "finalized_anchor": {"block_number": 1_000, "block_hash": "0" * 64},
+                "block_number": blocks,
+                "timestamp": blocks,
+                "base_fee_per_gas": blocks + 1,
+                "gas_used": blocks,
+                "gas_limit": blocks + 1,
+                "tx_count": blocks,
+                "effective_priority_fee_per_gas_p50": blocks,
+                "effective_priority_fee_per_gas_p90": blocks,
             }
         ),
-        encoding="utf-8",
     )
 
     held_out_id = UUID(

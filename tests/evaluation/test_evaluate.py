@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import stat
 from pathlib import Path
 from typing import Any, Self
@@ -15,17 +14,12 @@ from torch import nn
 
 import kairos.evaluation as evaluation_module
 from kairos.addresses import (
-    corpus_blocks_path,
-    corpus_directory,
-    corpus_json_path,
     evaluation_directory,
     evaluation_json_path,
     evaluation_observations_path,
 )
 from kairos.config import (
     BlockWindow,
-    CorpusDefinition,
-    CorpusRequest,
     EvaluateRequest,
     ExperimentSemantics,
     FitMethod,
@@ -37,6 +31,7 @@ from kairos.config import (
 from kairos.min_block_fee import MinBlockFeeOutput, TargetState
 from kairos.modeling import ArtifactAssociation
 from kairos.temporal import FeatureState
+from tests.helpers import write_blockweaver_dataset
 
 _CORPUS_ID = UUID("10000000-0000-4000-8000-000000000001")
 _OTHER_CORPUS_ID = UUID("10000000-0000-4000-8000-000000000002")
@@ -149,33 +144,24 @@ def _association(experiment: ExperimentSemantics | None = None) -> ArtifactAssoc
 
 
 def _write_corpus(storage_root: Path, corpus_id: UUID) -> None:
-    request = CorpusRequest(
-        corpus_id=corpus_id, definition=CorpusDefinition(chain_id=9, first_block=10, last_block=30)
-    )
-    corpus_directory(storage_root, corpus_id).mkdir(parents=True)
-    corpus_json_path(storage_root, corpus_id).write_text(
-        json.dumps(
+    blocks = np.arange(10, 31, dtype=np.int64)
+    write_blockweaver_dataset(
+        storage_root,
+        corpus_id,
+        pl.DataFrame(
             {
-                "request": request.model_dump(mode="json"),
-                "finalized_anchor": {"block_number": 30, "block_hash": "a" * 64},
+                "block_number": blocks,
+                "timestamp": _TIMESTAMPS,
+                "base_fee_per_gas": _BASE_FEES,
+                "gas_used": np.arange(30, 51, dtype=np.int64),
+                "gas_limit": np.full(blocks.size, 100, dtype=np.int64),
+                "tx_count": np.arange(5, 26, dtype=np.int64),
+                "effective_priority_fee_per_gas_p50": np.arange(blocks.size, dtype=np.int64),
+                "effective_priority_fee_per_gas_p90": 2 * np.arange(blocks.size, dtype=np.int64),
             }
         ),
-        encoding="utf-8",
+        chain_id=9,
     )
-    blocks = np.arange(10, 31, dtype=np.int64)
-    pl.DataFrame(
-        {
-            "block_number": blocks,
-            "timestamp": _TIMESTAMPS,
-            "chain_id": np.full(blocks.size, 9, dtype=np.int64),
-            "base_fee_per_gas": _BASE_FEES,
-            "gas_used": np.arange(30, 51, dtype=np.int64),
-            "gas_limit": np.full(blocks.size, 100, dtype=np.int64),
-            "tx_count": np.arange(5, 26, dtype=np.int64),
-            "effective_priority_fee_per_gas_p50": np.arange(blocks.size, dtype=np.int64),
-            "effective_priority_fee_per_gas_p90": 2 * np.arange(blocks.size, dtype=np.int64),
-        }
-    ).write_parquet(corpus_blocks_path(storage_root, corpus_id))
 
 
 def _request(

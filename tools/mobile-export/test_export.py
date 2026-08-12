@@ -78,12 +78,12 @@ def _install_artifact_fakes(
         corpus_id: mobile_export._CHAINS[chain] for chain, corpus_id in _CORPUS_IDS.items()
     }
 
-    def load_corpus_request(storage_root: Path, corpus_id: UUID) -> object:
+    def load_corpus_definition(storage_root: Path, corpus_id: UUID) -> object:
         del storage_root
-        return SimpleNamespace(definition=SimpleNamespace(chain_id=chain_ids[corpus_id]))
+        return SimpleNamespace(chain_id=chain_ids[corpus_id])
 
     monkeypatch.setattr(mobile_export, "load_artifact", load_artifact)
-    monkeypatch.setattr(mobile_export, "load_corpus_request", load_corpus_request)
+    monkeypatch.setattr(mobile_export, "load_corpus_definition", load_corpus_definition)
 
 
 @pytest.mark.usefixtures("umask_0002")
@@ -162,14 +162,14 @@ def test_export_bundle_rejects_artifact_association_mismatch(
 
         monkeypatch.setattr(mobile_export, "load_artifact", load_artifact)
     else:
-        fake_load_corpus_request = mobile_export.load_corpus_request
+        fake_load_corpus_definition = mobile_export.load_corpus_definition
 
-        def load_corpus_request(storage_root: Path, corpus_id: UUID) -> object:
+        def load_corpus_definition(storage_root: Path, corpus_id: UUID) -> object:
             if corpus_id == _CORPUS_IDS["ethereum"]:
-                return SimpleNamespace(definition=SimpleNamespace(chain_id=137))
-            return fake_load_corpus_request(storage_root, corpus_id)
+                return SimpleNamespace(chain_id=137)
+            return fake_load_corpus_definition(storage_root, corpus_id)
 
-        monkeypatch.setattr(mobile_export, "load_corpus_request", load_corpus_request)
+        monkeypatch.setattr(mobile_export, "load_corpus_definition", load_corpus_definition)
 
     with pytest.raises(ValueError, match=message):
         mobile_export.export_bundle(tmp_path / "storage", roster_path, tmp_path / "models")

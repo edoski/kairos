@@ -1,23 +1,19 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from uuid import UUID
 
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from kairos.addresses import corpus_blocks_path, corpus_json_path
-from kairos.config import CorpusDefinition, CorpusRequest
-from kairos.corpus import load_corpus_blocks
+from kairos.config import CorpusDefinition
+from kairos.corpus import load_corpus_blocks, load_corpus_definition
+from tests.helpers import write_blockweaver_dataset
 
 CORPUS_ID = UUID("11111111-1111-4111-8111-111111111111")
-OTHER_CORPUS_ID = UUID("22222222-2222-4222-8222-222222222222")
 BLOCK_SCHEMA = {
     "block_number": pl.Int64,
     "timestamp": pl.Int64,
-    "chain_id": pl.Int64,
     "base_fee_per_gas": pl.Int64,
     "gas_used": pl.Int64,
     "gas_limit": pl.Int64,
@@ -27,53 +23,51 @@ BLOCK_SCHEMA = {
 }
 
 
-def _request() -> CorpusRequest:
-    return CorpusRequest(
-        corpus_id=CORPUS_ID,
-        definition=CorpusDefinition(chain_id=1, first_block=100, last_block=102),
-    )
-
-
-def _valid_document() -> dict[str, object]:
-    return {
-        "request": _request().model_dump(mode="json"),
-        "finalized_anchor": {"block_number": 103, "block_hash": "a" * 64},
-    }
-
-
 def _valid_blocks() -> pl.DataFrame:
     return pl.DataFrame(
         [
-            (100, 1_000, 1, 100, 50, 100, 10, 1, 2),
-            (101, 1_012, 1, 101, 51, 100, 11, 2, 4),
-            (102, 1_024, 1, 102, 52, 100, 12, 0, 0),
+            (100, 1_000, 100, 50, 100, 10, 1, 2),
+            (101, 1_012, 101, 51, 100, 11, 2, 4),
+            (102, 1_024, 102, 52, 100, 12, 0, 0),
         ],
         schema=BLOCK_SCHEMA,
         orient="row",
     )
 
 
-def _write_corpus(root: Path, document: dict[str, object], blocks: pl.DataFrame) -> None:
-    corpus_json_path(root, CORPUS_ID).parent.mkdir(parents=True)
-    corpus_json_path(root, CORPUS_ID).write_text(json.dumps(document), encoding="utf-8")
-    blocks.write_parquet(corpus_blocks_path(root, CORPUS_ID))
-
-
-def test_load_corpus_blocks_reads_one_valid_canonical_pair(tmp_path) -> None:
+def test_load_corpus_reads_one_valid_blockweaver_dataset(tmp_path) -> None:
     blocks = _valid_blocks()
-    _write_corpus(tmp_path, _valid_document(), blocks)
+    write_blockweaver_dataset(tmp_path, CORPUS_ID, blocks, chain_id=137)
 
     loaded = load_corpus_blocks(tmp_path, CORPUS_ID)
 
+    assert loaded.definition == CorpusDefinition(chain_id=137, first_block=100, last_block=102)
     assert_frame_equal(loaded.to_polars(), blocks)
+    assert load_corpus_definition(tmp_path, CORPUS_ID) == loaded.definition
 
 
-def test_load_corpus_blocks_rejects_a_mismatched_request_uuid(tmp_path) -> None:
-    document = _valid_document()
-    request = document["request"]
-    assert isinstance(request, dict)
-    request["corpus_id"] = str(OTHER_CORPUS_ID)
-    _write_corpus(tmp_path, document, _valid_blocks())
+@pytest.mark.parametrize(
+    ("blocks", "output_format"),
+    [
+        pytest.param(_valid_blocks(), "csv", id="csv"),
+        pytest.param(
+            _valid_blocks()
+            .with_columns(pl.Series("block_hash", ["0x" + character * 64 for character in "abc"]))
+            .select("block_number", "timestamp", "block_hash", *_valid_blocks().columns[2:]),
+            "parquet",
+            id="feature-superset",
+        ),
+        pytest.param(
+            _valid_blocks().drop("effective_priority_fee_per_gas_p90"),
+            "parquet",
+            id="missing-feature",
+        ),
+    ],
+)
+def test_load_corpus_rejects_noncanonical_kairos_projection(
+    tmp_path, blocks: pl.DataFrame, output_format: str
+) -> None:
+    write_blockweaver_dataset(tmp_path, CORPUS_ID, blocks, output_format=output_format)
 
-    with pytest.raises(ValueError, match="UUID"):
+    with pytest.raises(ValueError, match="Parquet|schema"):
         load_corpus_blocks(tmp_path, CORPUS_ID)

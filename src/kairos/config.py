@@ -43,11 +43,6 @@ class CorpusDefinition(StrictFrozenRecord):
     last_block: int
 
 
-class CorpusRequest(StrictFrozenRecord):
-    corpus_id: UUID4
-    definition: CorpusDefinition
-
-
 class BlockWindow(StrictFrozenRecord):
     first_parent_block: _NonNegativeInt
     last_parent_block: _NonNegativeInt

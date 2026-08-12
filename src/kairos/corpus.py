@@ -1,21 +1,19 @@
-"""Canonical block rows and loading."""
+"""Scientific block rows loaded from Blockweaver datasets."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import polars as pl
+from blockweaver import Dataset, open_dataset
 from pydantic import UUID4
 
-from .addresses import corpus_blocks_path, corpus_json_path
-from .config import CorpusDefinition, CorpusRequest
+from .config import CorpusDefinition
 
 _SCHEMA = pl.Schema(
     {
         "block_number": pl.Int64,
         "timestamp": pl.Int64,
-        "chain_id": pl.Int64,
         "base_fee_per_gas": pl.Int64,
         "gas_used": pl.Int64,
         "gas_limit": pl.Int64,
@@ -24,6 +22,7 @@ _SCHEMA = pl.Schema(
         "effective_priority_fee_per_gas_p90": pl.Int64,
     }
 )
+_COLUMNS = tuple(_SCHEMA.names())
 
 
 class BlockFrame:
@@ -62,16 +61,28 @@ class BlockFrame:
         return self._frame.clone()
 
 
-def load_corpus_request(storage_root: Path, corpus_id: UUID4) -> CorpusRequest:
-    document = json.loads(corpus_json_path(storage_root, corpus_id).read_text(encoding="utf-8"))
-    request = CorpusRequest.model_validate_json(json.dumps(document["request"]))
-    if request.corpus_id != corpus_id:
-        raise ValueError("Corpus request UUID does not match the requested corpus")
-    return request
+def _open_corpus_dataset(storage_root: Path, corpus_id: UUID4) -> Dataset:
+    return open_dataset(storage_root / "datasets" / str(corpus_id))
+
+
+def _definition(dataset: Dataset) -> CorpusDefinition:
+    return CorpusDefinition(
+        chain_id=dataset.chain_id, first_block=dataset.first_block, last_block=dataset.last_block
+    )
+
+
+def load_corpus_definition(storage_root: Path, corpus_id: UUID4) -> CorpusDefinition:
+    """Load the scientific identity and range for one Blockweaver dataset."""
+
+    return _definition(_open_corpus_dataset(storage_root, corpus_id))
 
 
 def load_corpus_blocks(storage_root: Path, corpus_id: UUID4) -> BlockFrame:
-    request = load_corpus_request(storage_root, corpus_id)
-    return BlockFrame(
-        pl.read_parquet(corpus_blocks_path(storage_root, corpus_id)), request.definition
-    )
+    """Load one exact KAIROS projection from a verified Blockweaver dataset."""
+
+    dataset = _open_corpus_dataset(storage_root, corpus_id)
+    if dataset.output_format != "parquet":
+        raise ValueError("KAIROS corpora require a Parquet Blockweaver dataset")
+    if dataset.schema != _COLUMNS:
+        raise ValueError(f"KAIROS corpus schema must be exactly {_COLUMNS}, got {dataset.schema}")
+    return BlockFrame(pl.read_parquet(dataset.data_path), _definition(dataset))

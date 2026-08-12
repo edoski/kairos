@@ -18,7 +18,7 @@ from servatus import Draft, publish
 from torch import nn
 
 from kairos.config import FeatureName
-from kairos.corpus import load_corpus_request
+from kairos.corpus import load_corpus_definition
 from kairos.modeling import load_artifact
 
 _Chain = Literal["ethereum", "polygon", "avalanche"]
@@ -79,7 +79,7 @@ def _load_cells(storage_root: Path, roster: _Roster) -> dict[str, dict[int, _Cel
                 raise ValueError(f"{chain} K={horizon} artifact has the wrong horizon")
 
             corpus_id = association.request.source.corpus_id
-            artifact_chain_id = load_corpus_request(storage_root, corpus_id).definition.chain_id
+            artifact_chain_id = load_corpus_definition(storage_root, corpus_id).chain_id
             if artifact_chain_id != chain_id:
                 raise ValueError(f"{chain} K={horizon} artifact has the wrong chain")
 

@@ -6,18 +6,6 @@ from pathlib import Path
 from uuid import UUID
 
 
-def corpus_directory(storage_root: Path, corpus_id: UUID) -> Path:
-    return storage_root / "corpora" / str(corpus_id)
-
-
-def corpus_json_path(storage_root: Path, corpus_id: UUID) -> Path:
-    return corpus_directory(storage_root, corpus_id) / "corpus.json"
-
-
-def corpus_blocks_path(storage_root: Path, corpus_id: UUID) -> Path:
-    return corpus_directory(storage_root, corpus_id) / "blocks.parquet"
-
-
 def study_directory(storage_root: Path, study_id: UUID) -> Path:
     return storage_root / "studies" / str(study_id)
 

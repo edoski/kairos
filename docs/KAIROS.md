@@ -20,7 +20,7 @@ KAIROS is organized around strict request values, direct owner functions, native
 ### System shape
 
 ```text
-completed canonical Corpus pair
+verified Blockweaver dataset
         |
         v
 strict workflow request --> CLI or direct Python call
@@ -51,7 +51,8 @@ corpus / study / min_block_fee / workers
 
 This high-level diagram summarizes the production import direction. Direct owner seams are:
 
-- `corpus` owns canonical `BlockFrame` row access and Corpus request hydration.
+- `corpus` maps a verified Blockweaver dataset to canonical `BlockFrame` rows and a
+  `CorpusDefinition`.
 - `temporal` owns causal feature state, fixed-block context/outcome geometry, and lazy historical examples.
 - `min_block_fee` owns target state, the fixed training loss, two-head output, and decode.
 - `modeling` owns request-bound candidate and selected fitting, the three concrete neural
@@ -62,7 +63,8 @@ This high-level diagram summarizes the production import direction. Direct owner
 
 The closed model union is LSTM, Transformer, or Transformer-LSTM. Historical preparation supplies lazy contiguous CPU-backed examples; each model consumes float32 `[B,C,F]` and returns action logits `[B,K]` plus standardized minimum-fee prediction `[B]`. Architecture stays independent of target construction and evaluation accounting.
 
-Corpus production is external. KAIROS delegates native remote execution and publication mechanics
+Blockweaver owns Corpus artifact production and validation
+([ADR 0009](adr/0009-blockweaver-dataset-authority.md)). KAIROS delegates native remote execution and publication mechanics
 at the Servatus lifecycle boundary ([ADR 0008](adr/0008-servatus-lifecycle-boundary.md)). Completed
 objects own one exact request at direct canonical addresses; UUIDs identify instances and typed
 associations establish meaning ([ADR 0006](adr/0006-direct-durable-object-authority.md)).
@@ -541,18 +543,19 @@ in [Exact reference](#exact-reference).
 
 ### Corpus input
 
-KAIROS consumes one completed canonical Corpus pair. Corpus production is external.
+KAIROS consumes one immutable Blockweaver dataset. The Blockweaver UUID is the KAIROS Corpus ID.
 
 ```text
-corpora/<corpus_id>/
-  corpus.json
+datasets/<corpus_id>/
+  manifest.json
   blocks.parquet
 ```
 
-`corpus.json` stores the exact `CorpusRequest` and one finalized anchor. `blocks.parquet` stores the
-requested contiguous rows in block-number order with the exact nine-column canonical schema
-documented in the [reference](#corpus-object). `load_corpus_blocks()` hydrates the request, checks the
-requested UUID and exact Parquet schema, and constructs the canonical `BlockFrame`.
+`blockweaver.open_dataset()` validates the UUID-bound manifest, artifact digest, source and
+verification facts, resolved range, schema, row domains, and exact two-file publication.
+`load_corpus_blocks()` then requires Parquet and KAIROS's exact ordered eight-column projection,
+derives `CorpusDefinition` from the dataset chain and range, and constructs `BlockFrame`.
+`load_corpus_definition()` reads the same validated metadata without hydrating the frame.
 
 `BlockFrame(frame, definition)` is the public canonical-row interface. Its `definition` identifies the exact owned range, `select_range(first_block, last_block)` returns an inclusive subrange, and `to_polars()` returns an isolated native frame. Construction checks the exact schema and native access isolates caller mutation. Range selection is positional and does not rescan rows. The value carries neither hashes nor finality provenance.
 
@@ -712,8 +715,6 @@ Distribution name, import root, and installed executable are `kairos`; the stati
 | `CorpusDefinition` | `chain_id` | int |
 |  | `first_block` | int |
 |  | `last_block` | int |
-| `CorpusRequest` | `corpus_id` | UUIDv4 |
-|  | `definition` | `CorpusDefinition` |
 
 #### Scientific semantics
 
@@ -790,8 +791,8 @@ Direct construction defaults each workflow discriminator and mints the destinati
 Given an explicit `storage_root`:
 
 ```text
-corpora/<corpus_id>/corpus.json
-corpora/<corpus_id>/blocks.parquet
+datasets/<corpus_id>/manifest.json
+datasets/<corpus_id>/blocks.parquet
 experiments/{feature_ablation,c_study,hpo,k_study,held_out}/<UUID>/manifest.json
 studies/<study_id>/study.json
 studies/<study_id>/trials/<method_index>/selected.ckpt
@@ -805,38 +806,32 @@ evaluations/<evaluation_id>/observations.parquet
 
 IDs are lowercase UUID strings produced by `str(UUID)` and appear directly in the paths above.
 
-#### Corpus object
+#### Corpus input
 
-`corpus.json` has exactly:
-
-```text
-request: CorpusRequest
-finalized_anchor:
-  block_number: integer >= 0
-  block_hash: 64 lowercase hexadecimal characters
-```
-
-`blocks.parquet` has this exact ordered, nonnull schema:
+The directory is one strict Blockweaver dataset. Its `manifest.json` is the sole artifact authority
+for UUID, chain, resolved range, provenance, verification, schema, and output digest. KAIROS accepts
+only `blocks.parquet` with this exact ordered, nonnull projection:
 
 | # | Column | Type | Unit/rule |
 | ---: | --- | --- | --- |
 | 1 | `block_number` | Int64 | contiguous inclusive request range |
 | 2 | `timestamp` | Int64 | nonnegative seconds; nondecreasing |
-| 3 | `chain_id` | Int64 | equals request chain |
-| 4 | `base_fee_per_gas` | Int64 | positive wei/gas |
-| 5 | `gas_used` | Int64 | gas, `0≤used≤limit` |
-| 6 | `gas_limit` | Int64 | positive gas |
-| 7 | `tx_count` | Int64 | nonnegative transaction count |
-| 8 | `effective_priority_fee_per_gas_p50` | Int64 | nonnegative gas-used-weighted P50 among included transactions, wei/gas |
-| 9 | `effective_priority_fee_per_gas_p90` | Int64 | nonnegative gas-used-weighted P90 among included transactions, wei/gas |
+| 3 | `base_fee_per_gas` | Int64 | positive wei/gas |
+| 4 | `gas_used` | Int64 | gas, `0≤used≤limit` |
+| 5 | `gas_limit` | Int64 | positive gas |
+| 6 | `tx_count` | Int64 | nonnegative transaction count |
+| 7 | `effective_priority_fee_per_gas_p50` | Int64 | nonnegative gas-used-weighted P50 among included transactions, wei/gas |
+| 8 | `effective_priority_fee_per_gas_p90` | Int64 | nonnegative gas-used-weighted P90 among included transactions, wei/gas |
 
 Direct loader:
 
 ```python
 load_corpus_blocks(storage_root: Path, corpus_id: UUID4) -> BlockFrame
+load_corpus_definition(storage_root: Path, corpus_id: UUID4) -> CorpusDefinition
 ```
 
-The loader validates the embedded request UUID and uses its definition to construct the returned `BlockFrame`. The request remains independently available through `load_corpus_request()`. Finalized-anchor metadata remains part of the durable producer format but is not represented in memory.
+Both loaders resolve `storage_root / "datasets" / str(corpus_id)` through
+`blockweaver.open_dataset()`. Chain identity remains in `CorpusDefinition`, not in every block row.
 
 #### Experiment manifest
 
@@ -1016,7 +1011,7 @@ The isolated `tools/mobile-export` project pins Torch 2.11 and ExecuTorch 1.2 wi
 Every cell must match artifact identity, chain, horizon, shared feature contract, native output
 semantics, eager-to-XNNPACK host parity, selected action, and decoded-fee tolerance. At least one
 delegate across the exported program's execution plans must have exact ID `XnnpackBackend`. The
-exporter reads only the Corpus request needed for chain identity and publishes all twelve models
+exporter reads only the Corpus definition needed for chain identity and publishes all twelve models
 plus one manifest through one Servatus transaction:
 
 ```text

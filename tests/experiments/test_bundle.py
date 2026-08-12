@@ -55,6 +55,7 @@ def test_close_preserves_bundle_after_verifier_failure_then_retries(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     bundle = open_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID)
+    assert stat.S_IMODE(bundle.stat().st_mode) == 0o700
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
     campaign = bundle / ".servatus"
     campaign.mkdir()
@@ -109,7 +110,10 @@ def test_publication_failure_preserves_authored_bundle(
     sentinel = campaign / "sentinel"
     sentinel.write_bytes(b"opaque campaign state")
 
-    def fail_publication(_destination: object, _assemble: object) -> None:
+    def fail_publication(
+        _destination: object, _assemble: object, *, retire: object | None = None
+    ) -> None:
+        assert retire == bundle
         raise RuntimeError("publication failed")
 
     monkeypatch.setattr(bundle_module, "publish", fail_publication)

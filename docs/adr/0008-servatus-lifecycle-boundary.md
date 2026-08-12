@@ -22,8 +22,8 @@ immutable image contents, and every scientific request, association, schema, and
 
 ADR 0006 remains authoritative for canonical objects. KAIROS chooses each destination, identity,
 file roster, and validation rule; Servatus implements the transaction that preserves resumable work
-and publishes the assembled files without overwrite. Corpus production remains external, and a
-future Blockweaver-owned external dataset boundary remains outside Servatus.
+or disposable work, publishes assembled files without overwrite, and retires an owner-only authored
+bundle only after its manifest commits. Corpus production remains external under ADR 0009.
 
 ## Consequences
 

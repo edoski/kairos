@@ -6,10 +6,16 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from typing import Any
+from unittest.mock import Mock
 from uuid import UUID
 
 import polars as pl
+import pytest
 from click.testing import Result
+from servatus import JobReceipt
+from torch.utils.data import DataLoader, Dataset
 from typer import Typer
 from typer.testing import CliRunner
 
@@ -48,6 +54,16 @@ _BLOCK_SCHEMA = [
     {"name": "effective_priority_fee_per_gas_p50", "type": "Int64", "unit": "wei/gas"},
     {"name": "effective_priority_fee_per_gas_p90", "type": "Int64", "unit": "wei/gas"},
 ]
+
+
+def fake_campaign(monkeypatch: pytest.MonkeyPatch, module: ModuleType) -> tuple[Mock, Mock]:
+    receipt = JobReceipt("allocation", 1001, "research", ())
+    campaign = Mock()
+    campaign.plan.return_value = object()
+    campaign.submit.return_value = (receipt,)
+    open_campaign = Mock(return_value=campaign)
+    monkeypatch.setattr(module, "Campaign", SimpleNamespace(open=open_campaign))
+    return open_campaign, campaign
 
 
 def write_blockweaver_dataset(
@@ -156,6 +172,12 @@ def write_servatus_config(root: Path) -> tuple[Path, Path]:
 
 def dispatch(app: Typer, *arguments: str, input: str | None = None) -> Result:
     return CliRunner().invoke(app, list(arguments), input=input)
+
+
+def single_process_loader(
+    dataset: Dataset[Any], *, batch_size: int, shuffle: bool
+) -> DataLoader[Any]:
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
 def window(first: int) -> BlockWindow:

@@ -214,15 +214,11 @@ def export_bundle(
     roster_path: Path,
     output_directory: Path,
 ) -> None:
-    if output_directory.exists():
-        raise FileExistsError(output_directory)
-
-    roster = _load_roster(roster_path)
-    cells = _load_cells(storage_root, roster)
-
     output_directory.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
 
     def build(draft: Draft) -> None:
+        roster = _load_roster(roster_path)
+        cells = _load_cells(storage_root, roster)
         for chain in _CHAINS:
             for horizon in _HORIZONS:
                 _export_model(cells[chain][horizon], draft.path / f"{chain}-k{horizon}.pte")

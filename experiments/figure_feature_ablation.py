@@ -15,11 +15,6 @@ from matplotlib.colors import TwoSlopeNorm
 from kairos.experiments import ExperimentKind, load_experiment_manifest
 from kairos.study import load_study
 
-
-def _objective(storage_root: Path, study_id: UUID) -> float:
-    return load_study(storage_root, study_id).trials[0].objective
-
-
 _FEATURE_LABELS = {
     "base_fee": "Base fee",
     "gas_utilization": "Gas utilization",
@@ -63,7 +58,9 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
             configurations_by_chain[chain].append(configuration)
         if configuration.startswith("without_") and configuration not in configurations:
             configurations.append(configuration)
-        objectives[chain, family, configuration] = _objective(storage_root, study_id)
+        objectives[chain, family, configuration] = (
+            load_study(storage_root, study_id).trials[0].objective
+        )
 
     configurations.sort(key=lambda value: value == "without_exact_forming_base_fee")
 

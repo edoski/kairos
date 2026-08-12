@@ -24,7 +24,6 @@ from kairos.observations import validate_observations
 from kairos.study import load_study
 from kairos.workers import CandidateProcessInput, candidate_task, workflow_task
 
-_MAX_TASKS_PER_JOB = 4
 _CAMPAIGN_DIRECTORY = ".servatus"
 _TargetPath = Annotated[Path, typer.Option("--target", dir_okay=False, readable=True)]
 _ResourcePath = Annotated[Path, typer.Option("--resources", dir_okay=False, readable=True)]
@@ -33,7 +32,7 @@ _RetryKeys = Annotated[list[str] | None, typer.Option("--retry", metavar="TASK_K
 
 def candidates(
     bundle: Path,
-    tasks_per_job: int = _MAX_TASKS_PER_JOB,
+    tasks_per_job: int | None = None,
     target: _TargetPath = Path("REMOTE.toml"),
     resources: _ResourcePath = Path("RESOURCES.toml"),
     retry: _RetryKeys = None,
@@ -61,7 +60,7 @@ def candidates(
 
 def workflows(
     bundle: Path,
-    tasks_per_job: int = _MAX_TASKS_PER_JOB,
+    tasks_per_job: int | None = None,
     target: _TargetPath = Path("REMOTE.toml"),
     resources: _ResourcePath = Path("RESOURCES.toml"),
     retry: _RetryKeys = None,
@@ -86,16 +85,13 @@ def workflows(
 def _launch(
     bundle: Path,
     tasks: Sequence[Task],
-    tasks_per_job: int,
+    tasks_per_job: int | None,
     target_path: Path,
     resource_path: Path,
     *,
     completed: Collection[str],
     retry: Collection[str],
 ) -> None:
-    if not 2 <= tasks_per_job <= _MAX_TASKS_PER_JOB:
-        raise ValueError("tasks per job must be between two and four")
-
     target = SlurmTarget.from_toml(target_path)
     resources = ResourceRequest.from_toml(resource_path)
     if resources.gpus_per_task != 1:

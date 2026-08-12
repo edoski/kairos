@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import shutil
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
@@ -42,6 +41,7 @@ def bundle_path(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -
 def open_bundle(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -> Path:
     bundle = bundle_path(storage_root, kind, experiment_id)
     bundle.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    bundle.mkdir(mode=0o700)
     (bundle / "requests").mkdir(parents=True)
     return bundle
 
@@ -136,9 +136,7 @@ def publish_bundle(
     def assemble(draft: Draft) -> None:
         (draft.path / "manifest.json").write_text(manifest.model_dump_json(), encoding="utf-8")
 
-    publish(canonical, assemble)
-
-    shutil.rmtree(bundle)
+    publish(canonical, assemble, retire=bundle)
 
 
 def close_bundle(

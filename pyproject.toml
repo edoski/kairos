@@ -11,6 +11,7 @@ authors = [
   { name = "Edoardo" }
 ]
 dependencies = [
+  "blockweaver==0.3.2",
   "numpy>=1.26",
   "polars>=1.5",
   "torch==2.7.1",

@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 import polars as pl
 
-from kairos.addresses import evaluation_directory
+from kairos.addresses import artifact_directory, evaluation_directory
 from kairos.config import (
     BlockWindow,
     ExperimentSemantics,
@@ -29,6 +29,7 @@ _FIGURE_SCRIPTS = {
     ExperimentKind.FEATURE_ABLATION: _ROOT / "experiments" / "figure_feature_ablation.py",
     ExperimentKind.C_STUDY: _ROOT / "experiments" / "figure_context_study.py",
     ExperimentKind.HPO: _ROOT / "experiments" / "figure_hpo.py",
+    ExperimentKind.K_STUDY: _ROOT / "experiments" / "figure_k_study.py",
     ExperimentKind.HELD_OUT: _ROOT / "experiments" / "figure_held_out.py",
 }
 _FIT = FitMethod(
@@ -187,9 +188,50 @@ def test_context_and_hpo_figures_use_canonical_study_objectives(tmp_path: Path) 
     assert (context_figure.read_bytes(), hpo_figure.read_bytes()) == expected
 
 
-def _publish_evaluation(
-    storage_root: Path, evaluation_id: UUID, horizon: int, actions: list[int]
-) -> None:
+def test_k_study_figures_use_canonical_artifact_observations(tmp_path: Path) -> None:
+    cells = {}
+    for chain in ("ethereum", "polygon", "avalanche"):
+        for horizon, action in ((2, 0), (5, 4)):
+            artifact_id = uuid4()
+            observations = artifact_directory(tmp_path, artifact_id) / "validation.parquet"
+            observations.parent.mkdir(parents=True)
+            _observation_frame(horizon, [action]).write_parquet(observations)
+            cells[f"{chain}.lstm.K{horizon}"] = artifact_id
+    experiment_id = _publish_manifest(tmp_path, ExperimentKind.K_STUDY, cells)
+    output = tmp_path / "figures"
+
+    result = run_script(
+        _FIGURE_SCRIPTS[ExperimentKind.K_STUDY],
+        tmp_path,
+        experiment_id,
+        "--output-directory",
+        output,
+    )
+
+    predictive = output / "horizon-validation-predictive.pdf"
+    economic = output / "horizon-validation-economic.pdf"
+    economic_detail = output / "horizon-validation-economic-k25.pdf"
+    _assert_pdf(predictive)
+    _assert_pdf(economic)
+    _assert_pdf(economic_detail)
+    assert result.stdout.splitlines() == [str(predictive), str(economic), str(economic_detail)]
+    expected = predictive.read_bytes(), economic.read_bytes(), economic_detail.read_bytes()
+
+    run_script(
+        _FIGURE_SCRIPTS[ExperimentKind.K_STUDY],
+        tmp_path,
+        experiment_id,
+        "--output-directory",
+        output,
+    )
+    assert (
+        predictive.read_bytes(),
+        economic.read_bytes(),
+        economic_detail.read_bytes(),
+    ) == expected
+
+
+def _observation_frame(horizon: int, actions: list[int]) -> pl.DataFrame:
     base_fees = {101: 100, 102: 80, 103: 60, 104: 40, 105: 20}
     priority_fees = {block: fee // 10 for block, fee in base_fees.items()}
     rows = []
@@ -214,9 +256,15 @@ def _publish_evaluation(
                 "minimum_base_fee_per_gas": outcome_fees[minimum_action],
             }
         )
+    return pl.DataFrame(rows, schema=OBSERVATION_SCHEMA)
+
+
+def _publish_evaluation(
+    storage_root: Path, evaluation_id: UUID, horizon: int, actions: list[int]
+) -> None:
     directory = evaluation_directory(storage_root, evaluation_id)
     directory.mkdir(parents=True)
-    pl.DataFrame(rows, schema=OBSERVATION_SCHEMA).write_parquet(directory / "observations.parquet")
+    _observation_frame(horizon, actions).write_parquet(directory / "observations.parquet")
 
 
 def test_held_out_figure_uses_canonical_reducers_for_horizon_and_rolling_plots(

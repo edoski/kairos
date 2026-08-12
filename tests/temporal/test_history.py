@@ -20,7 +20,6 @@ def _blocks(first_block: int = 10, last_block: int = 29) -> BlockFrame:
         {
             "block_number": blocks,
             "timestamp": blocks * 12,
-            "chain_id": np.ones(blocks.size, dtype=np.int64),
             "base_fee_per_gas": _BASE_FEES,
             "gas_used": 35 + np.arange(blocks.size, dtype=np.int64),
             "gas_limit": np.full(blocks.size, 100, dtype=np.int64),
@@ -123,7 +122,6 @@ def test_interval_feature_uses_a_real_predecessor_outside_the_context() -> None:
         {
             "block_number": blocks,
             "timestamp": timestamps,
-            "chain_id": np.ones(blocks.size, dtype=np.int64),
             "base_fee_per_gas": np.concatenate((np.array([13]), _BASE_FEES)),
             "gas_used": 34 + np.arange(blocks.size, dtype=np.int64),
             "gas_limit": np.full(blocks.size, 100, dtype=np.int64),

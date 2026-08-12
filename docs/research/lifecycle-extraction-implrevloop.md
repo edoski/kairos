@@ -1,9 +1,10 @@
 # Generic lifecycle extraction implementation-review ledger
 
-Status: implementation program complete; extraction, main, and compact-CUDA reviews green; product
-refs published; protected user work restored. Final choreography reviews and fast-forwards
-ledger-only completion commits, then removes the lifecycle-scoped final compact review worktree
-before handoff. The separate inference-benchmark scientific-readiness gate remains open.
+Status: initial extraction program complete; consolidation plan reviewed and awaiting execution
+approval. Planning baselines are clean KAIROS `c0021cb99fa1c28295059a1cc827d6d68afca633`
+and clean Servatus
+`2ccf749e2a4c3f5ad7ca572ee34fe78e5b1bb78f`. The separate inference-benchmark
+scientific-readiness gate remains open.
 
 This ledger is the planning authority for extracting KAIROS's generic remote-work and durable-work
 lifecycle into a reusable standalone repository.
@@ -1948,7 +1949,598 @@ recorded below
   now mode `0755`; only group/other write permission was removed. No thesis output, active or
   queued job, queue state, production object content, or old campaign state was changed.
 
-### Final external deployment gates
+### Consolidation planning pass
+
+Status: planning GREEN; product implementation awaits explicit approval
+
+Immutable planning state:
+
+- KAIROS `main` is clean at `c0021cb99fa1c28295059a1cc827d6d68afca633`, two local user commits
+  ahead of published `origin/main`: `7cca6fcb` and `c0021cb9`. Its only worktree is the pre-existing
+  main checkout. Pre-existing `codex/compact-cuda-execution` remains outside run ownership.
+- Servatus `main` is clean at `2ccf749e2a4c3f5ad7ca572ee34fe78e5b1bb78f`, exactly public
+  release `v0.4.1`, with one pre-existing main worktree.
+- Planning may update only this ledger. It creates no branch or worktree and contacts no Slurm,
+  SSH, Apptainer, output, dataset, campaign, or external publication surface.
+
+Execution checkout and review policy:
+
+- Planning ends with one ledger-only KAIROS commit. Product implementation does not begin until the
+  user approves this plan.
+- On approval, create one recorded run-owned Servatus integration branch/worktree from exact
+  `2ccf749e` and one recorded run-owned KAIROS integration branch/worktree from the accepted
+  planning head. Leave both existing main worktrees and the pre-existing compact-CUDA branch
+  untouched until reviewed final integration. Record paths, branches, refs, and clean status.
+- Each slice starts from the exact clean prior accepted head. A fresh implementer must read and use
+  the `implement` skill, commit only its slice, report its SHA/checks, and never edit this ledger or
+  self-review. The orchestrator verifies the repository range before review.
+- A distinct fresh reviewer must read and use the `code-review` skill against the fixed baseline and
+  head, run Standards and Spec as separate axes, and return GREEN only with zero findings on both.
+  Rejections return to the same implementer; correction deltas return to the same reviewer until
+  GREEN. Only then may the ledger advance and the next baseline be recorded.
+- No push, release, PyPI publication, image build, Slurm job, production configuration change, or
+  destructive cleanup follows from this plan. Each external gate requires its stated later
+  authority. Remove only run-owned branches/worktrees/evidence after their commits are integrated;
+  preserve every pre-existing ref and checkout.
+
+Governing outcome:
+
+- Servatus should own as much reusable ML/GPU-project execution, runtime, durable-state,
+  filesystem, publication, retirement, cleanup, retry, and reconciliation mechanics as can form a
+  deep generic module. KAIROS should retain only task meaning, scientific completion, typed
+  requests and associations, canonical paths and schemas, manifests, metrics, model/checkpoint
+  meaning, and project/site policy.
+- KAIROS must use only a small public Servatus interface. It must not know or test private Servatus
+  state filenames, schemas, locks, stages, transport helpers, cleanup implementation, or other
+  incidental details.
+- The consolidation should make both repositories leaner, simpler, easier to read, and more local.
+  Moving a line without hiding reusable complexity fails the deletion test; convenience wrappers,
+  plugin seams, DAG/HPO abstractions, and one-off KAIROS concepts are non-goals.
+- Servatus remains strict at raw configuration, serialized state, filesystem, subprocess,
+  scheduler-receipt, ownership, symlink, inode, locking, no-clobber, durability, and concurrency
+  seams. Repeated validation of already-typed or already-validated internal values is a candidate
+  for removal only when the same failure remains caught at its owning seam.
+- Research must evaluate successful-publication retirement and every other credible generic
+  lifecycle leak in KAIROS, then audit all Servatus modules, public exports, CLI, tests, docs, and
+  defensive checks for consolidation. The final plan will reject speculative extraction and state
+  exact supported changes, ordered slices, checks, non-goals, release dependencies, and external
+  gates.
+
+Expected outcome:
+
+One reviewed implementation plan identifies the smallest deep Servatus interface that owns all
+supported generic mechanics, leaves a straightforward KAIROS client containing only application
+meaning, removes private coupling and duplicate tests, and preserves every canonical output path,
+schema, scientific association, GPU execution behavior, and failure-safety guarantee. Planning
+alone makes no product or external change.
+
+#### Consolidation audit decision
+
+The whole-repository deletion audit found one remaining generic production leak in KAIROS.
+`publish_bundle()` commits the canonical manifest through Servatus and then calls raw
+`shutil.rmtree()` on the authored sibling bundle. KAIROS therefore still owns commit/cleanup
+ordering, exact cleanup-target binding, cleanup durability, and the distinction between committed
+success and post-commit residue. Cleanup can currently raise after the manifest is already durable.
+
+Servatus will deepen the existing directory-publication transaction with one keyword-only option:
+
+```python
+publication = publish(canonical, assemble, retire=bundle)
+```
+
+`retire` accepts one existing, distinct, owner-only directory whose parent is exactly the
+destination parent. Servatus pins the parent and source inode before invoking the builder, leaves
+the source untouched on every precommit failure, commits and syncs the destination first, removes
+only the pinned tree descriptor-relatively, and syncs the parent again. A missing, moved,
+substituted, unsafe, or unremovable source after commit never changes committed success into
+failure: `Publication.cleanup_pending` is true and Servatus emits one nonfatal cleanup warning.
+The structured result remains available to callers. The source must be quiescent before the
+transaction; this operation is not a writer lease or a recursive-delete callback.
+
+This seam passes the deletion test: without it, every client with retained authored state must
+reimplement safe tree pinning, commit-first ordering, durable removal, race handling, and
+post-commit outcome reporting. It is narrower than an arbitrary callback and keeps application
+meaning out of Servatus.
+
+Re-homing the whole authored experiment bundle into `Workspace.path` is rejected. That would force
+prepare, HPO extension, launch, monitoring, load, and close commands through another long-lived
+lease; replace the current operator-addressed bundle with a hashed private path; and couple nested
+Campaign access to Workspace choreography. It adds client code to solve a quiescence condition the
+operator already owns. `Campaign.close()` is also rejected: a scheduler receipt proves acceptance,
+not scientific completion, and Campaign cannot decide which canonical records or manifest make an
+experiment complete.
+
+No other generic production implementation remains in KAIROS. The audit found no KAIROS-owned SSH,
+Slurm rendering, packing, lock, journal, staging, rename, hard-link, fsync, retry-state,
+reconciliation, or no-clobber algorithm. The following remain application meaning and policy:
+
+- `cells.tsv`, typed request files, cell labels, HPO append rules, and manifest schemas;
+- canonical Study, Artifact, and Evaluation completion and scientific validation;
+- Task keys, opaque payload bytes, worker commands, explicit retry-key selection, and receipt
+  presentation;
+- `last.ckpt`, Method order, objective/checkpoint association, metrics, benchmark protocols, and
+  scientific resume rules;
+- canonical namespace creation, one-GPU policy, two-to-four packing choice, resource values, image,
+  partitions, and external queue/QOS policy.
+
+Servatus must not gain a generic Bundle, experiment tracker, finalizer protocol, DAG, HPO model,
+completion callback, scheduler adapter/plugin system, queue monitor, automatic retry, `run()`
+facade, parent-directory creator, or compatibility parser. These would enlarge the surface without
+hiding reusable complexity.
+
+The audit also found a real existing Servatus safety defect: Workspace documentation names its
+hidden container as an owner-only trust root, but current open paths accept pre-existing permissive
+container/work directories and permissive lock/identity files. That contract must be enforced
+before adding functionality.
+
+#### Consolidation slice C1A: Workspace trust-root correction
+
+Baseline: Servatus `2ccf749e2a4c3f5ad7ca572ee34fe78e5b1bb78f` (`v0.4.1`).
+
+Scope:
+
+- Require every existing Workspace container, work directory, lifecycle lock, and identity file to
+  belong to the effective user and expose no group/world permissions. Reverify those properties at
+  the existing pinned-entry boundaries.
+- Compare a newly created directory entry with the descriptor opened for it instead of replacing
+  the first stat record without comparison.
+- Replace the current check-then-`shutil.rmtree()` cleanup with descriptor-rooted recursive removal:
+  hold the verified source directory descriptor, inspect/open every child without following links,
+  remove only entries reached through those descriptors, reverify each parent/name binding, and
+  reverify the root binding before final `rmdir`. A renamed or substituted root must survive. This
+  exact primitive becomes the later retirement foundation.
+- Persist a newly initialized container in its parent and sync its new internal entries before
+  committing identity. Do not change the existing identity schema in this correction slice.
+- Keep native no-replace, the accepted Linux file-link and coherently locked directory fallbacks,
+  descriptor-relative access, symlink/special-file rejection, cross-device rejection, inode-pinned
+  cleanup, child/root locks, and callback revalidation unchanged.
+- Update Servatus CONTEXT, README, SECURITY, and ADRs 0002/0004 so the implemented trust-root and
+  durability contract is stated once and consistently.
+
+Tests and review:
+
+- Red tests for permissive or foreign container, work, lock, and identity entries; created/opened
+  directory substitution; root and nested cleanup substitution; parent/container sync order; and
+  existing root/child races.
+- Retain distinct race, replacement, hard-link, no-clobber, cleanup-pending, fallback, and macOS /
+  Linux process tests. Delete only exact duplicated probes.
+- Full Servatus pytest, Ruff check/format, strict Pyright, Vulture, lock/build/archive inspection,
+  fresh-wheel API/CLI smoke, then fixed-range Standards and Spec review.
+
+Expected outcome:
+
+Workspace's documented trust root becomes true and first-creation durability plus exact cleanup are
+proven before any consolidation. No public API, private schema, or KAIROS behavior changes in this
+slice.
+
+#### Consolidation slice C1B: Workspace and POSIX consolidation
+
+Baseline: exact clean C1A GREEN head.
+
+Scope:
+
+- Introduce the clean Workspace identity format that stores only the three authoritative inode
+  pins. Stored device numbers are currently parsed and then deliberately ignored because client
+  device identities may differ; live local device/type checks remain.
+- Once a durable identity exists, stop syncing its unchanged container on every reopen.
+- Remove only the parent sync performed immediately after `make_unique_stage()` and
+  `make_unique_file_stage()`; those names are disposable before commit. Retain content sync before
+  commit and publication-parent sync after commit.
+- Remove only `sorted()` from recursive sync, the second descriptor type/fstat checks inside
+  `_ensure_open_entry` after type/device/identity were already established on open, and named
+  `_workspace._cleanup_workspace` forwarding wrapper. Keep `_build_draft`, `sync_descriptor`, and
+  pathname-to-expected-inode verification; C2 separately owns `_slurm.validate_allocation`.
+- Consolidate the associated identity/sync prose in CONTEXT, README, SECURITY, and ADR 0002. Do not
+  remove the production Linux locked-directory fallback or weaken its coherent-flock contract.
+
+Tests and review:
+
+- Identity format bounds/canonical bytes, first initialization, reopen without redundant sync,
+  disposable-stage crash semantics, file/tree durability ordering, and existing native/fallback
+  behavior.
+- Keep distinct syscall failure/race/substitution contracts; delete only tests whose observable
+  guarantee is already proved through the same public path.
+- Full Servatus package/build/install gates and independent fixed-range review.
+
+Expected outcome:
+
+Workspace retains every accepted safety property with a smaller private record, fewer repeated
+metadata syscalls, and fewer implementation-specific tests. No public API changes.
+
+#### Consolidation slice C2: Campaign state and codec consolidation
+
+Baseline: exact clean C1B GREEN head. Uses a clean-break Campaign/plan schema; no legacy parser is
+added.
+
+Scope:
+
+- Keep `Task`, `ResourceRequest`, and `SlurmTarget` constructors as the sole typed value validators.
+  TOML readers retain exact raw document/key checks and delegate values once.
+- Parse only the plan fields required to regenerate an immutable plan, regenerate it once through
+  Campaign, and compare canonical JSON bytes. This replaces derived allocation/target/resource
+  validation and still rejects bool-as-int and every changed derived field.
+- Thin durable intent/receipt/resolution records: remove redundant `argv_digest`, per-intent target
+  and resource digests, derivable job names, receipt task-key copies, and `accepted: false` wrappers.
+  Keep lineage, plan/script digests, exact argv, allocation totals, query windows, and intent order.
+- Validate every bounded owner-only durable-state ingress. Stop running the complete decoder again
+  immediately before writing an already-validated snapshot mutated through typed internal paths.
+- Add the missing invariant that one allocation cannot be both accepted and explicitly resolved as
+  not submitted.
+- Remove the now-redundant Slurm validation wrapper, dead remote-path helper, extra allocation argv
+  digest check, and exact duplicate mutation/GRES tests.
+- Update Servatus CONTEXT, README, and ADR 0003 for the thinned private records and unchanged
+  acceptance/ambiguity authority.
+
+Tests and review:
+
+- Canonical schema, corrupt/truncated/oversized state, receipt/resolution contradiction, task-prefix,
+  revision, lineage, ambiguity, retry, intent-before-SSH, receipt-after-acceptance, crash boundary,
+  and concurrent opener tests remain.
+- Reduce derived-plan mutation cases to raw consumed-field type cases plus one canonical derived
+  tamper that proves regeneration comparison.
+- Run the full Servatus package/build/install gates and independent fixed-range review.
+
+Expected outcome:
+
+Campaign keeps the same acceptance, ambiguity, retry, reconciliation, and resource-lineage
+guarantees while deleting roughly 110-140 lines of duplicate decoding and persisted derivations.
+State remains one simple atomic snapshot; no event log, database, validation framework, or backend
+abstraction is introduced.
+
+#### Consolidation slice C3: Campaign public interface and CLI
+
+Baseline: exact clean C2 GREEN head.
+
+Scope:
+
+- Rename private `Campaign._reopen(path)` to public `Campaign.load(path)`. Opening registers an
+  exact task roster; loading operates on an existing durable roster.
+- Add `Campaign.validate(plan)` with one small immutable public validation-result type. The method
+  verifies campaign/plan authority and runs bounded Slurm `--test-only` validation. The CLI stops
+  importing a private function and private result.
+- Rename `CampaignStatus.pending_task_keys` to `unaccepted_task_keys`. The value means tasks without
+  a proven scheduler-acceptance receipt, never incomplete application work.
+- Remove the redundant `target` argument from `Campaign.reconcile()`: immutable validated lineage
+  is its authority. The CLI drops `reconcile --target`.
+- Add repeatable `plan --completed TASK_KEY` and `--retry TASK_KEY` flags so CLI and typed API expose
+  the same explicit lifecycle controls. CLI/API parity is a supported Servatus goal, not a KAIROS
+  requirement; this small addition must not delay the preceding filesystem/state corrections.
+- Resolve relative `stdin_file` paths against the task JSONL parent.
+- Replace the CLI's hand-written temporary/fsync/replace plan writer with owner-only
+  `publish_file()`. Plan output becomes immutable/no-clobber; no `--force` or overwrite helper is
+  added.
+- Trim duplicated syscall/acceptance prose from README while retaining quick starts, resource and
+  target configuration, security boundary, and actionable exceptions. ADRs retain design detail.
+- Update CONTEXT and ADR 0003 for load/validate/reconcile/status terminology.
+
+Tests and review:
+
+- Public Python and installed-wheel smokes cover load, validate, status meaning, reconcile from
+  lineage, explicit completed/retry selection, immutable plan output, and relative payload paths.
+- CLI JSON and help use `unaccepted_task_keys`; docs say receipts prove acceptance only.
+- Full Servatus gates and independent review.
+
+Expected outcome:
+
+Servatus's Python API and CLI express one consistent lifecycle without private crossings,
+redundant target input, misleading completion language, or a second filesystem transaction.
+
+#### Consolidation slice C4: publication preflight and retained-tree retirement
+
+Baseline: exact clean C3 GREEN head.
+
+Scope:
+
+- Before invoking `publish()` or `publish_file()` callbacks, inspect the pinned destination parent
+  and reject an existing destination. Commit-time no-replace remains authoritative against races.
+- Add only `publish(destination, build, *, retire: Path | None = None)`. Retirement is limited to
+  one existing distinct owner-only destination sibling and uses the exact contract recorded above.
+- Centralize public publication-result construction. Every committed publication with residual
+  stage, Workspace, or retirement cleanup emits one nonfatal `RuntimeWarning` without mutating the
+  process warning filters or converting warnings-as-errors into apparent commit failure. Preserve
+  `Publication.cleanup_pending` as the authoritative result. Warning delivery is best-effort and
+  no warning filter or custom hook may escape after commit.
+- Reuse C1A's descriptor-rooted exact tree removal and existing transaction outcomes. Do not expose
+  a cleanup callback, public cleanup token, retry registry, garbage collector, or second close
+  operation.
+- Update package version and lock to `0.5.0`; update CONTEXT, README, SECURITY, and ADR 0002 for the
+  reviewed release contract. Inspect generated artifacts in this slice, but do not publish them.
+
+Tests and review:
+
+- Callback is not entered for an existing destination; destination races still never overwrite.
+- Retirement success, builder failure, commit failure, collision, source/destination mismatch,
+  unsafe permissions, symlink/special source, source substitution, cleanup failure, parent-sync
+  failure, warnings-as-errors, and exact canonical success are covered through public APIs.
+- Existing native/fallback/file/directory/Workspace suites remain proportionate; do not duplicate
+  every syscall matrix for the new option.
+- Full Servatus gates and independent fixed-range review.
+
+Expected outcome:
+
+One reviewed `0.5.0` source tree owns absent-or-complete commit, early collision rejection, safe
+post-commit retirement, durability, and truthful residual-cleanup reporting. Servatus should be
+judged by the deletion test rather than a forced total-line target: Campaign/Workspace duplication
+is deleted, while any bounded POSIX growth must correspond to the newly proven trust-root and
+retirement contracts. The final measured source delta is recorded after review; safety is not
+weakened to obtain a net-negative count.
+
+#### External gate: Servatus 0.5.0
+
+After C1A-C4 are independently GREEN, request explicit authority to push Servatus, create/tag the
+GitHub `v0.5.0` release, and publish PyPI `servatus==0.5.0`. Inspect wheel/sdist contents, metadata,
+zero runtime dependencies, installed API/CLI, and published hashes before KAIROS pins it. The minor
+version is a deliberate pre-1.0 clean break: Campaign/plan/Workspace private schemas, status field,
+reconcile signature, and CLI plan behavior change without compatibility aliases.
+
+No existing canonical KAIROS output needs migration. Old images and active old-layout campaign/work
+state remain on their old code until closed. New Servatus code must not open the active HPO bundle
+or its scratch, Campaign, jobs, or outputs.
+
+#### Consolidation slice C5: lean KAIROS adoption
+
+Baseline: exact clean accepted KAIROS planning head plus exact published 0.5.0 wheel/sdist URLs and
+SHA-256 hashes. Record both repository status and artifact identity before dispatch.
+
+Scope:
+
+- Pin exact `servatus==0.5.0` in root and mobile environments and regenerate locks from the published
+  artifacts.
+- Create new authored bundle roots as owner-only, then replace `publish()` plus raw
+  `shutil.rmtree()` with `publish(..., retire=bundle)`. KAIROS still verifies every record and builds
+  the exact manifest before it decides to close.
+- Treat Evaluation as disposable publication, not resumable work: write `evaluation.json` and
+  `observations.parquet` directly inside one `publish()` builder. No code resumes preserved
+  Evaluation files today; Artifact fitting and Study assembly keep their meaningful Workspaces and
+  `last.ckpt` behavior.
+- Remove mobile export's caller-side destination-exists check and move roster/artifact loading into
+  the builder so Servatus preflight avoids expensive work for a known collision.
+- Rename the one KAIROS status assertion to acceptance terminology.
+- Remove all KAIROS imports/patches of `servatus._slurm`. Tests fake the public `Campaign` seam and
+  retain exact KAIROS Task bytes/order, canonical completion selection, explicit retry keys,
+  authored HPO extension, one-GPU/resource policy, packing cap, and receipt presentation. Slurm
+  argv, base64 script, generic packing, transport, journal, and retry mechanics remain tested only
+  in Servatus.
+- Consolidate the two direct-request CLI paths through one small private KAIROS helper that owns
+  target/resource loading, the one-GPU check, one-task Campaign planning/submission, and receipt
+  display. Do not add this convenience to Servatus or create a KAIROS wrapper around experiment
+  Campaigns.
+- Update ADR/manual wording for disposable Evaluation publication and generic bundle retirement.
+  Canonical paths, schemas, labels, request bytes, manifests, output modes, and CLI success output
+  remain unchanged.
+
+Tests and review:
+
+- Bundle verification failure preserves the entire owner-only authored bundle including opaque
+  `.servatus`; retry publishes the exact manifest and retires the bundle. Generic retirement fault
+  matrices are not copied into KAIROS.
+- Evaluation failure after builder entry is accepted as disposable: no forensic Workspace is
+  promised, and retry recomputes it. Artifact/Study resumability is unchanged.
+- Evaluation association/failure and exact published bytes, mobile collision-before-load, Task
+  mapping/completion/retry/profile, HPO append, full root/mobile/App/static/lock/residue/CLI gates,
+  and fixed-range independent review.
+- Explicit gates include root and mobile `uv lock --check` plus frozen syncs, root/mobile pytest,
+  Ruff check/format, strict Pyright, `uv run vulture` with manual verification of every finding,
+  App tests/typecheck/dry install, installed API/CLI help, residue scan, diff check, and clean status.
+
+Expected outcome:
+
+KAIROS contains no generic post-commit cleanup, disposable-workspace ceremony, caller preflight, or
+private Servatus test knowledge. Its remaining code states only scientific work, application
+addresses, and deployment policy. Expected reduction is modest in production code and roughly
+50-100 test lines; ownership and failure truth improve without changing outputs or GPU execution.
+
+#### Consolidation slice C6: reviewed local KAIROS integration
+
+Baseline: exact clean C5 GREEN head, the then-current clean local KAIROS main head, and the exact
+pre-existing compact-CUDA ref. Record all merge bases and worktree/branch ownership before dispatch.
+
+- Reconcile the accepted KAIROS change with current local `main` and the maintained compact-CUDA
+  branch using normal merges; prove compact's only product delta remains its reviewed CUDA path.
+- Review the extraction/main merge and compact merge as separate fixed ranges, each with distinct
+  implementer/reviewer roles, exact parent/topology proofs, Standards/Spec zero findings, and the
+  full KAIROS gates. Do not push, build, run remotely, or clean up in this slice.
+- Preserve the two pre-existing user commits, existing main/compact refs until their reviewed
+  successors are accepted, and every unrelated branch/worktree.
+
+Required integration proof:
+
+- Pin `git rev-parse`, `git status --porcelain`, `git merge-base`, both merge parents, ancestry, and
+  first-/second-parent diffs for every merge; require `git diff --check` and no conflict residue.
+- Before merging, record compact's exact non-base commit list, stable patch IDs, changed-file
+  roster, numstat, and byte-level CUDA delta. After merging, require the same logical commit list
+  and exact CUDA-only product delta relative to the accepted KAIROS base; use `git range-diff` and
+  tree/file hashes where rebasing or merge context changes object IDs.
+- Run root and mobile pytest, Ruff check/format, strict Pyright, manually verified Vulture, root and
+  mobile lock/frozen-sync checks, App tests/typecheck/dry install, installed API/CLI help, residue
+  scans, and clean status on the final product trees.
+
+Expected outcome:
+
+Two exact locally reviewed KAIROS heads contain the accepted client change, preserve the compact
+CUDA-only delta, and are ready for separately authorized publication. No external state changes.
+
+#### External gate: immutable image build and isolated acceptance
+
+After C6 GREEN, request explicit authority for the exact remote mutations:
+
+- Build a new immutable KAIROS image from the exact accepted compact-CUDA C6 SHA through the
+  documented isolated `sbuild` path. Assert the full checkout SHA and name the build/cache/image
+  paths from its short SHA. Preserve the previous image and keep `REMOTE.toml` pointing at it.
+- Run an isolated CPU-only production-filesystem publication/retire smoke and one synthetic
+  one-task train/evaluate publication smoke using only run-owned paths. Scheduler rendering,
+  resource values, four-task packing, and throughput code are unchanged, so another four-GPU
+  throughput campaign is not required.
+- Do not push refs, edit production configuration, or delete evidence at this gate. Preserve the
+  accepted image and exact evidence for the reviewed configuration cutover.
+
+#### Consolidation slice C7A: reviewed image-configuration cutover
+
+Baseline: exact clean C6 main/integration head plus the exact accepted image path, image-building
+source SHA, and isolated smoke evidence.
+
+Scope:
+
+- A fresh implementer changes only `REMOTE.toml` from the preserved `f49db0b` image to the exact
+  accepted C6 compact-CUDA image. Resource values, target paths, partitions, caps, and every other
+  file remain unchanged.
+- Run the public target/profile parser check, full root tests, Ruff check/format, strict Pyright,
+  manually verified Vulture, lock check, diff check, and clean status. Do not add a mirrored
+  hard-coded image assertion to tests.
+- A distinct reviewer inspects the fixed one-line product range on Standards and Spec. No push or
+  remote mutation occurs.
+
+Expected outcome:
+
+One reviewed KAIROS head selects the exact already-built and already-accepted immutable image; no
+unreviewed post-build configuration commit remains.
+
+#### Consolidation slice C7B: compact configuration synchronization
+
+Baseline: exact clean C7A GREEN head and exact clean C6 compact-CUDA GREEN head.
+
+Scope and checks:
+
+- Merge the accepted C7A configuration commit normally into compact-CUDA. Keep the image path
+  identical and preserve the exact C6 CUDA-only delta.
+- Re-run target parsing, merge-parent/ancestry/tree/diff/range-diff/patch-ID parity, diff check, and
+  clean status. Review the fixed merge range independently on Standards and Spec.
+
+Expected outcome:
+
+Main and compact-CUDA select one accepted immutable image while compact retains only its reviewed
+CUDA execution delta.
+
+#### External gate: ref publication and run-owned cleanup
+
+After C7A/C7B GREEN, request explicit authority to:
+
+- Push only the exact reviewed KAIROS refs and verify the remote SHA values.
+- Start the clean Servatus schemas only with the next new experiment bundle. Never open or migrate
+  legacy HPO bundle `dfd33e91-702e-46c5-8cb1-3c510af4c048`; preserve image `004f951` and its old
+  lifecycle state until it is closed with old semantics.
+- Before the 0.5 image becomes production authority, inventory only known private lifecycle
+  namespaces under explicit metadata-read authorization: authored bundle `.servatus` directories
+  and destination-adjacent `.servatus-*.work` roots for Studies, Artifacts, and Evaluations. Every
+  pre-0.5 active item must finish on its old image or remain quarantined and unopened. Do not crawl
+  canonical contents, parse old state, or migrate it. Canonical outputs remain compatible.
+- After published refs and acceptance are verified, remove only recorded run-owned worktrees,
+  branches, build/cache/acceptance/log evidence whose exact paths and ownership have been checked.
+
+Expected outcome:
+
+Published Servatus and KAIROS refs, immutable image, and future clean-break execution all use the
+reviewed interface. Existing outputs remain readable and byte/schema compatible; existing jobs and
+legacy work are untouched. Final branch/worktree state matches the recorded pre-run state except
+for explicitly published refs.
+
+Planning review record:
+
+- Independent architecture review returned GREEN with zero actionable findings after the plan made
+  retirement descriptor-rooted, covered every pre-0.5 private lifecycle namespace, split the
+  trust-root correction from mechanical consolidation, made Evaluation's disposable-failure
+  tradeoff explicit, kept `cleanup_pending` authoritative, and named the remaining KAIROS CLI
+  duplication.
+- Independent execution review returned GREEN with zero actionable Standards or Spec findings
+  after the plan added reviewed 0.5.0 release preparation; exact run-owned checkout, baseline,
+  implementer/reviewer, and correction policy; full named gates; separate local integration,
+  immutable-image acceptance, reviewed `REMOTE.toml` cutover, compact synchronization, push, and
+  cleanup boundaries.
+- `git diff --check` passed. Planning contacted no remote scheduler, output, dataset, campaign,
+  image, GitHub, or PyPI surface and changed no product code.
+
+Execution authorization and run setup on 2026-08-11:
+
+- The user authorized Servatus consolidation slices C1A through C4 and requested a pause before
+  KAIROS slice C5. The user separately authorized pushing Servatus, creating/tagging the GitHub
+  `v0.5.0` release, and publishing `servatus==0.5.0` after all four slices are independently GREEN.
+- The immutable Servatus baseline is the clean released `v0.4.1` head
+  `2ccf749e2a4c3f5ad7ca572ee34fe78e5b1bb78f`; its primary checkout had only `main` and no other
+  worktree. This run owns branch `codex/servatus-consolidation-0.5` and worktree
+  `/private/tmp/servatus-consolidation-0.5`, created at that exact baseline.
+- The KAIROS orchestration baseline is clean `main` at
+  `fa7ba4f1571eb293dd6d1e919cf4e9e0f532183a`, three commits ahead of `origin/main`. Existing
+  `codex/compact-cuda-execution` at `a81efb47e653227381401a597a48d76ab03068ef` is pre-run state and
+  is not owned or modified by the Servatus slices.
+- Each slice receives one fresh implementer and one distinct reviewer. Corrections return to the
+  same pair; the next slice starts only after a zero-finding Standards/Spec review. No KAIROS
+  product, remote scheduler, image, output, dataset, campaign, or production scratch is in scope.
+- C1A implementation commit `0cb630eb8da19518f1cf65eadb64a824bc740e54` passed 247 tests with
+  one platform skip plus all static/build/installed-artifact gates. Its first independent review
+  rejected four findings: stage creation still accepted a substituted inode; the C1B reopen-sync
+  optimization landed early; mode-`000` regular files blocked exact cleanup; and root/nested
+  removal duplicated one recursive algorithm. Correction `322296de64e5cebe6cea683c486f8fa1206aa1d7`
+  closed all functional findings; its rereview rejected one unused recursive-device parameter.
+  Correction `b6d7647367486375017e4ee1756a9c80903d5d1a` made that root-device invariant explicit. The same
+  reviewer returned final GREEN LIGHT with Standards 0 and Spec 0. Final C1A gates passed 250 tests
+  with one platform skip, Ruff check/format, strict Pyright, Vulture, lock/diff checks, build,
+  archive inspection, and fresh-wheel API/CLI smokes. The Servatus worktree is clean; C1B starts
+  from exact `b6d7647`.
+- C1B implementation `ecf7c644a35ac4d8d6e212f55230dc37ef8b36b2` reduced the Workspace/POSIX
+  slice by 56 net lines and passed 250 tests with one platform skip plus every static/build/install
+  gate. Its first review rejected one P1 on both axes: `_verify_level()` reused stale open-time
+  metadata, so a post-open permissive chmod escaped the C1A owner-only recheck. The same pair owns a
+  focused correction that must retain a fresh UID/mode read without restoring redundant
+  type/device validation. Correction `960a3f09e5865f846f34a8dcf279b575294a5446` fresh-fstats the
+  already-open container, work, and lock descriptors for current owner/mode while preserving the
+  pathname-to-pinned-inode check. The same reviewer returned GREEN LIGHT with Standards 0 and Spec
+  0. Final C1B is a net 29-line reduction from C1A; 253 tests with one platform skip and every
+  static/build/install gate pass. C2 starts from exact `960a3f0`.
+- C2 implementation `e861789e262f8930a5c0b130f50b53ebe0f232d9` removed 135 Campaign/Slurm
+  source lines and passed 255 tests with one platform skip plus all static/build/install gates.
+  Standards review returned zero findings. Spec review rejected one P2 durable-ingress defect:
+  Python numeric equality admitted float schema versions and bool/float allocation totals. The same
+  pair corrected exact integer type/bounds at ingress in
+  `f5cb8afcc3cbe6ebacfb33da1b7d98fe713f9a0f` without restoring the duplicate decoder. Rereview
+  returned GREEN LIGHT with Standards 0 and Spec 0. Final C2 passed 262 tests with one platform
+  skip plus all static/build/install gates. C3 starts from exact `f5cb8af`.
+- C3 implementation `6c8c96c289a5e812f45c3e06440a09f5cff93a4d` passed 267 tests with one
+  platform skip plus all static/build/install gates. Its first review rejected one shared
+  Standards/Spec defect: CLI plan bytes were written while the ordinary-umask stage was still
+  `0644`, before chmod to `0600`. Standards also found validation messages coupled to submission
+  and a stale file-wide private-usage suppression. Correction
+  `e6028749c32436340b313d9eb3afecf22e63dced` makes the empty stage `0600` before writing, gives
+  validation/submission precise operation messages, and removes the suppression. Rereview returned
+  GREEN LIGHT with Standards 0 and Spec 0. Final C3 passed 268 tests with one platform skip plus all
+  static/build/install gates. C4 starts from exact `e602874`.
+- C4 implementation `ce7c8ffe69adea70432629100fe1873ea895d14c` passed 285 tests with one
+  platform skip plus all static/build/install gates and produced inspected 0.5.0 artifacts. Review
+  accepted every functional retirement/preflight/warning contract but rejected three concrete
+  duplications: repeated parent verification, repeated owner-only policy, and repeated pinned-tree
+  verification behind a single-use wrapper. It also rejected the plan's optimistic cumulative
+  “smaller overall” wording: measured C1A-C4 product source was net +126 versus v0.4.1. The same pair
+  owns the deletion correction; the orchestrator must record the final measured outcome truthfully
+  after rereview. Correction `79ee407c431d1f9c0510e9462d5136fa7b58319d` removes the repeated
+  checks/wrapper and 18 net product lines. The correction candidate is net +108 product source lines
+  versus v0.4.1: Campaign `-98`, Slurm `-9`, Workspace `-1`, CLI `+3`, public exports `+2`, and POSIX
+  `+211`. The growth is concentrated in the new exact trust-root deletion and retained-tree
+  retirement implementation, not duplicated client-facing surface. The same reviewer returned
+  final GREEN LIGHT with Standards 0 and Spec 0, confirming one authoritative preflight check, one
+  owner-only policy, and one exact pinned-tree deletion path. Final C4 passed 285 tests with one
+  environmental skip plus all static/build/install gates. Exact accepted 0.5.0 source head is
+  `79ee407c431d1f9c0510e9462d5136fa7b58319d`. The user authorized the Servatus push, tag, GitHub
+  Release, and PyPI publication gate; KAIROS C5 remains paused until published artifact hashes are
+  verified.
+- Servatus `main` was fast-forwarded and pushed to exact reviewed head
+  `79ee407c431d1f9c0510e9462d5136fa7b58319d`. Main CI run `31487426717` and tag CI run
+  `31487474435` passed on Ubuntu and macOS. Annotated tag `v0.5.0` dereferences to that exact commit;
+  the public GitHub Release is `https://github.com/edoski/servatus/releases/tag/v0.5.0`.
+- Trusted-publishing run `31487570056` succeeded. PyPI published wheel
+  `servatus-0.5.0-py3-none-any.whl` with SHA-256
+  `1d1f0bc1a0d5d38b5d9e80d6b93799e30cf6395a050d6bd9524e5d0592d389eb` and sdist
+  `servatus-0.5.0.tar.gz` with SHA-256
+  `1874c8776e1db515f5249a3a80f67cc8cc2c82b1ca4a9074d9963b6d0c1f9015`. A fresh no-cache public
+  index install verified metadata version 0.5.0, zero runtime dependencies, `Campaign.load`,
+  `ValidationResult`, exact `publish(..., retire=...)` behavior, and both CLI entry points. The
+  release gate is complete. The run-owned `/private/tmp/servatus-consolidation-0.5` worktree and
+  `codex/servatus-consolidation-0.5` branch were removed only after `main` and the remote tag were
+  verified at the accepted head. Servatus now matches its pre-run one-worktree/one-main-branch
+  shape, clean at 0.5.0. Work pauses before KAIROS C5 as requested.
+
+### Historical final deployment gates for the initial extraction
+
+This retained record describes the completed initial 0.4.1 cutover. It does not authorize or prove
+the future 0.5.0 consolidation release, image, smoke, publication, or cleanup gates above.
 
 The implementation and configuration cutover is complete. Old-layout work remains isolated on its
 captured checkout, image, and `jobs.tsv` lifecycle until it closes; new work uses the clean Servatus

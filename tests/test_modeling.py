@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import math
 import stat
 from pathlib import Path
@@ -20,9 +19,6 @@ from kairos.addresses import (
     artifact_checkpoint_path,
     artifact_observations_path,
     artifact_result_path,
-    corpus_blocks_path,
-    corpus_directory,
-    corpus_json_path,
     study_directory,
     study_json_path,
     study_trial_checkpoint_path,
@@ -31,7 +27,6 @@ from kairos.addresses import (
 from kairos.config import (
     BlockWindow,
     CorpusDefinition,
-    CorpusRequest,
     ExperimentSemantics,
     FitMethod,
     LstmDefinition,
@@ -48,6 +43,7 @@ from kairos.modeling import ArtifactAssociation, load_artifact, run_candidate, t
 from kairos.observations import OBSERVATION_SCHEMA, reduce_observations
 from kairos.study import RetainedResult, Study, load_study, publish_study
 from kairos.temporal import FeatureState, prepare_fit_history
+from tests.helpers import write_blockweaver_dataset
 
 ARTIFACT_ID = UUID("10000000-0000-4000-8000-000000000001")
 CORPUS_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -81,13 +77,11 @@ def _experiment() -> ExperimentSemantics:
 
 def _blocks() -> BlockFrame:
     blocks = np.arange(10, 24, dtype=np.int64)
-    request = _corpus_request()
     return BlockFrame(
         pl.DataFrame(
             {
                 "block_number": blocks,
                 "timestamp": blocks * 11,
-                "chain_id": np.ones(blocks.size, dtype=np.int64),
                 "base_fee_per_gas": _BASE_FEES,
                 "gas_used": 30 + np.arange(blocks.size, dtype=np.int64),
                 "gas_limit": np.full(blocks.size, 100, dtype=np.int64),
@@ -96,30 +90,12 @@ def _blocks() -> BlockFrame:
                 "effective_priority_fee_per_gas_p90": 2 * np.arange(blocks.size, dtype=np.int64),
             }
         ),
-        request.definition,
-    )
-
-
-def _corpus_request() -> CorpusRequest:
-    return CorpusRequest(
-        corpus_id=CORPUS_ID, definition=CorpusDefinition(chain_id=1, first_block=10, last_block=23)
+        CorpusDefinition(chain_id=1, first_block=10, last_block=23),
     )
 
 
 def _write_corpus(storage_root: Path) -> None:
-    request = _corpus_request()
-    blocks = _blocks()
-    corpus_directory(storage_root, CORPUS_ID).mkdir(parents=True)
-    corpus_json_path(storage_root, CORPUS_ID).write_text(
-        json.dumps(
-            {
-                "request": request.model_dump(mode="json"),
-                "finalized_anchor": {"block_number": 23, "block_hash": "a" * 64},
-            }
-        ),
-        encoding="utf-8",
-    )
-    blocks.to_polars().write_parquet(corpus_blocks_path(storage_root, CORPUS_ID))
+    write_blockweaver_dataset(storage_root, CORPUS_ID, _blocks().to_polars())
 
 
 def _candidate_request(method: Method) -> TuneRequest:

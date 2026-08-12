@@ -43,17 +43,19 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
         for family in families_by_chain[chain]:
             values = objectives[chain, family]
             candidates = range(1, len(values) + 1)
-            baseline = values[0]
-            deltas = [100.0 * (value - baseline) for value in values]
+            percentages = [100.0 * value for value in values]
             color, marker = family_style(family)
-            axis.plot(candidates, deltas, color=color, marker=marker, label=display_name(family))
+            axis.plot(
+                candidates, percentages, color=color, marker=marker, label=display_name(family)
+            )
             winner = winners[chain, family]
-            axis.scatter(winner + 1, deltas[winner], color=color, s=32, facecolors="none", zorder=3)
-        axis.axhline(0.0, color="#333333", linewidth=0.7)
+            axis.scatter(
+                winner + 1, percentages[winner], color=color, s=32, facecolors="none", zorder=3
+            )
         axis.set_title(display_name(chain))
         axis.set_xlabel("L9 candidate")
         if column == 0:
-            axis.set_ylabel("Δ Cost over optimum (pp)")
+            axis.set_ylabel("Cost over optimum (%)")
 
     add_family_legend(figure, axes[0, 0])
     path = save_pdf(figure, output_directory / "hpo.pdf")

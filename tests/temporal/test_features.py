@@ -27,7 +27,6 @@ def _blocks(
         {
             "block_number": range(count),
             "timestamp": timestamps,
-            "chain_id": [chain_id] * count,
             "base_fee_per_gas": base_fees,
             "gas_used": gas_used,
             "gas_limit": gas_limits,

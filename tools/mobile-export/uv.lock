@@ -115,6 +115,20 @@ wheels = [
 ]
 
 [[package]]
+name = "blockweaver"
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "polars" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/42/30/0a304a8cfb12129d6b6d9934302daeeb729be3d9057f243d98d70217c9af/blockweaver-0.3.2.tar.gz", hash = "sha256:542f88c2b7f9dcfc7438eca547f46a8ea455b3b49a0c67ad39f695a45f2c4fdf", size = 165583, upload-time = "2026-08-11T13:18:23.988Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/ea/1a7318ef7d98219f39ec4b108991dbc756c7a4313f4ff06da79c3a6e1a9e/blockweaver-0.3.2-py3-none-any.whl", hash = "sha256:81a194e54d19ce7125178b41d5091cd283da699a138d2fbc38e05812251771ac", size = 39930, upload-time = "2026-08-11T13:18:22.733Z" },
+]
+
+[[package]]
 name = "cattrs"
 version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -542,6 +556,7 @@ name = "kairos"
 version = "0.1.0"
 source = { editable = "../../" }
 dependencies = [
+    { name = "blockweaver" },
     { name = "lightning" },
     { name = "numpy" },
     { name = "polars" },
@@ -553,6 +568,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "blockweaver", specifier = "==0.3.2" },
     { name = "lightning", specifier = "==2.6.5" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.5" },

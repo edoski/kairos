@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from bundle import StorageRoot, close_bundle, open_bundle, print_metrics, run, write_evaluate_cells
 
 from kairos.config import BlockWindow, EvaluateRequest
-from kairos.corpus import load_corpus_request
+from kairos.corpus import load_corpus_definition
 from kairos.evaluation import ROLLING_HORIZONS, reduce_baselines, reduce_evaluation, reduce_rolling
 from kairos.experiments import ExperimentKind, load_experiment_manifest
 from kairos.study import load_study
@@ -22,6 +22,10 @@ def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID, k_experiment_id:
     maximum_horizon = max(horizons.values())
     hpo = load_experiment_manifest(storage_root, ExperimentKind.HPO, hpo_experiment_id)
     studies = {cell: load_study(storage_root, study_id) for cell, study_id in hpo.items()}
+    corpus_ids = {study.request.corpus_id for study in studies.values()}
+    corpora = {
+        corpus_id: load_corpus_definition(storage_root, corpus_id) for corpus_id in corpus_ids
+    }
     bundle = open_bundle(storage_root, _KIND, experiment_id)
 
     cells: list[tuple[str, EvaluateRequest]] = []
@@ -30,9 +34,9 @@ def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID, k_experiment_id:
         horizon = horizons[cell]
         study = studies[f"{chain}.{family}"]
         validation_end = study.request.experiment.validation_window.last_parent_block
-        corpus_request = load_corpus_request(storage_root, study.request.corpus_id)
+        corpus = corpora[study.request.corpus_id]
         first_parent = validation_end + maximum_horizon + 1
-        last_parent = corpus_request.definition.last_block - maximum_horizon + max(0, 5 - horizon)
+        last_parent = corpus.last_block - maximum_horizon + max(0, 5 - horizon)
         request = EvaluateRequest(
             artifact_id=artifact_id,
             corpus_id=study.request.corpus_id,

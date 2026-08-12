@@ -276,8 +276,6 @@ def _resolve(
                 continue
             labels += 1
             horizons = roster.setdefault(group, {})
-            if horizon in horizons:
-                raise ValueError("manifests must contain exactly nine complete rolling groups")
             horizons[horizon] = object_id
         if (
             labels != 9 * len(ROLLING_HORIZONS)

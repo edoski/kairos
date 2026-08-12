@@ -9,7 +9,7 @@ from uuid import UUID
 import numpy as np
 import polars as pl
 import torch
-from servatus import Draft, Workspace
+from servatus import Draft, publish
 
 from . import _runtime
 from .addresses import evaluation_directory, evaluation_observations_path
@@ -33,7 +33,8 @@ def evaluate(request: EvaluateRequest, storage_root: Path) -> None:
 
     canonical = evaluation_directory(storage_root, request.evaluation_id)
     canonical.parent.mkdir(mode=0o755, exist_ok=True)
-    with Workspace(canonical, identity=request.model_dump_json().encode()) as workspace:
+
+    def assemble(draft: Draft) -> None:
         blocks = load_corpus_blocks(storage_root, request.corpus_id)
         association, model = load_artifact(storage_root, request.artifact_id)
         if association.request.source.corpus_id != request.corpus_id:
@@ -58,16 +59,10 @@ def evaluate(request: EvaluateRequest, storage_root: Path) -> None:
             device=_DEVICE,
             batch_size=_runtime.EVALUATION_BATCH_SIZE,
         )
-        request_path = workspace.path / "evaluation.json"
-        observations_path = workspace.path / "observations.parquet"
-        request_path.write_text(request.model_dump_json(), encoding="utf-8")
-        observations.write_parquet(observations_path)
+        (draft.path / "evaluation.json").write_text(request.model_dump_json(), encoding="utf-8")
+        observations.write_parquet(draft.path / "observations.parquet")
 
-        def assemble(draft: Draft) -> None:
-            draft.link(request_path, "evaluation.json")
-            draft.link(observations_path, "observations.parquet")
-
-        workspace.publish(assemble)
+    publish(canonical, assemble)
 
 
 def reduce_evaluation(storage_root: Path, evaluation_id: UUID) -> pl.DataFrame:

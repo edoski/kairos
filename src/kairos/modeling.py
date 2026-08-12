@@ -389,7 +389,7 @@ def train(request: TrainRequest, storage_root: Path) -> None:
 
 def run_candidate(storage_root: Path, request: TuneRequest, method_index: int) -> None:
     definition = TrainingDefinition(
-        experiment=request.experiment, method=request.method_at(method_index)
+        experiment=request.experiment, method=request.methods[method_index]
     )
     canonical = study_directory(storage_root, request.study_id)
     canonical.parent.mkdir(mode=0o755, exist_ok=True)

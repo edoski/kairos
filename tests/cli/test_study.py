@@ -5,12 +5,11 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from servatus import JobReceipt, ResourceRequest, SlurmTarget, Task
 
 import kairos.cli as cli
 from kairos.cli import app
 from kairos.config import ExperimentSemantics, FitMethod, LstmDefinition, Method, TuneRequest
-from tests.helpers import dispatch, window, write_servatus_config
+from tests.helpers import dispatch, fake_campaign, window, write_servatus_config
 
 STUDY_ID = UUID("10000000-0000-4000-8000-000000000001")
 CORPUS_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -51,28 +50,7 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
     request_path = tmp_path / "TUNE_REQUEST.json"
     request_path.write_text(REQUEST.model_dump_json(), encoding="utf-8")
     target_path, resource_path = write_servatus_config(tmp_path)
-    calls: list[tuple[Path, tuple[Task, ...], SlurmTarget, ResourceRequest]] = []
-
-    class FakeCampaign:
-        def __init__(self, path: Path, tasks: tuple[Task, ...]) -> None:
-            self.path = path
-            self.tasks = tasks
-
-        @classmethod
-        def open(cls, path: Path, tasks: tuple[Task, ...]) -> FakeCampaign:
-            return cls(path, tasks)
-
-        def plan(
-            self, target: SlurmTarget, resources: ResourceRequest, **options: object
-        ) -> object:
-            assert options == {"retry": (), "tasks_per_allocation": 1}
-            calls.append((self.path, self.tasks, target, resources))
-            return object()
-
-        def submit(self, _plan: object) -> tuple[JobReceipt, ...]:
-            return (JobReceipt("allocation", 123, None, (self.tasks[0].key,)),)
-
-    monkeypatch.setattr(cli, "Campaign", FakeCampaign)
+    open_campaign, campaign = fake_campaign(monkeypatch, cli)
 
     result = dispatch(
         app,
@@ -87,9 +65,8 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
     )
 
     assert result.exit_code == 0
-    assert result.output == "123\n"
-    assert len(calls) == 1
-    campaign_path, tasks, target, resources = calls[0]
+    assert result.output == "1001;research\n"
+    campaign_path, tasks = open_campaign.call_args.args
     assert campaign_path == request_path.with_name(
         f".{request_path.name}.study-{STUDY_ID}-method-0.campaign"
     )
@@ -101,8 +78,10 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
         ).encode()
         + b"\n"
     )
+    target, resources = campaign.plan.call_args.args
     assert target.host == "research-alias"
     assert resources.gpus_per_task == 1
+    assert campaign.plan.call_args.kwargs == {"retry": ()}
 
 
 def test_remote_candidate_dispatches_input(monkeypatch: pytest.MonkeyPatch) -> None:

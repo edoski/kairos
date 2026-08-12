@@ -11,6 +11,7 @@ import export as mobile_export
 import pytest
 import torch
 import yaml
+from servatus import DestinationExists
 from torch import nn
 
 torch.manual_seed(2026)
@@ -193,14 +194,19 @@ def test_export_bundle_rejects_feature_mismatch_without_publication(
     assert not output.exists()
 
 
-def test_export_bundle_preserves_existing_output(tmp_path: Path) -> None:
+def test_export_bundle_rejects_collision_before_loading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     roster_path = tmp_path / "MOBILE.yaml"
     output = tmp_path / "models"
     output.mkdir()
     marker = output / "occupied"
     marker.write_text("preserve", encoding="utf-8")
+    monkeypatch.setattr(
+        mobile_export, "_load_roster", lambda _path: pytest.fail("roster must not load")
+    )
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(DestinationExists):
         mobile_export.export_bundle(tmp_path / "storage", roster_path, output)
 
     assert marker.read_text(encoding="utf-8") == "preserve"

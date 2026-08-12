@@ -9,7 +9,7 @@ from typing import Annotated
 from uuid import UUID
 
 import typer
-from servatus import Campaign, ResourceRequest, SlurmTarget
+from servatus import Campaign, ResourceRequest, SlurmTarget, Task
 
 from .config import WORKFLOW_REQUEST_ADAPTER, TrainRequest, TuneRequest
 from .evaluation import evaluate
@@ -42,19 +42,13 @@ def submit_command(
     ] = Path("RESOURCES.toml"),
     retry: Annotated[bool, typer.Option("--retry")] = False,
 ) -> None:
+    requests = [WORKFLOW_REQUEST_ADAPTER.validate_json(path.read_bytes()) for path in request_paths]
     target = SlurmTarget.from_toml(target_path)
     resources = ResourceRequest.from_toml(resource_path)
     if resources.gpus_per_task != 1:
-        raise ValueError("KAIROS workflow tasks require exactly one GPU")
-    requests = [WORKFLOW_REQUEST_ADAPTER.validate_json(path.read_bytes()) for path in request_paths]
-    for request_path, request in zip(request_paths, requests, strict=True):
-        task = workflow_task(request)
-        campaign = Campaign.open(_request_campaign_path(request_path, task.key), (task,))
-        plan = campaign.plan(
-            target, resources, retry=(task.key,) if retry else (), tasks_per_allocation=1
-        )
-        for receipt in campaign.submit(plan):
-            typer.echo(receipt)
+        raise ValueError("KAIROS tasks require exactly one GPU")
+    for index, request_path in enumerate(request_paths):
+        _submit_task(request_path, workflow_task(requests[index]), target, resources, retry=retry)
 
 
 @remote_app.command("workflow")
@@ -92,11 +86,15 @@ def study_run_command(
     target = SlurmTarget.from_toml(target_path)
     resources = ResourceRequest.from_toml(resource_path)
     if resources.gpus_per_task != 1:
-        raise ValueError("KAIROS candidate tasks require exactly one GPU")
+        raise ValueError("KAIROS tasks require exactly one GPU")
+    _submit_task(request_path, task, target, resources, retry=retry)
+
+
+def _submit_task(
+    request_path: Path, task: Task, target: SlurmTarget, resources: ResourceRequest, *, retry: bool
+) -> None:
     campaign = Campaign.open(_request_campaign_path(request_path, task.key), (task,))
-    plan = campaign.plan(
-        target, resources, retry=(task.key,) if retry else (), tasks_per_allocation=1
-    )
+    plan = campaign.plan(target, resources, retry=(task.key,) if retry else ())
     for receipt in campaign.submit(plan):
         typer.echo(receipt)
 

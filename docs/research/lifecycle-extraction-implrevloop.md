@@ -2277,6 +2277,224 @@ No existing canonical KAIROS output needs migration. Old images and active old-l
 state remain on their old code until closed. New Servatus code must not open the active HPO bundle
 or its scratch, Campaign, jobs, or outputs.
 
+#### Post-release source audit S1: Servatus owned-seam deletion
+
+Status: user-approved for local implementation and independent review. Because S2 is also approved
+and changes a documented behavior contract, S1 and S2 prepare one clean `0.6.0` candidate rather
+than an intermediate `0.5.1`. Publication remains a separate external gate.
+
+Baseline: exact reviewed and published Servatus 0.5.0 head
+`79ee407c431d1f9c0510e9462d5136fa7b58319d`.
+
+Scope:
+
+- Remove runtime `isinstance` checks on the typed public `Task`, `SlurmTarget`,
+  `ResourceRequest`, and Campaign-produced `SubmissionPlan` interface. Raw JSON/TOML/state ingress
+  retains exact validation; deliberately passing arbitrary `object()` values is not a supported
+  runtime contract.
+- Validate durable Campaign collection shapes once at the top-level raw-state ingress and pass
+  typed collections to subordinate validators. Delete the repeated list checks. Keep task parsing,
+  digest/uniqueness, lineage, allocation provenance, receipt/resolution referential integrity, and
+  accepted-versus-resolved contradiction checks.
+- Let exact canonical allocation-argv equality own nonempty/string/NUL-free provenance instead of
+  checking those properties immediately before the equality check.
+- Trust kernel facts established by `O_CREAT|O_EXCL`, an already-held descriptor, `O_DIRECTORY`,
+  and inode identity. Delete impossible fresh-stage type/device branches, repeated descriptor
+  type/device/identity checks, and type predicates already implied by the pinned inode. Keep every
+  pathname-to-inode check around callbacks, sync, commit, and cleanup.
+- Remove repeated platform/leaf validation from the private no-replace commit helper after its only
+  callers have validated those values at their owning seam.
+- Pin retirement at the atomic directory open, then verify owner-only metadata and the pathname to
+  the opened inode. Delete the preliminary path stat because no prior inode is part of the public
+  interface.
+- Remove the CLI fallback made unreachable by argparse's required fixed subcommands.
+
+Tests and review:
+
+- Delete contrived tests that pass arbitrary untyped objects to typed public methods or monkeypatch
+  kernel-created regular stages into impossible file kinds. Do not replace deleted implementation
+  probes with new probes.
+- Retain raw durable-state corruption, bool-versus-int, real substitution/symlink/mount,
+  no-clobber, durability-order, cleanup-residue, fallback, scheduler-response, and lineage tests.
+- Require the full Servatus package/static/build/install gates and independent fixed-range
+  Standards/Spec review. A release and KAIROS repin remain separate external gates.
+
+Expected outcome:
+
+Servatus loses roughly 45-60 source lines and the corresponding nonsense tests without changing
+its public interface, accepted filesystem threat model, durable-state contract, scheduler
+behavior, or KAIROS ownership seam. Each retained check has one owning raw/racy boundary.
+
+Implementation and review record:
+
+- S1 implementation `0f2547f2259156f4722698d92090ded980133a6b` is one clean commit from exact
+  0.5.0 baseline `79ee407c`. Product source is `+16/-74`, net 58 lines smaller; tests delete 15
+  lines. Independent fixed-range review returned GREEN with Standards 0 and Spec 0. The reviewer
+  confirmed every raw-state, lineage, scheduler, pathname/inode, mutable-permission, cross-device,
+  no-clobber, durability, cleanup-residue, and cleanup-pin contract remains. Gates passed 284 tests
+  with one environmental skip plus Ruff, formatting, strict Pyright, Vulture, lock, build/archive,
+  metadata/zero-dependency, fresh-wheel public API/CLI, and file/directory publication smokes. S2
+  starts from exact accepted `0f2547f`.
+
+#### Post-release source audit S2: quiescent-source linearization
+
+Status: user-approved for local implementation and independent review after S1 GREEN.
+
+Candidate scope:
+
+- Simplify `Draft.link()` so the atomic hard link, not a preliminary source stat/open, selects the
+  source inode. The linked draft entry is then inspected and rejected/removed unless it is a safe
+  regular file. This changes the contract from “the pathname still denotes the inode observed at
+  method entry” to “link the safe inode denoted at the kernel link linearization point.”
+- Remove file/tree size and modification-time comparisons around `fsync`. Those checks detect only
+  some concurrent writers and cannot prevent a write immediately afterward. The simpler contract
+  requires the trusted builder to be quiescent before returning and retains pathname/inode checks,
+  content sync, commit, and parent durability.
+
+Expected outcome if later approved:
+
+Roughly 25-40 more source lines and two misleading partial-concurrency concepts disappear. This is
+not a mechanical cleanup: it deliberately narrows the same-account threat model and must be
+decided, documented, implemented, and reviewed separately from S1.
+
+Approved decision: the atomic hard-link operation is the source-inode linearization point, and a
+trusted builder must stop mutating draft inputs before returning. Servatus continues to reject
+unsafe linked entries, verify pathname/inode identity, sync published contents, commit without
+clobber, and sync the publication parent. S2 updates package/docs/lock to `0.6.0`; build and inspect
+artifacts locally, but do not push, tag, release, publish, or repin KAIROS until separately
+authorized.
+
+Portable-contract correction after first review: POSIX `link`/`linkat` returns only success or
+failure, not the selected inode or a descriptor, and `unlink`/`unlinkat` cannot condition removal on
+an expected inode. Therefore Servatus cannot both select the inode at pathname-link linearization
+and defend portably on macOS/Linux against a hostile same-account process replacing that private
+draft leaf after the link. The approved lean contract treats the owner-only draft namespace as
+trusted and quiescent during synchronous `Draft.link()`. Concurrent mutation of the draft leaf is
+out of contract; source replacement before the atomic link may be selected if the resulting entry
+is safe. Do not add Linux-only descriptor-link machinery or restore pre-open source linearization.
+Ordinary post-link inspection or validation failure must remove the just-created link before
+returning so a caught failure cannot leave publishable residue. Under the quiescent namespace this
+cleanup targets that created entry. Retain the final regular-file check and all commit/durability
+contracts; remove the redundant post-success device check because hard-link success already proves
+same filesystem. The same implementer/reviewer pair owns correction and rereview against this
+revised contract.
+
+The still larger proposal to delete regular-file cleanup hard-link pinning is rejected for this
+run. It can save another roughly 35-40 lines, but it weakens exact cleanup-target retention for a
+small internal simplification and deserves a concrete production need or failure model before the
+accepted safety contract is reopened.
+
+Implementation and review record:
+
+- Initial S2 implementation `b18c13158609ab49e28c7b5af718d29d8157a09a` was rejected after
+  review reproduced two races under the original too-strong wording: post-link replacement could
+  be accepted, and check-then-unlink could remove a replacement. Portable POSIX cannot return the
+  inode selected by pathname `link` or condition `unlink` on an expected inode. The user accepted
+  the revised trusted/quiescent private-draft contract above instead of nonportable machinery or
+  restored pre-open source linearization.
+- Correction `efde60c563d96a0f710abcf3f0825014391f3ed7` documented the boundary, removed the
+  redundant post-link device check, and cleaned ordinary rejected links. Rereview found one P1:
+  inspection plus cleanup failure could leave residue that a builder caught and later published;
+  it also found dead private device callback plumbing and an over-specific private test.
+- Final correction `281c381548489c1dcf7a6ca8d045908d0b50ba3f` adds one narrow private poison only when
+  rejected-link cleanup cannot be proven, checks it after the builder callback and aborts before
+  sync/commit, removes the dead callback argument, and replaces the private probe with one public
+  caught-error/no-destination regression. Fully cleaned rejection remains catchable; the source is
+  untouched; transaction cleanup and the regular-file cleanup pin remain.
+- The same reviewer returned final GREEN LIGHT with Standards 0 and Spec 0. Cumulative S2 product
+  source is net 18 lines smaller; the combined S1+S2 candidate is version 0.6.0. Final gates passed
+  289 tests with one environmental skip plus Ruff, formatting, strict Pyright, Vulture, lock,
+  build/archive/version/zero-dependency inspection, and fresh-wheel public API/CLI/file/tree/link/
+  Workspace smokes. Exact accepted candidate head is `281c381548489c1dcf7a6ca8d045908d0b50ba3f`.
+  No push, tag, release, PyPI publication, or KAIROS repin is authorized by local acceptance; those
+  remain the next external gate.
+
+External release record:
+
+- The user authorized the Servatus 0.6.0 external gate. Servatus `main` was fast-forwarded and
+  pushed to exact accepted head `281c381548489c1dcf7a6ca8d045908d0b50ba3f`. Branch CI run
+  `31597737876` and annotated-tag CI run `31597794856` passed on Ubuntu and macOS. Annotated tag
+  `v0.6.0` dereferences to that exact commit; the public GitHub Release is
+  `https://github.com/edoski/servatus/releases/tag/v0.6.0`.
+- Trusted-publishing run `31597843846` succeeded. PyPI published wheel
+  `servatus-0.6.0-py3-none-any.whl` with SHA-256
+  `d1770b961bf14e9afeed731d4cee55a4eff09238db33ebaa1a5cdc32627c638f` and sdist
+  `servatus-0.6.0.tar.gz` with SHA-256
+  `16c99b3c10a62d63064a98ac78e665a821fea418f52fc9bab7a1c173a0e7b457`. A fresh no-cache
+  public-index install verified version 0.6.0, zero runtime dependencies, public API/CLI, atomic
+  hard-link publication, output bytes, and cleanup status. An initial smoke compared unresolved
+  `/tmp` with canonical `/private/tmp`; the corrected canonical-path/content check passed and was a
+  command assertion mistake, not a product defect.
+
+#### Consolidation slice C5B: Servatus 0.6.0 repin
+
+Baseline: exact clean accepted C5A head `919e93bbd3173bea09e8a6af6f17a097f197198f`
+plus the exact published 0.6.0 artifacts/hashes above.
+
+Scope:
+
+- Change only root and mobile Servatus pins from 0.5.0 to 0.6.0 and regenerate their locks against
+  the public artifacts. Preserve Blockweaver's current KAIROS pin and every dataset/corpus contract;
+  the separate Blockweaver task owns later v0.3.3/K1 adoption after this handoff.
+- Update directly affected active dependency documentation only. Do not add transition tests or
+  mirror artifact hashes in product tests.
+- Run root/mobile locks and frozen syncs, root/mobile/App tests, Ruff check/format, configured Pyright,
+  manually verified Vulture, installed Servatus 0.6.0 public API/CLI/link publication smoke,
+  residue/diff/status checks, and independent fixed-range review.
+- Do not integrate main/compact, push KAIROS, build an image, edit `REMOTE.toml`, touch outputs/data/
+  corpora, or create/launch a Campaign in this slice.
+
+Expected outcome:
+
+One reviewed KAIROS client head uses the public Servatus 0.6.0 contract with exact reproducible
+locks and no source behavior change. C6 may then integrate that head into current main and
+compact-CUDA while the Blockweaver task remains paused.
+
+Implementation and review record:
+
+- C5B implementation `1756a93b66b82803b11dac0d2fc9bc115f586f8d` is one clean commit from
+  exact C5A head `919e93bb`; only root/mobile `pyproject.toml` and `uv.lock` changed, net zero lines.
+  Both pins are `servatus==0.6.0` and both locks contain the exact published wheel/sdist hashes.
+  Blockweaver remains 0.3.2 and every dataset/corpus boundary remains untouched. Independent review
+  returned GREEN with Standards 0 and Spec 0. Gates passed 104 root, 9 mobile, and 43 App tests;
+  root/mobile lock and frozen-sync checks; Ruff check/format; repository-configured Pyright;
+  Vulture; App typecheck/dry install; installed public 0.6.0 API/CLI/hard-link publication smokes;
+  residue, protected-diff, and status checks.
+- Accuracy correction: `pyrightconfig.json` explicitly uses `typeCheckingMode: standard`; historical
+  ledger wording calling the gate “strict Pyright” was inaccurate. Literal strict mode currently
+  reports 34 pre-existing source errors and is a separate cleanup, not a C5B defect or integration
+  gate. Final records use “configured Pyright.” Reviewer smoke attempts first assumed nonexistent
+  convenience attributes before the corrected public metadata/`cleanup_pending` smoke passed;
+  those command mistakes were not product findings.
+
+#### Rejected consolidation findings
+
+- A Servatus `run()`, `dispatch()`, or `open_plan_submit()` facade is rejected. It saves about a
+  dozen KAIROS lines while creating a second public lifecycle, extra documentation, and a much
+  larger test surface. The existing `open -> plan -> submit` interface is already direct and makes
+  acceptance/retry choices explicit.
+- Completion callbacks and a generic workflow/finalizer interface are rejected. Canonical Study,
+  Artifact, Evaluation, roster, checkpoint, and observation validity are KAIROS scientific meaning;
+  moving them would couple Servatus to application schemas.
+- `Campaign.close()` and a generic Bundle abstraction are rejected. Scheduler receipts prove
+  acceptance, not scientific completion, and `publish(..., retire=...)` already owns generic
+  commit-first cleanup once KAIROS has decided the bundle is complete.
+- GPU predicates, one-GPU rules, tasks-per-allocation policy, resource defaults, image selection,
+  partitions, and queue/QOS monitoring remain KAIROS/operator policy. Servatus stays usable for CPU,
+  multi-GPU, and other ML/HPC clients and must not become site-policy aware.
+- Task-key/payload authoring, Pydantic request helpers, automatic completion detection, and retry
+  selection remain KAIROS meaning. Servatus correctly treats tasks and completed/retry keys as
+  opaque inputs.
+- A scheduler plugin/backend framework, parent-directory creator, automatic retry/monitor, or
+  compatibility parser is rejected as speculative generality. There is one real Slurm adapter and
+  one clean-break state format; another seam would add concepts without hiding existing caller
+  complexity.
+- Broad removal of durable JSON/TOML validation, exact bool-versus-int checks, owner-permission
+  rechecks, cross-device checks, pathname identity around callbacks/commit/deletion, no-clobber,
+  parent durability, lineage, or scheduler-response parsing is rejected. These checks sit at raw or
+  concurrently mutable seams and have concrete corruption/race counterexamples; they are not the
+  redundant validation targeted by S1.
+
 #### Consolidation slice C5: lean KAIROS adoption
 
 Baseline: exact clean accepted KAIROS planning head plus exact published 0.5.0 wheel/sdist URLs and
@@ -2330,6 +2548,52 @@ private Servatus test knowledge. Its remaining code states only scientific work,
 addresses, and deployment policy. Expected reduction is modest in production code and roughly
 50-100 test lines; ownership and failure truth improve without changing outputs or GPU execution.
 
+#### Consolidation slice C5A: lean KAIROS execution client
+
+Status: approved and active from exact C5 GREEN head
+`67c1367c91550466f8d75e4c3fb811cf3ddd9334`.
+
+Scope:
+
+- Load target and resource TOML once at each raw CLI command, enforce the existing one-GPU KAIROS
+  policy there, and pass typed values to the direct submission helper. Do not add a profile class,
+  tuple, or forwarding helper.
+- Remove `zip(strict=True)` where both sequences derive one-for-one from the same request paths and
+  remove the one-task `tasks_per_allocation=1` override whose result cannot differ.
+- Keep the operator-facing `--tasks-per-job` spelling, but make its default `None`; remove the
+  KAIROS `2..4` guard and pass an explicit optional cap to Servatus. Servatus owns feasible-capacity
+  validation. Omitted cap derives from the target; explicit `1` is valid; values above capacity fail
+  at the Servatus owner seam.
+- Remove the duplicate nonnegative candidate-index field constraint while retaining
+  `TuneRequest.method_at()` as the complete bounds check. Replace the impossible third branch of
+  the closed Train/Evaluate union with an ordinary typed `else`.
+- Remove the repeated candidate bounds check in the internal model runner, the minimum-fee
+  finiteness check strictly subsumed by final predicted-log validation, and the duplicate rolling
+  horizon branch implied by the final exact group/count/horizon-set condition.
+- Make the installed DataLoader profile directly fixed at four workers; remove its test-driven
+  mutable worker branch and explicit default prefetch value. Tests replace the loader at its seam
+  instead of mutating production configuration.
+- Inline the one-use feature-ablation objective pass-through.
+- Delete fake-only Campaign status and KAIROS packing-bound tests that test configured fakes or
+  Servatus arithmetic. This supersedes C5's earlier `unaccepted_task_keys` assertion requirement:
+  KAIROS production never calls status, while Servatus already tests its public vocabulary.
+
+Tests and review:
+
+- Retain exact Task keys, argv and payload bytes/order; HPO append; canonical completion selection;
+  retry forwarding; one-GPU and committed profile values; receipt presentation; scientific
+  association/schema/order; and meaningful runtime output.
+- Add observable tests only for load-once profile behavior and default/explicit packing delegation.
+  Do not add transition tests or implementation probes for deleted branches.
+- Run the same root/mobile/App/static/lock/frozen-sync/installed-interface/residue/diff gates as C5
+  and independent fixed-range Standards/Spec review.
+
+Expected outcome:
+
+KAIROS loses roughly 12-20 production lines plus redundant tests and runtime branches. No generic
+module moves to Servatus because none remains; the client becomes a thinner statement of KAIROS
+task meaning, scientific completion, and explicit deployment policy with no new interface.
+
 #### Consolidation slice C6: reviewed local KAIROS integration
 
 Baseline: exact clean C5 GREEN head, the then-current clean local KAIROS main head, and the exact
@@ -2351,7 +2615,7 @@ Required integration proof:
   roster, numstat, and byte-level CUDA delta. After merging, require the same logical commit list
   and exact CUDA-only product delta relative to the accepted KAIROS base; use `git range-diff` and
   tree/file hashes where rebasing or merge context changes object IDs.
-- Run root and mobile pytest, Ruff check/format, strict Pyright, manually verified Vulture, root and
+- Run root and mobile pytest, Ruff check/format, configured Pyright, manually verified Vulture, root and
   mobile lock/frozen-sync checks, App tests/typecheck/dry install, installed API/CLI help, residue
   scans, and clean status on the final product trees.
 
@@ -2359,6 +2623,23 @@ Expected outcome:
 
 Two exact locally reviewed KAIROS heads contain the accepted client change, preserve the compact
 CUDA-only delta, and are ready for separately authorized publication. No external state changes.
+
+C6A main-integration record:
+
+- Current local main/ledger baseline `0381eccad72b004868b41d08f91a38dda75e6795` and exact accepted
+  client `1756a93b66b82803b11dac0d2fc9bc115f586f8d` were combined by normal non-fast-forward merge
+  `1af116223572aedfa944b0ef4765b69de966eaf7`, with parents in that order and merge-base
+  `91515365a0ae0692f2844a81ca303d45c4c33926`. The mechanical merge tree was exact and remerge diff
+  empty; first-parent delta was the accepted C5/C5A/C5B client and second-parent delta ledger-only.
+- Review returned Standards 0 and one Spec P3: one earlier manual sentence still claimed a two-to-
+  four-task packing limit. Correction `68d2d60467b95768eb5236f0732472717c150a96` changed only
+  `docs/KAIROS.md` to state Servatus-derived default capacity, explicit cap 1, and rejection above
+  target feasibility. Same-reviewer rereview returned GREEN with Standards 0 and Spec 0.
+- Final C6A gates passed 104 root, 9 mobile, and 43 App tests; root/mobile lock and frozen-sync;
+  App install/typecheck; Ruff check/format; configured Pyright; Vulture; installed Servatus 0.6.0
+  API/CLI/hard-link publication; Blockweaver 0.3.2 dataset boundary; residue/protected-path/diff and
+  status checks. Exact accepted main integration head is `68d2d60467b95768eb5236f0732472717c150a96`.
+  C6B compact integration remains pending; no KAIROS ref has been pushed.
 
 #### External gate: immutable image build and isolated acceptance
 
@@ -2384,7 +2665,7 @@ Scope:
 - A fresh implementer changes only `REMOTE.toml` from the preserved `f49db0b` image to the exact
   accepted C6 compact-CUDA image. Resource values, target paths, partitions, caps, and every other
   file remain unchanged.
-- Run the public target/profile parser check, full root tests, Ruff check/format, strict Pyright,
+- Run the public target/profile parser check, full root tests, Ruff check/format, configured Pyright,
   manually verified Vulture, lock check, diff check, and clean status. Do not add a mirrored
   hard-coded image assertion to tests.
 - A distinct reviewer inspects the fixed one-line product range on Standards and Spec. No push or
@@ -2536,6 +2817,84 @@ Execution authorization and run setup on 2026-08-11:
   `codex/servatus-consolidation-0.5` branch were removed only after `main` and the remote tag were
   verified at the accepted head. Servatus now matches its pre-run one-worktree/one-main-branch
   shape, clean at 0.5.0. Work pauses before KAIROS C5 as requested.
+
+KAIROS C5/C6 resumption authority on 2026-08-12:
+
+- The legacy HPO campaign is closed at 216/216. The separately reviewed Blockweaver clean break is
+  complete and published on both remotes: KAIROS `main` is exactly
+  `6a8f22c2e518b4bc6885b5cc6e3d807333e3053b`; compact-CUDA is exactly
+  `05ca43b1c51d2c68fd61065cf69b41e7548ca58a`. Root and mobile environments pin Blockweaver 0.3.2,
+  KAIROS loads `outputs/datasets/<uuid>` through its public reader, and old corpora remain untouched.
+- The user authorized C5 adoption of published Servatus 0.5.0, independent fixed-range review, and
+  C6 integration into both current heads. After both heads are GREEN, push only those exact refs to
+  `origin` and `research`, verify remote SHAs, then report them to task
+  `019fea93-223d-7d42-bcfc-c4a499b59dd0` and stop.
+- This resumption must preserve the Blockweaver dependency, dataset paths and schemas, the exact
+  compact CUDA delta, canonical output paths and bytes, and old corpora. It must not build an image,
+  edit `REMOTE.toml`, read/delete/migrate outputs or corpora, contact Slurm/GPU/Apptainer, create or
+  launch a Campaign, or run synthetic/live campaign smokes. The Blockweaver task owns the one final
+  combined image, later configuration cutover, and exact legacy-corpus cleanup.
+- Pre-run state is one clean KAIROS worktree on `main`; local refs are the exact heads above plus
+  pre-existing alias `codex/compact-dataset-alignment` at the compact head. Both remotes already
+  match. Any new C5 branch/worktree is run-owned; the three existing refs and primary worktree are
+  not.
+- C5 implementation `ef817b301e7d0c68584408a2a3e2034671d413c2` passed 110 root, 9 mobile,
+  and 43 App tests plus every required static/lock/installed-interface gate; production Python is
+  net 15 lines smaller. Standards review returned zero findings. Spec review rejected two P2s: the
+  old pending-status assertion lacked one lean `unaccepted_task_keys` replacement, and tests grew
+  by 43 lines because the new public Campaign fake was too large instead of delivering the planned
+  test simplification. The same implementer replaced the 52-line fake with a 15-line public capture
+  seam, restored one `CampaignStatus.unaccepted_task_keys` assertion, merged three workflow cases,
+  and deleted two dependency-level collision cases in correction
+  `67c1367c91550466f8d75e4c3fb811cf3ddd9334`. Final C5 tests are net 63 lines smaller and contain
+  106 root cases versus the 109-case baseline; production remains net 15 lines smaller. The same
+  reviewer returned GREEN LIGHT with Standards 0 and Spec 0. Final gates passed 106 root, 9 mobile,
+  and 43 App tests plus Ruff, formatting, strict Pyright, Vulture, exact lock/frozen-sync checks,
+  installed public-interface smokes, and residue/diff checks. A final source-deletion audit is
+  active before C6 integration; C6 remains blocked until it either records no supported deletion or
+  a separately reviewed cleanup is accepted.
+- The source-deletion and execution-ownership audits found no generic execution, submission, or
+  filesystem module left in KAIROS to move into Servatus. Servatus already owns roster lineage,
+  packing and resource arithmetic, submission intents and receipts, ambiguity, reconciliation,
+  publication, and retirement. A new run/dispatch facade, completion callback, Campaign close,
+  GPU predicate, or queue policy would be a shallow second lifecycle path and is rejected.
+- C5A is a bounded KAIROS deletion slice from exact accepted C5 head `67c1367c`. It loads target and
+  resources once per raw CLI command, removes a meaningless one-task packing override, delegates
+  experiment packing bounds to Servatus while retaining the existing `--tasks-per-job` spelling,
+  and removes redundant candidate-index, exhaustive-union, strict-zip, finiteness, rolling-roster,
+  test-driven DataLoader-profile, and one-use figure-helper machinery. It must retain exact task
+  bytes/order, canonical completion and scientific association/schema checks, explicit retry,
+  one-GPU policy, receipt presentation, and the committed resource/profile values. The earlier
+  fake-only `unaccepted_task_keys` test requirement is superseded: KAIROS production never calls
+  Campaign status, and testing a configured fake or real Servatus status here would retest the
+  dependency. Expected outcome: fewer KAIROS source concepts and runtime checks, roughly 12–20
+  fewer production lines plus a smaller test surface, with no new interface and no output/config
+  change. A fresh implementer and reviewer own C5A before C6 can start.
+- C5A implementation `919e93bbd3173bea09e8a6af6f17a097f197198f` is GREEN. Its exact
+  `67c1367c...919e93bb` range contains one clean commit; production Python is net 16 lines smaller
+  and tests are net 10 lines smaller. Independent review returned Standards 0 and Spec 0. Final
+  gates passed 104 root, 9 mobile-export, and 43 App tests plus Ruff, formatting, strict Pyright,
+  Vulture, root/mobile locks and frozen syncs, App typecheck/dry install, installed API/CLI smokes,
+  residue, diff, and status checks. C6 remains paused behind approved Servatus S1/S2 and the later
+  public dependency repin.
+- A separate read-only audit of released Servatus 0.5.0 found an internal-only slimming candidate:
+  redundant typed-object checks, repeated durable-list checks after one raw-ingress validation,
+  kernel-impossible file-stage branches, repeated inode-type clauses, private ingress repeats, and
+  one unreachable CLI branch. Adversarial review estimates 45–60 definitely safe source-line
+  deletions, with a further clean-break set requiring an explicit source-linearization decision.
+  This finding does not reveal another KAIROS ownership leak. It is not part of C5A/C6: changing the
+  already published dependency requires a separately authorized Servatus version/release and KAIROS
+  repin, so the current 0.5.0 adoption must not be silently rewritten around it. The user then
+  approved local S1 and S2 implementation/review as one 0.6.0 candidate. The separate Blockweaver
+  task may continue Blockweaver-only slices concurrently but holds K1, KAIROS refs, image/config,
+  and corpus cleanup until this task supplies exact accepted main/compact heads; the coordination
+  message was delivered on 2026-08-12. That task subsequently completed and independently reviewed
+  Blockweaver Slices 3A-3F and publicly verified release v0.3.3 at exact head
+  `e69c02c2d72cc5250834233d3eee9a525e386eb0` (wheel SHA-256
+  `42f368fb94daab2fdf12f8d4763be82917f4f0b37255a16be98d735c3443ec0b`; sdist
+  `a5f8c55f6310e8766c23b2adb6a5000159a36bf9adb26de24027eb816b8dd9c1`). It remains paused
+  before K1/KAIROS/image/config/corpus actions and instructed this task to finish S1/S2, then stop
+  at any ungranted Servatus release gate.
 
 ### Historical final deployment gates for the initial extraction
 

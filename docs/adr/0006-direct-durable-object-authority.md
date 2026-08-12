@@ -33,8 +33,8 @@ checkpoint, selected-checkpoint validation observations, and compact result meta
 finalization groups the exact ordered trials. KAIROS supplies canonical destinations, exact work
 identities, and application-owned assembly callbacks. Servatus owns exclusive resumable work,
 absent-or-complete publication, no-overwrite commit, failure preservation, and success cleanup.
-Corpus production remains external. Evaluation and mobile-export publication use the same Servatus
-transaction boundary.
+Corpus production remains external. Evaluation is disposable work rebuilt inside one Servatus
+publication attempt; mobile export uses the same absent-or-complete publication boundary.
 
 ## Consequences
 

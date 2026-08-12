@@ -66,7 +66,7 @@ def _install_artifact_fakes(
     artifact_ids: dict[tuple[str, int], UUID],
     *,
     mismatched_feature_cell: tuple[str, int] | None = None,
-) -> None:
+) -> list[UUID]:
     cells_by_id = {artifact_id: cell for cell, artifact_id in artifact_ids.items()}
 
     def load_artifact(storage_root: Path, artifact_id: UUID) -> tuple[object, nn.Module]:
@@ -79,12 +79,16 @@ def _install_artifact_fakes(
         corpus_id: mobile_export._CHAINS[chain] for chain, corpus_id in _CORPUS_IDS.items()
     }
 
-    def load_corpus_definition(storage_root: Path, corpus_id: UUID) -> object:
+    opened_corpora: list[UUID] = []
+
+    def open_corpus_dataset(storage_root: Path, corpus_id: UUID) -> object:
         del storage_root
+        opened_corpora.append(corpus_id)
         return SimpleNamespace(chain_id=chain_ids[corpus_id])
 
     monkeypatch.setattr(mobile_export, "load_artifact", load_artifact)
-    monkeypatch.setattr(mobile_export, "load_corpus_definition", load_corpus_definition)
+    monkeypatch.setattr(mobile_export, "open_corpus_dataset", open_corpus_dataset)
+    return opened_corpora
 
 
 @pytest.mark.usefixtures("umask_0002")
@@ -93,7 +97,7 @@ def test_export_bundle_publishes_complete_stable_bundle(
 ) -> None:
     roster_path = tmp_path / "MOBILE.yaml"
     artifact_ids = _write_roster(roster_path)
-    _install_artifact_fakes(monkeypatch, artifact_ids)
+    opened_corpora = _install_artifact_fakes(monkeypatch, artifact_ids)
 
     def export_model(cell: mobile_export._Cell, destination: Path) -> None:
         destination.write_bytes(cell.artifact_id.bytes)
@@ -103,6 +107,7 @@ def test_export_bundle_publishes_complete_stable_bundle(
 
     mobile_export.export_bundle(tmp_path / "storage", roster_path, output)
 
+    assert opened_corpora == list(_CORPUS_IDS.values())
     assert stat.S_IMODE(output.parent.stat().st_mode) == 0o755
     expected_files = {"manifest.json"} | {
         f"{chain}-k{horizon}.pte"
@@ -163,14 +168,14 @@ def test_export_bundle_rejects_artifact_association_mismatch(
 
         monkeypatch.setattr(mobile_export, "load_artifact", load_artifact)
     else:
-        fake_load_corpus_definition = mobile_export.load_corpus_definition
+        fake_open_corpus_dataset = mobile_export.open_corpus_dataset
 
-        def load_corpus_definition(storage_root: Path, corpus_id: UUID) -> object:
+        def open_corpus_dataset(storage_root: Path, corpus_id: UUID) -> object:
             if corpus_id == _CORPUS_IDS["ethereum"]:
                 return SimpleNamespace(chain_id=137)
-            return fake_load_corpus_definition(storage_root, corpus_id)
+            return fake_open_corpus_dataset(storage_root, corpus_id)
 
-        monkeypatch.setattr(mobile_export, "load_corpus_definition", load_corpus_definition)
+        monkeypatch.setattr(mobile_export, "open_corpus_dataset", open_corpus_dataset)
 
     with pytest.raises(ValueError, match=message):
         mobile_export.export_bundle(tmp_path / "storage", roster_path, tmp_path / "models")

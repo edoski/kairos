@@ -6,7 +6,7 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from kairos.config import BlockWindow, CorpusDefinition, ExperimentSemantics
+from kairos.config import BlockWindow, ExperimentSemantics
 from kairos.corpus import BlockFrame
 from kairos.temporal import prepare_fit_history, prepare_historical_window
 
@@ -29,9 +29,7 @@ def _blocks(first_block: int = 10, last_block: int = 29) -> BlockFrame:
             "effective_priority_fee_per_gas_p90": 4 + np.arange(blocks.size, dtype=np.int64),
         }
     ).filter(pl.col("block_number").is_between(first_block, last_block))
-    return BlockFrame(
-        frame, CorpusDefinition(chain_id=1, first_block=first_block, last_block=last_block)
-    )
+    return BlockFrame(frame, chain_id=1)
 
 
 def _experiment() -> ExperimentSemantics:
@@ -129,7 +127,7 @@ def test_interval_feature_uses_a_real_predecessor_outside_the_context() -> None:
             "effective_priority_fee_per_gas_p90": 2 * np.arange(blocks.size, dtype=np.int64),
         }
     )
-    blocks = BlockFrame(frame, CorpusDefinition(chain_id=1, first_block=9, last_block=29))
+    blocks = BlockFrame(frame, chain_id=1)
     experiment = _experiment().model_copy(
         update={
             "ordered_features": (
@@ -145,13 +143,13 @@ def test_interval_feature_uses_a_real_predecessor_outside_the_context() -> None:
     torch.testing.assert_close(preparation.training[0]["inputs"], torch.from_numpy(expected[:3]))
 
     without_predecessor = blocks.select_range(10, 29)
-    with pytest.raises(ValueError, match="within the BlockFrame definition"):
+    with pytest.raises(ValueError, match="within the BlockFrame extent"):
         prepare_fit_history(without_predecessor, experiment)
 
 
 @pytest.mark.parametrize("blocks", (_blocks(first_block=11), _blocks(last_block=23)))
 def test_fit_history_requires_complete_context_and_outcome_support(blocks: BlockFrame) -> None:
-    with pytest.raises(ValueError, match="within the BlockFrame definition"):
+    with pytest.raises(ValueError, match="within the BlockFrame extent"):
         prepare_fit_history(blocks, _experiment())
 
 

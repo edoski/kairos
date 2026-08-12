@@ -51,8 +51,8 @@ corpus / study / min_block_fee / workers
 
 This high-level diagram summarizes the production import direction. Direct owner seams are:
 
-- `corpus` maps a verified Blockweaver dataset to canonical `BlockFrame` rows and a
-  `CorpusDefinition`.
+- `corpus` resolves UUID-addressed Blockweaver datasets and maps their rows to canonical
+  `BlockFrame` values.
 - `temporal` owns causal feature state, fixed-block context/outcome geometry, and lazy historical examples.
 - `min_block_fee` owns target state, the fixed training loss, two-head output, and decode.
 - `modeling` owns request-bound candidate and selected fitting, the three concrete neural
@@ -553,11 +553,16 @@ datasets/<corpus_id>/
 
 `blockweaver.open_dataset()` validates the UUID-bound manifest, artifact digest, source and
 verification facts, resolved range, schema, row domains, and exact two-file publication.
-`load_corpus_blocks()` reads the declared data path as Parquet, derives `CorpusDefinition` from the
-dataset chain and range, and lets `BlockFrame` enforce KAIROS's exact ordered eight-column schema.
-`load_corpus_definition()` reads the same validated metadata without hydrating the frame.
+`open_corpus_dataset()` exposes the validated `Dataset` for metadata-only callers without
+hydrating rows. `load_corpus_blocks()` reads its data path as Parquet and lets `BlockFrame` enforce
+KAIROS's exact ordered eight-column scientific schema.
 
-`BlockFrame(frame, definition)` is the public canonical-row interface. Its `definition` identifies the exact owned range, `select_range(first_block, last_block)` returns an inclusive subrange, and `to_polars()` returns an isolated native frame. Construction checks the exact schema and native access isolates caller mutation. Range selection is positional and does not rescan rows. The value carries neither hashes nor finality provenance.
+`BlockFrame(frame, chain_id)` is the public canonical-row interface. It stores chain identity once,
+derives `first_block` and `last_block` from its nonempty rows, returns inclusive subranges through
+`select_range(first_block, last_block)`, and returns an isolated native frame through `to_polars()`.
+Construction checks the exact schema and nonempty extent; native access isolates caller mutation.
+Range selection is positional and does not rescan rows. The value carries neither hashes nor
+finality provenance.
 
 ### Temporal preparation
 
@@ -708,14 +713,6 @@ Distribution name, import root, and installed executable are `kairos`; the stati
 
 ### Requests and definitions
 
-#### Corpus
-
-| Record | Ordered field | Type and rule |
-| --- | --- | --- |
-| `CorpusDefinition` | `chain_id` | int |
-|  | `first_block` | int |
-|  | `last_block` | int |
-
 #### Scientific semantics
 
 | Record | Ordered field | Type and rule |
@@ -826,12 +823,13 @@ only `blocks.parquet` with this exact ordered, nonnull projection:
 Direct loader:
 
 ```python
+open_corpus_dataset(storage_root: Path, corpus_id: UUID4) -> blockweaver.Dataset
 load_corpus_blocks(storage_root: Path, corpus_id: UUID4) -> BlockFrame
-load_corpus_definition(storage_root: Path, corpus_id: UUID4) -> CorpusDefinition
 ```
 
 Both loaders resolve `storage_root / "datasets" / str(corpus_id)` through
-`blockweaver.open_dataset()`. Chain identity remains in `CorpusDefinition`, not in every block row.
+`blockweaver.open_dataset()`. Metadata callers consume `Dataset` facts directly. Hydrated frames
+store chain identity once, not in every block row, and derive their extent from their actual rows.
 
 #### Experiment manifest
 
@@ -885,7 +883,8 @@ the earliest minimum validation objective.
 selected-Study Train requests for `K={2,3,4,5,10,25,50,100,200}`. It publishes the K-study
 manifest only after every artifact exists. `experiments/held_out.py` authors the corresponding
 held-out Evaluate requests. It derives complete-outcome separation and corpus-tail support from the
-largest horizon in the loaded K-study roster, so all horizons share the same first testing origin.
+largest horizon in the loaded K-study roster, opening each distinct Dataset once and retaining only
+its last block, so all horizons share the same first testing origin.
 The explicit `K=2…5` rolling policy remains fixed: the `K=2…4` ranges extend their last origin by
 three, two, or one blocks so the fixed-deadline comparison has every reachable decision origin. Its
 report commands print, but do not persist, the ordinary and rolling reductions. Closure publishes
@@ -1018,7 +1017,7 @@ The isolated `tools/mobile-export` project pins Torch 2.11 and ExecuTorch 1.2 wi
 Every cell must match artifact identity, chain, horizon, shared feature contract, native output
 semantics, eager-to-XNNPACK host parity, selected action, and decoded-fee tolerance. At least one
 delegate across the exported program's execution plans must have exact ID `XnnpackBackend`. The
-exporter reads only the Corpus definition needed for chain identity and publishes all twelve models
+exporter opens each distinct Dataset once, retains only its chain ID, and publishes all twelve models
 plus one manifest through one Servatus transaction:
 
 ```text

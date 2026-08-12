@@ -27,7 +27,6 @@ from kairos.addresses import (
 )
 from kairos.config import (
     BlockWindow,
-    CorpusDefinition,
     ExperimentSemantics,
     FitMethod,
     LstmDefinition,
@@ -44,7 +43,7 @@ from kairos.modeling import ArtifactAssociation, load_artifact, run_candidate, t
 from kairos.observations import OBSERVATION_SCHEMA, reduce_observations
 from kairos.study import RetainedResult, Study, load_study, publish_study
 from kairos.temporal import FeatureState, prepare_fit_history
-from tests.helpers import single_process_loader, write_blockweaver_dataset
+from tests.helpers import single_process_loader
 
 ARTIFACT_ID = UUID("10000000-0000-4000-8000-000000000001")
 CORPUS_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -69,6 +68,7 @@ _METHOD = Method(
 @pytest.fixture(autouse=True)
 def _use_single_process_loaders(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(modeling._runtime, "data_loader", single_process_loader)
+    monkeypatch.setattr(modeling, "load_corpus_blocks", lambda *_args: _blocks())
 
 
 def _experiment() -> ExperimentSemantics:
@@ -96,12 +96,8 @@ def _blocks() -> BlockFrame:
                 "effective_priority_fee_per_gas_p90": 2 * np.arange(blocks.size, dtype=np.int64),
             }
         ),
-        CorpusDefinition(chain_id=1, first_block=10, last_block=23),
+        chain_id=1,
     )
-
-
-def _write_corpus(storage_root: Path) -> None:
-    write_blockweaver_dataset(storage_root, CORPUS_ID, _blocks().to_polars())
 
 
 def _candidate_request(method: Method) -> TuneRequest:
@@ -270,7 +266,6 @@ def test_lstm_trains_loads_and_applies_direct_loss(
 ) -> None:
     artifact_id = UUID("30000000-0000-4000-8000-000000000001")
     request = _train_request(artifact_id)
-    _write_corpus(tmp_path)
     _write_selected_study(tmp_path, request, _METHOD)
     _use_cpu_trainer(monkeypatch)
 
@@ -320,7 +315,6 @@ def test_train_preserves_canonical_created_during_publication(
 ) -> None:
     artifact_id = UUID("30000000-0000-4000-8000-000000000002")
     request = _train_request(artifact_id)
-    _write_corpus(tmp_path)
     _write_selected_study(tmp_path, request, _METHOD)
     _use_cpu_trainer(monkeypatch)
     canonical = artifact_checkpoint_path(tmp_path, artifact_id).parent
@@ -360,7 +354,6 @@ def test_candidate_failure_preserves_checkpoint_and_resume_publishes_result(
         ),
     )
     request = _candidate_request(method)
-    _write_corpus(tmp_path)
     real_trainer: Any = modeling.pl.Trainer
     fit_kwargs: list[dict[str, object]] = []
 

@@ -3,12 +3,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from kairos.config import CorpusDefinition
 from kairos.corpus import BlockFrame
-
-
-def _definition(first_block: int = 100, last_block: int = 104) -> CorpusDefinition:
-    return CorpusDefinition(chain_id=1, first_block=first_block, last_block=last_block)
 
 
 def _valid_frame() -> pl.DataFrame:
@@ -41,7 +36,12 @@ def test_block_frame_requires_the_canonical_schema() -> None:
     )
 
     with pytest.raises(ValueError, match="schema"):
-        BlockFrame(reordered, _definition())
+        BlockFrame(reordered, chain_id=1)
+
+
+def test_block_frame_requires_rows_for_its_extent() -> None:
+    with pytest.raises(ValueError, match="nonempty"):
+        BlockFrame(_valid_frame().clear(), chain_id=1)
 
 
 @pytest.mark.parametrize(
@@ -55,9 +55,13 @@ def test_block_frame_requires_the_canonical_schema() -> None:
 def test_select_range_returns_exact_inclusive_block_range(
     first_block: int, last_block: int, expected: list[int]
 ) -> None:
-    selected = BlockFrame(_valid_frame(), _definition()).select_range(first_block, last_block)
+    selected = BlockFrame(_valid_frame(), chain_id=1).select_range(first_block, last_block)
 
-    assert selected.definition == _definition(first_block, last_block)
+    assert (selected.chain_id, selected.first_block, selected.last_block) == (
+        1,
+        first_block,
+        last_block,
+    )
     assert selected.to_polars()["block_number"].to_list() == expected
 
 
@@ -71,12 +75,12 @@ def test_select_range_returns_exact_inclusive_block_range(
 )
 def test_select_range_rejects_invalid_bounds(first_block: int, last_block: int) -> None:
     with pytest.raises(ValueError, match="range"):
-        BlockFrame(_valid_frame(), _definition()).select_range(first_block, last_block)
+        BlockFrame(_valid_frame(), chain_id=1).select_range(first_block, last_block)
 
 
 def test_select_range_isolates_selected_frame_from_mutation() -> None:
     source = _valid_frame()
-    blocks = BlockFrame(source, _definition())
+    blocks = BlockFrame(source, chain_id=1)
     selected = blocks.select_range(101, 103)
 
     source[1, "base_fee_per_gas"] = 999

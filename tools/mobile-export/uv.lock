@@ -116,16 +116,16 @@ wheels = [
 
 [[package]]
 name = "blockweaver"
-version = "0.3.2"
+version = "0.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "polars" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/30/0a304a8cfb12129d6b6d9934302daeeb729be3d9057f243d98d70217c9af/blockweaver-0.3.2.tar.gz", hash = "sha256:542f88c2b7f9dcfc7438eca547f46a8ea455b3b49a0c67ad39f695a45f2c4fdf", size = 165583, upload-time = "2026-08-11T13:18:23.988Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bb/a3/cd6a5eb47a364dff1e59a08da05f6c6e132ec568cae5d1dceecc545f2dd7/blockweaver-0.3.3.tar.gz", hash = "sha256:a5f8c55f6310e8766c23b2adb6a5000159a36bf9adb26de24027eb816b8dd9c1", size = 177301, upload-time = "2026-08-12T11:48:45.956Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/ea/1a7318ef7d98219f39ec4b108991dbc756c7a4313f4ff06da79c3a6e1a9e/blockweaver-0.3.2-py3-none-any.whl", hash = "sha256:81a194e54d19ce7125178b41d5091cd283da699a138d2fbc38e05812251771ac", size = 39930, upload-time = "2026-08-11T13:18:22.733Z" },
+    { url = "https://files.pythonhosted.org/packages/85/f4/0240967184299b431b9f4cb011ea1afe6318929873f0df29e9ebe46ab430/blockweaver-0.3.3-py3-none-any.whl", hash = "sha256:42f368fb94daab2fdf12f8d4763be82917f4f0b37255a16be98d735c3443ec0b", size = 38868, upload-time = "2026-08-12T11:48:44.508Z" },
 ]
 
 [[package]]
@@ -568,7 +568,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "blockweaver", specifier = "==0.3.2" },
+    { name = "blockweaver", specifier = "==0.3.3" },
     { name = "lightning", specifier = "==2.6.5" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.5" },

@@ -59,7 +59,7 @@ def _raw_feature_rows(
     predecessor_blocks = _feature_predecessor_blocks(ordered_features)
     columns = []
     for feature_name in ordered_features:
-        values = _feature_values(frame, blocks.definition.chain_id, feature_name)
+        values = _feature_values(frame, blocks.chain_id, feature_name)
         if predecessor_blocks and feature_name != "block_interval_seconds":
             values = values[predecessor_blocks:]
         columns.append(values)

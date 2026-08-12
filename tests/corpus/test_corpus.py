@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from uuid import UUID
 
 import polars as pl
+import pytest
 from polars.testing import assert_frame_equal
 
-from kairos.config import CorpusDefinition
-from kairos.corpus import load_corpus_blocks, load_corpus_definition
-from tests.helpers import write_blockweaver_dataset
+import kairos.corpus as corpus
+from kairos.corpus import load_corpus_blocks, open_corpus_dataset
 
 CORPUS_ID = UUID("11111111-1111-4111-8111-111111111111")
 BLOCK_SCHEMA = {
@@ -34,12 +35,27 @@ def _valid_blocks() -> pl.DataFrame:
     )
 
 
-def test_load_corpus_reads_one_valid_blockweaver_dataset(tmp_path) -> None:
+def test_corpus_adapter_reads_one_parquet_dataset(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     blocks = _valid_blocks()
-    write_blockweaver_dataset(tmp_path, CORPUS_ID, blocks, chain_id=137)
+    data_path = tmp_path / "blocks.parquet"
+    blocks.write_parquet(data_path)
+    dataset = SimpleNamespace(chain_id=137, data_path=data_path)
+    opened: list[object] = []
+
+    def open_dataset(path) -> object:
+        opened.append(path)
+        return dataset
+
+    monkeypatch.setattr(corpus, "open_dataset", open_dataset)
 
     loaded = load_corpus_blocks(tmp_path, CORPUS_ID)
 
-    assert loaded.definition == CorpusDefinition(chain_id=137, first_block=100, last_block=102)
+    assert open_corpus_dataset(tmp_path, CORPUS_ID) is dataset
+    assert opened == [
+        tmp_path / "datasets" / str(CORPUS_ID),
+        tmp_path / "datasets" / str(CORPUS_ID),
+    ]
+    assert (loaded.chain_id, loaded.first_block, loaded.last_block) == (137, 100, 102)
     assert_frame_equal(loaded.to_polars(), blocks)
-    assert load_corpus_definition(tmp_path, CORPUS_ID) == loaded.definition

@@ -2562,8 +2562,16 @@ KAIROS C5/C6 resumption authority on 2026-08-12:
   net 15 lines smaller. Standards review returned zero findings. Spec review rejected two P2s: the
   old pending-status assertion lacked one lean `unaccepted_task_keys` replacement, and tests grew
   by 43 lines because the new public Campaign fake was too large instead of delivering the planned
-  test simplification. The same implementer/reviewer pair owns a focused correction; C6 remains
-  blocked.
+  test simplification. The same implementer replaced the 52-line fake with a 15-line public capture
+  seam, restored one `CampaignStatus.unaccepted_task_keys` assertion, merged three workflow cases,
+  and deleted two dependency-level collision cases in correction
+  `67c1367c91550466f8d75e4c3fb811cf3ddd9334`. Final C5 tests are net 63 lines smaller and contain
+  106 root cases versus the 109-case baseline; production remains net 15 lines smaller. The same
+  reviewer returned GREEN LIGHT with Standards 0 and Spec 0. Final gates passed 106 root, 9 mobile,
+  and 43 App tests plus Ruff, formatting, strict Pyright, Vulture, exact lock/frozen-sync checks,
+  installed public-interface smokes, and residue/diff checks. A final source-deletion audit is
+  active before C6 integration; C6 remains blocked until it either records no supported deletion or
+  a separately reviewed cleanup is accepted.
 
 ### Historical final deployment gates for the initial extraction
 

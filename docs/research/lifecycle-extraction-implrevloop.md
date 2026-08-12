@@ -2615,7 +2615,7 @@ Required integration proof:
   roster, numstat, and byte-level CUDA delta. After merging, require the same logical commit list
   and exact CUDA-only product delta relative to the accepted KAIROS base; use `git range-diff` and
   tree/file hashes where rebasing or merge context changes object IDs.
-- Run root and mobile pytest, Ruff check/format, strict Pyright, manually verified Vulture, root and
+- Run root and mobile pytest, Ruff check/format, configured Pyright, manually verified Vulture, root and
   mobile lock/frozen-sync checks, App tests/typecheck/dry install, installed API/CLI help, residue
   scans, and clean status on the final product trees.
 
@@ -2623,6 +2623,23 @@ Expected outcome:
 
 Two exact locally reviewed KAIROS heads contain the accepted client change, preserve the compact
 CUDA-only delta, and are ready for separately authorized publication. No external state changes.
+
+C6A main-integration record:
+
+- Current local main/ledger baseline `0381eccad72b004868b41d08f91a38dda75e6795` and exact accepted
+  client `1756a93b66b82803b11dac0d2fc9bc115f586f8d` were combined by normal non-fast-forward merge
+  `1af116223572aedfa944b0ef4765b69de966eaf7`, with parents in that order and merge-base
+  `91515365a0ae0692f2844a81ca303d45c4c33926`. The mechanical merge tree was exact and remerge diff
+  empty; first-parent delta was the accepted C5/C5A/C5B client and second-parent delta ledger-only.
+- Review returned Standards 0 and one Spec P3: one earlier manual sentence still claimed a two-to-
+  four-task packing limit. Correction `68d2d60467b95768eb5236f0732472717c150a96` changed only
+  `docs/KAIROS.md` to state Servatus-derived default capacity, explicit cap 1, and rejection above
+  target feasibility. Same-reviewer rereview returned GREEN with Standards 0 and Spec 0.
+- Final C6A gates passed 104 root, 9 mobile, and 43 App tests; root/mobile lock and frozen-sync;
+  App install/typecheck; Ruff check/format; configured Pyright; Vulture; installed Servatus 0.6.0
+  API/CLI/hard-link publication; Blockweaver 0.3.2 dataset boundary; residue/protected-path/diff and
+  status checks. Exact accepted main integration head is `68d2d60467b95768eb5236f0732472717c150a96`.
+  C6B compact integration remains pending; no KAIROS ref has been pushed.
 
 #### External gate: immutable image build and isolated acceptance
 
@@ -2648,7 +2665,7 @@ Scope:
 - A fresh implementer changes only `REMOTE.toml` from the preserved `f49db0b` image to the exact
   accepted C6 compact-CUDA image. Resource values, target paths, partitions, caps, and every other
   file remain unchanged.
-- Run the public target/profile parser check, full root tests, Ruff check/format, strict Pyright,
+- Run the public target/profile parser check, full root tests, Ruff check/format, configured Pyright,
   manually verified Vulture, lock check, diff check, and clean status. Do not add a mirrored
   hard-coded image assertion to tests.
 - A distinct reviewer inspects the fixed one-line product range on Standards and Spec. No push or

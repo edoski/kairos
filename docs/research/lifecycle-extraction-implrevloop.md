@@ -2277,6 +2277,106 @@ No existing canonical KAIROS output needs migration. Old images and active old-l
 state remain on their old code until closed. New Servatus code must not open the active HPO bundle
 or its scratch, Campaign, jobs, or outputs.
 
+#### Post-release source audit S1: Servatus owned-seam deletion
+
+Status: evidence-approved; implementation and a possible `0.5.1` release are not yet authorized.
+
+Baseline: exact reviewed and published Servatus 0.5.0 head
+`79ee407c431d1f9c0510e9462d5136fa7b58319d`.
+
+Scope:
+
+- Remove runtime `isinstance` checks on the typed public `Task`, `SlurmTarget`,
+  `ResourceRequest`, and Campaign-produced `SubmissionPlan` interface. Raw JSON/TOML/state ingress
+  retains exact validation; deliberately passing arbitrary `object()` values is not a supported
+  runtime contract.
+- Validate durable Campaign collection shapes once at the top-level raw-state ingress and pass
+  typed collections to subordinate validators. Delete the repeated list checks. Keep task parsing,
+  digest/uniqueness, lineage, allocation provenance, receipt/resolution referential integrity, and
+  accepted-versus-resolved contradiction checks.
+- Let exact canonical allocation-argv equality own nonempty/string/NUL-free provenance instead of
+  checking those properties immediately before the equality check.
+- Trust kernel facts established by `O_CREAT|O_EXCL`, an already-held descriptor, `O_DIRECTORY`,
+  and inode identity. Delete impossible fresh-stage type/device branches, repeated descriptor
+  type/device/identity checks, and type predicates already implied by the pinned inode. Keep every
+  pathname-to-inode check around callbacks, sync, commit, and cleanup.
+- Remove repeated platform/leaf validation from the private no-replace commit helper after its only
+  callers have validated those values at their owning seam.
+- Pin retirement at the atomic directory open, then verify owner-only metadata and the pathname to
+  the opened inode. Delete the preliminary path stat because no prior inode is part of the public
+  interface.
+- Remove the CLI fallback made unreachable by argparse's required fixed subcommands.
+
+Tests and review:
+
+- Delete contrived tests that pass arbitrary untyped objects to typed public methods or monkeypatch
+  kernel-created regular stages into impossible file kinds. Do not replace deleted implementation
+  probes with new probes.
+- Retain raw durable-state corruption, bool-versus-int, real substitution/symlink/mount,
+  no-clobber, durability-order, cleanup-residue, fallback, scheduler-response, and lineage tests.
+- Require the full Servatus package/static/build/install gates and independent fixed-range
+  Standards/Spec review. A release and KAIROS repin remain separate external gates.
+
+Expected outcome:
+
+Servatus loses roughly 45-60 source lines and the corresponding nonsense tests without changing
+its public interface, accepted filesystem threat model, durable-state contract, scheduler
+behavior, or KAIROS ownership seam. Each retained check has one owning raw/racy boundary.
+
+#### Post-release source audit S2: quiescent-source linearization
+
+Status: decision-required and deferred; not approved for implementation.
+
+Candidate scope:
+
+- Simplify `Draft.link()` so the atomic hard link, not a preliminary source stat/open, selects the
+  source inode. The linked draft entry is then inspected and rejected/removed unless it is a safe
+  regular file. This changes the contract from “the pathname still denotes the inode observed at
+  method entry” to “link the safe inode denoted at the kernel link linearization point.”
+- Remove file/tree size and modification-time comparisons around `fsync`. Those checks detect only
+  some concurrent writers and cannot prevent a write immediately afterward. The simpler contract
+  requires the trusted builder to be quiescent before returning and retains pathname/inode checks,
+  content sync, commit, and parent durability.
+
+Expected outcome if later approved:
+
+Roughly 25-40 more source lines and two misleading partial-concurrency concepts disappear. This is
+not a mechanical cleanup: it deliberately narrows the same-account threat model and must be
+decided, documented, implemented, and reviewed separately from S1.
+
+The still larger proposal to delete regular-file cleanup hard-link pinning is rejected for this
+run. It can save another roughly 35-40 lines, but it weakens exact cleanup-target retention for a
+small internal simplification and deserves a concrete production need or failure model before the
+accepted safety contract is reopened.
+
+#### Rejected consolidation findings
+
+- A Servatus `run()`, `dispatch()`, or `open_plan_submit()` facade is rejected. It saves about a
+  dozen KAIROS lines while creating a second public lifecycle, extra documentation, and a much
+  larger test surface. The existing `open -> plan -> submit` interface is already direct and makes
+  acceptance/retry choices explicit.
+- Completion callbacks and a generic workflow/finalizer interface are rejected. Canonical Study,
+  Artifact, Evaluation, roster, checkpoint, and observation validity are KAIROS scientific meaning;
+  moving them would couple Servatus to application schemas.
+- `Campaign.close()` and a generic Bundle abstraction are rejected. Scheduler receipts prove
+  acceptance, not scientific completion, and `publish(..., retire=...)` already owns generic
+  commit-first cleanup once KAIROS has decided the bundle is complete.
+- GPU predicates, one-GPU rules, tasks-per-allocation policy, resource defaults, image selection,
+  partitions, and queue/QOS monitoring remain KAIROS/operator policy. Servatus stays usable for CPU,
+  multi-GPU, and other ML/HPC clients and must not become site-policy aware.
+- Task-key/payload authoring, Pydantic request helpers, automatic completion detection, and retry
+  selection remain KAIROS meaning. Servatus correctly treats tasks and completed/retry keys as
+  opaque inputs.
+- A scheduler plugin/backend framework, parent-directory creator, automatic retry/monitor, or
+  compatibility parser is rejected as speculative generality. There is one real Slurm adapter and
+  one clean-break state format; another seam would add concepts without hiding existing caller
+  complexity.
+- Broad removal of durable JSON/TOML validation, exact bool-versus-int checks, owner-permission
+  rechecks, cross-device checks, pathname identity around callbacks/commit/deletion, no-clobber,
+  parent durability, lineage, or scheduler-response parsing is rejected. These checks sit at raw or
+  concurrently mutable seams and have concrete corruption/race counterexamples; they are not the
+  redundant validation targeted by S1.
+
 #### Consolidation slice C5: lean KAIROS adoption
 
 Baseline: exact clean accepted KAIROS planning head plus exact published 0.5.0 wheel/sdist URLs and
@@ -2329,6 +2429,52 @@ KAIROS contains no generic post-commit cleanup, disposable-workspace ceremony, c
 private Servatus test knowledge. Its remaining code states only scientific work, application
 addresses, and deployment policy. Expected reduction is modest in production code and roughly
 50-100 test lines; ownership and failure truth improve without changing outputs or GPU execution.
+
+#### Consolidation slice C5A: lean KAIROS execution client
+
+Status: approved and active from exact C5 GREEN head
+`67c1367c91550466f8d75e4c3fb811cf3ddd9334`.
+
+Scope:
+
+- Load target and resource TOML once at each raw CLI command, enforce the existing one-GPU KAIROS
+  policy there, and pass typed values to the direct submission helper. Do not add a profile class,
+  tuple, or forwarding helper.
+- Remove `zip(strict=True)` where both sequences derive one-for-one from the same request paths and
+  remove the one-task `tasks_per_allocation=1` override whose result cannot differ.
+- Keep the operator-facing `--tasks-per-job` spelling, but make its default `None`; remove the
+  KAIROS `2..4` guard and pass an explicit optional cap to Servatus. Servatus owns feasible-capacity
+  validation. Omitted cap derives from the target; explicit `1` is valid; values above capacity fail
+  at the Servatus owner seam.
+- Remove the duplicate nonnegative candidate-index field constraint while retaining
+  `TuneRequest.method_at()` as the complete bounds check. Replace the impossible third branch of
+  the closed Train/Evaluate union with an ordinary typed `else`.
+- Remove the repeated candidate bounds check in the internal model runner, the minimum-fee
+  finiteness check strictly subsumed by final predicted-log validation, and the duplicate rolling
+  horizon branch implied by the final exact group/count/horizon-set condition.
+- Make the installed DataLoader profile directly fixed at four workers; remove its test-driven
+  mutable worker branch and explicit default prefetch value. Tests replace the loader at its seam
+  instead of mutating production configuration.
+- Inline the one-use feature-ablation objective pass-through.
+- Delete fake-only Campaign status and KAIROS packing-bound tests that test configured fakes or
+  Servatus arithmetic. This supersedes C5's earlier `unaccepted_task_keys` assertion requirement:
+  KAIROS production never calls status, while Servatus already tests its public vocabulary.
+
+Tests and review:
+
+- Retain exact Task keys, argv and payload bytes/order; HPO append; canonical completion selection;
+  retry forwarding; one-GPU and committed profile values; receipt presentation; scientific
+  association/schema/order; and meaningful runtime output.
+- Add observable tests only for load-once profile behavior and default/explicit packing delegation.
+  Do not add transition tests or implementation probes for deleted branches.
+- Run the same root/mobile/App/static/lock/frozen-sync/installed-interface/residue/diff gates as C5
+  and independent fixed-range Standards/Spec review.
+
+Expected outcome:
+
+KAIROS loses roughly 12-20 production lines plus redundant tests and runtime branches. No generic
+module moves to Servatus because none remains; the client becomes a thinner statement of KAIROS
+task meaning, scientific completion, and explicit deployment policy with no new interface.
 
 #### Consolidation slice C6: reviewed local KAIROS integration
 

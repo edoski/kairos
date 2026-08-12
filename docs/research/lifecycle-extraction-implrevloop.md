@@ -2744,6 +2744,13 @@ KAIROS C5/C6 resumption authority on 2026-08-12:
   dependency. Expected outcome: fewer KAIROS source concepts and runtime checks, roughly 12–20
   fewer production lines plus a smaller test surface, with no new interface and no output/config
   change. A fresh implementer and reviewer own C5A before C6 can start.
+- C5A implementation `919e93bbd3173bea09e8a6af6f17a097f197198f` is GREEN. Its exact
+  `67c1367c...919e93bb` range contains one clean commit; production Python is net 16 lines smaller
+  and tests are net 10 lines smaller. Independent review returned Standards 0 and Spec 0. Final
+  gates passed 104 root, 9 mobile-export, and 43 App tests plus Ruff, formatting, strict Pyright,
+  Vulture, root/mobile locks and frozen syncs, App typecheck/dry install, installed API/CLI smokes,
+  residue, diff, and status checks. C6 remains paused behind approved Servatus S1/S2 and the later
+  public dependency repin.
 - A separate read-only audit of released Servatus 0.5.0 found an internal-only slimming candidate:
   redundant typed-object checks, repeated durable-list checks after one raw-ingress validation,
   kernel-impossible file-stage branches, repeated inode-type clauses, private ingress repeats, and
@@ -2751,7 +2758,11 @@ KAIROS C5/C6 resumption authority on 2026-08-12:
   deletions, with a further clean-break set requiring an explicit source-linearization decision.
   This finding does not reveal another KAIROS ownership leak. It is not part of C5A/C6: changing the
   already published dependency requires a separately authorized Servatus version/release and KAIROS
-  repin, so the current 0.5.0 adoption must not be silently rewritten around it.
+  repin, so the current 0.5.0 adoption must not be silently rewritten around it. The user then
+  approved local S1 and S2 implementation/review as one 0.6.0 candidate. The separate Blockweaver
+  task may continue Blockweaver-only slices concurrently but holds K1, KAIROS refs, image/config,
+  and corpus cleanup until this task supplies exact accepted main/compact heads; the coordination
+  message was delivered on 2026-08-12.
 
 ### Historical final deployment gates for the initial extraction
 

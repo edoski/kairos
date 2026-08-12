@@ -2537,6 +2537,27 @@ Execution authorization and run setup on 2026-08-11:
   verified at the accepted head. Servatus now matches its pre-run one-worktree/one-main-branch
   shape, clean at 0.5.0. Work pauses before KAIROS C5 as requested.
 
+KAIROS C5/C6 resumption authority on 2026-08-12:
+
+- The legacy HPO campaign is closed at 216/216. The separately reviewed Blockweaver clean break is
+  complete and published on both remotes: KAIROS `main` is exactly
+  `6a8f22c2e518b4bc6885b5cc6e3d807333e3053b`; compact-CUDA is exactly
+  `05ca43b1c51d2c68fd61065cf69b41e7548ca58a`. Root and mobile environments pin Blockweaver 0.3.2,
+  KAIROS loads `outputs/datasets/<uuid>` through its public reader, and old corpora remain untouched.
+- The user authorized C5 adoption of published Servatus 0.5.0, independent fixed-range review, and
+  C6 integration into both current heads. After both heads are GREEN, push only those exact refs to
+  `origin` and `research`, verify remote SHAs, then report them to task
+  `019fea93-223d-7d42-bcfc-c4a499b59dd0` and stop.
+- This resumption must preserve the Blockweaver dependency, dataset paths and schemas, the exact
+  compact CUDA delta, canonical output paths and bytes, and old corpora. It must not build an image,
+  edit `REMOTE.toml`, read/delete/migrate outputs or corpora, contact Slurm/GPU/Apptainer, create or
+  launch a Campaign, or run synthetic/live campaign smokes. The Blockweaver task owns the one final
+  combined image, later configuration cutover, and exact legacy-corpus cleanup.
+- Pre-run state is one clean KAIROS worktree on `main`; local refs are the exact heads above plus
+  pre-existing alias `codex/compact-dataset-alignment` at the compact head. Both remotes already
+  match. Any new C5 branch/worktree is run-owned; the three existing refs and primary worktree are
+  not.
+
 ### Historical final deployment gates for the initial extraction
 
 This retained record describes the completed initial 0.4.1 cutover. It does not authorize or prove

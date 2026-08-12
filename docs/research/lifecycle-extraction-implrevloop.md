@@ -2364,6 +2364,21 @@ clobber, and sync the publication parent. S2 updates package/docs/lock to `0.6.0
 artifacts locally, but do not push, tag, release, publish, or repin KAIROS until separately
 authorized.
 
+Portable-contract correction after first review: POSIX `link`/`linkat` returns only success or
+failure, not the selected inode or a descriptor, and `unlink`/`unlinkat` cannot condition removal on
+an expected inode. Therefore Servatus cannot both select the inode at pathname-link linearization
+and defend portably on macOS/Linux against a hostile same-account process replacing that private
+draft leaf after the link. The approved lean contract treats the owner-only draft namespace as
+trusted and quiescent during synchronous `Draft.link()`. Concurrent mutation of the draft leaf is
+out of contract; source replacement before the atomic link may be selected if the resulting entry
+is safe. Do not add Linux-only descriptor-link machinery or restore pre-open source linearization.
+Ordinary post-link inspection or validation failure must remove the just-created link before
+returning so a caught failure cannot leave publishable residue. Under the quiescent namespace this
+cleanup targets that created entry. Retain the final regular-file check and all commit/durability
+contracts; remove the redundant post-success device check because hard-link success already proves
+same filesystem. The same implementer/reviewer pair owns correction and rereview against this
+revised contract.
+
 The still larger proposal to delete regular-file cleanup hard-link pinning is rejected for this
 run. It can save another roughly 35-40 lines, but it weakens exact cleanup-target retention for a
 small internal simplification and deserves a concrete production need or failure model before the

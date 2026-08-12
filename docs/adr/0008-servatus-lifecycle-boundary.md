@@ -20,10 +20,10 @@ Servatus tasks. Hidden `kairos remote` commands hydrate those inputs and call KA
 evaluation owners. KAIROS also owns canonical completion checks, resource and target values,
 immutable image contents, and every scientific request, association, schema, and manifest.
 
-ADRs 0006 and 0009 remain authoritative for their canonical objects. KAIROS chooses each owned
-destination, identity, file roster, and validation rule; Servatus implements the transaction that
-preserves resumable work and publishes the assembled files without overwrite. Corpus production
-remains external, and the Blockweaver-owned dataset boundary remains outside Servatus.
+ADR 0006 remains authoritative for canonical objects. KAIROS chooses each destination, identity,
+file roster, and validation rule; Servatus implements the transaction that preserves resumable work
+and publishes the assembled files without overwrite. Corpus production remains external, and a
+future Blockweaver-owned external dataset boundary remains outside Servatus.
 
 ## Consequences
 

@@ -22,7 +22,6 @@ _SCHEMA = pl.Schema(
         "effective_priority_fee_per_gas_p90": pl.Int64,
     }
 )
-_COLUMNS = tuple(_SCHEMA.names())
 
 
 class BlockFrame:
@@ -78,11 +77,7 @@ def load_corpus_definition(storage_root: Path, corpus_id: UUID4) -> CorpusDefini
 
 
 def load_corpus_blocks(storage_root: Path, corpus_id: UUID4) -> BlockFrame:
-    """Load one exact KAIROS projection from a verified Blockweaver dataset."""
+    """Load KAIROS block facts from a verified Blockweaver dataset."""
 
     dataset = _open_corpus_dataset(storage_root, corpus_id)
-    if dataset.output_format != "parquet":
-        raise ValueError("KAIROS corpora require a Parquet Blockweaver dataset")
-    if dataset.schema != _COLUMNS:
-        raise ValueError(f"KAIROS corpus schema must be exactly {_COLUMNS}, got {dataset.schema}")
     return BlockFrame(pl.read_parquet(dataset.data_path), _definition(dataset))

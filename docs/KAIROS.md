@@ -553,8 +553,8 @@ datasets/<corpus_id>/
 
 `blockweaver.open_dataset()` validates the UUID-bound manifest, artifact digest, source and
 verification facts, resolved range, schema, row domains, and exact two-file publication.
-`load_corpus_blocks()` then requires Parquet and KAIROS's exact ordered eight-column projection,
-derives `CorpusDefinition` from the dataset chain and range, and constructs `BlockFrame`.
+`load_corpus_blocks()` reads the declared data path as Parquet, derives `CorpusDefinition` from the
+dataset chain and range, and lets `BlockFrame` enforce KAIROS's exact ordered eight-column schema.
 `load_corpus_definition()` reads the same validated metadata without hydrating the frame.
 
 `BlockFrame(frame, definition)` is the public canonical-row interface. Its `definition` identifies the exact owned range, `select_range(first_block, last_block)` returns an inclusive subrange, and `to_polars()` returns an isolated native frame. Construction checks the exact schema and native access isolates caller mutation. Range selection is positional and does not rescan rows. The value carries neither hashes nor finality provenance.

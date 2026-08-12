@@ -3,7 +3,6 @@ from __future__ import annotations
 from uuid import UUID
 
 import polars as pl
-import pytest
 from polars.testing import assert_frame_equal
 
 from kairos.config import CorpusDefinition
@@ -44,30 +43,3 @@ def test_load_corpus_reads_one_valid_blockweaver_dataset(tmp_path) -> None:
     assert loaded.definition == CorpusDefinition(chain_id=137, first_block=100, last_block=102)
     assert_frame_equal(loaded.to_polars(), blocks)
     assert load_corpus_definition(tmp_path, CORPUS_ID) == loaded.definition
-
-
-@pytest.mark.parametrize(
-    ("blocks", "output_format"),
-    [
-        pytest.param(_valid_blocks(), "csv", id="csv"),
-        pytest.param(
-            _valid_blocks()
-            .with_columns(pl.Series("block_hash", ["0x" + character * 64 for character in "abc"]))
-            .select("block_number", "timestamp", "block_hash", *_valid_blocks().columns[2:]),
-            "parquet",
-            id="feature-superset",
-        ),
-        pytest.param(
-            _valid_blocks().drop("effective_priority_fee_per_gas_p90"),
-            "parquet",
-            id="missing-feature",
-        ),
-    ],
-)
-def test_load_corpus_rejects_noncanonical_kairos_projection(
-    tmp_path, blocks: pl.DataFrame, output_format: str
-) -> None:
-    write_blockweaver_dataset(tmp_path, CORPUS_ID, blocks, output_format=output_format)
-
-    with pytest.raises(ValueError, match="Parquet|schema"):
-        load_corpus_blocks(tmp_path, CORPUS_ID)

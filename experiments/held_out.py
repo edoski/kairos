@@ -22,6 +22,10 @@ def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID, k_experiment_id:
     maximum_horizon = max(horizons.values())
     hpo = load_experiment_manifest(storage_root, ExperimentKind.HPO, hpo_experiment_id)
     studies = {cell: load_study(storage_root, study_id) for cell, study_id in hpo.items()}
+    corpus_ids = {study.request.corpus_id for study in studies.values()}
+    corpora = {
+        corpus_id: load_corpus_definition(storage_root, corpus_id) for corpus_id in corpus_ids
+    }
     bundle = open_bundle(storage_root, _KIND, experiment_id)
 
     cells: list[tuple[str, EvaluateRequest]] = []
@@ -30,7 +34,7 @@ def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID, k_experiment_id:
         horizon = horizons[cell]
         study = studies[f"{chain}.{family}"]
         validation_end = study.request.experiment.validation_window.last_parent_block
-        corpus = load_corpus_definition(storage_root, study.request.corpus_id)
+        corpus = corpora[study.request.corpus_id]
         first_parent = validation_end + maximum_horizon + 1
         last_parent = corpus.last_block - maximum_horizon + max(0, 5 - horizon)
         request = EvaluateRequest(

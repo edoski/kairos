@@ -17,7 +17,7 @@ from pydantic import UUID4, Field, TypeAdapter
 from servatus import Draft, publish
 from torch import nn
 
-from kairos.config import FeatureName
+from kairos.config import CorpusDefinition, FeatureName
 from kairos.corpus import load_corpus_definition
 from kairos.modeling import load_artifact
 
@@ -67,6 +67,7 @@ def _load_roster(roster_path: Path) -> _Roster:
 
 def _load_cells(storage_root: Path, roster: _Roster) -> dict[str, dict[int, _Cell]]:
     cells: dict[str, dict[int, _Cell]] = {}
+    corpora: dict[UUID, CorpusDefinition] = {}
     for chain, chain_id in _CHAINS.items():
         cells[chain] = {}
         shared_features: _FeatureContract | None = None
@@ -79,8 +80,11 @@ def _load_cells(storage_root: Path, roster: _Roster) -> dict[str, dict[int, _Cel
                 raise ValueError(f"{chain} K={horizon} artifact has the wrong horizon")
 
             corpus_id = association.request.source.corpus_id
-            artifact_chain_id = load_corpus_definition(storage_root, corpus_id).chain_id
-            if artifact_chain_id != chain_id:
+            corpus = corpora.get(corpus_id)
+            if corpus is None:
+                corpus = load_corpus_definition(storage_root, corpus_id)
+                corpora[corpus_id] = corpus
+            if corpus.chain_id != chain_id:
                 raise ValueError(f"{chain} K={horizon} artifact has the wrong chain")
 
             features = _FeatureContract(

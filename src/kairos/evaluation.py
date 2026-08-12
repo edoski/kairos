@@ -35,10 +35,10 @@ def evaluate(request: EvaluateRequest, storage_root: Path) -> None:
     canonical.parent.mkdir(mode=0o755, exist_ok=True)
 
     def assemble(draft: Draft) -> None:
-        blocks = load_corpus_blocks(storage_root, request.corpus_id)
         association, model = load_artifact(storage_root, request.artifact_id)
         if association.request.source.corpus_id != request.corpus_id:
             raise ValueError("artifact source Corpus must match the evaluation Corpus")
+        blocks = load_corpus_blocks(storage_root, request.corpus_id)
         experiment = association.training_definition.experiment
         dataset = prepare_historical_window(
             blocks,

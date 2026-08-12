@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
-import numpy as np
-import polars as pl
+import pytest
 
 from kairos.config import (
     BlockWindow,
@@ -19,13 +20,15 @@ from kairos.config import (
 from kairos.experiments import ExperimentKind, ExperimentManifest, experiment_manifest_path
 from kairos.study import RetainedResult, Study
 from tests.experiments.helpers import publish_test_study
-from tests.helpers import read_tsv_rows, run_script, write_blockweaver_dataset
+from tests.helpers import read_tsv_rows, run_script
 
 _ROOT = Path(__file__).parents[2]
 _K_STUDY_SCRIPT = _ROOT / "experiments" / "k_study.py"
-_HELD_OUT_SCRIPT = _ROOT / "experiments" / "held_out.py"
 _HPO_EXPERIMENT_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-_CORPUS_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+_CORPUS_IDS = {
+    chain: UUID(f"cccccccc-cccc-4ccc-8ccc-{index:012d}")
+    for index, chain in enumerate(("ethereum", "polygon", "avalanche"), start=1)
+}
 _HORIZONS = (2, 3, 4, 5, 10, 25, 50, 100, 200)
 _METHOD = Method(
     model=LstmDefinition(family="lstm", hidden=2, layers=1, head_hidden=2, dropout=0.0),
@@ -53,7 +56,7 @@ def _publish_hpo(storage_root: Path) -> None:
         study_id = UUID(f"10000000-0000-4000-8000-{index:012d}")
         request = TuneRequest(
             study_id=study_id,
-            corpus_id=_CORPUS_ID,
+            corpus_id=_CORPUS_IDS[cell.split(".", maxsplit=1)[0]],
             experiment=ExperimentSemantics(
                 training_window=BlockWindow(first_parent_block=100, last_parent_block=200),
                 validation_window=BlockWindow(first_parent_block=401, last_parent_block=500),
@@ -82,7 +85,9 @@ def _publish_hpo(storage_root: Path) -> None:
     manifest_path.write_text(ExperimentManifest(root=cells).model_dump_json(), encoding="utf-8")
 
 
-def test_k_study_and_held_out_author_the_exact_rosters_and_windows(tmp_path: Path) -> None:
+def test_k_study_and_held_out_author_the_exact_rosters_and_windows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     _publish_hpo(tmp_path)
 
     k_experiment_id = UUID(
@@ -105,29 +110,20 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(tmp_path: Pat
     canonical_path = experiment_manifest_path(tmp_path, ExperimentKind.K_STUDY, k_experiment_id)
     canonical_path.parent.mkdir(parents=True)
     canonical_path.write_text(k_manifest.model_dump_json(), encoding="utf-8")
-    blocks = np.arange(1_001, dtype=np.int64)
-    write_blockweaver_dataset(
-        tmp_path,
-        _CORPUS_ID,
-        pl.DataFrame(
-            {
-                "block_number": blocks,
-                "timestamp": blocks,
-                "base_fee_per_gas": blocks + 1,
-                "gas_used": blocks,
-                "gas_limit": blocks + 1,
-                "tx_count": blocks,
-                "effective_priority_fee_per_gas_p50": blocks,
-                "effective_priority_fee_per_gas_p90": blocks,
-            }
-        ),
-    )
+    monkeypatch.syspath_prepend(str(_ROOT / "experiments"))
+    held_out = importlib.import_module("held_out")
+    opened_corpora: list[UUID] = []
 
-    held_out_id = UUID(
-        run_script(
-            _HELD_OUT_SCRIPT, "prepare", tmp_path, _HPO_EXPERIMENT_ID, k_experiment_id
-        ).stdout.strip()
-    )
+    def open_corpus_dataset(storage_root: Path, corpus_id: UUID) -> object:
+        assert storage_root == tmp_path
+        opened_corpora.append(corpus_id)
+        return SimpleNamespace(last_block=1_000)
+
+    monkeypatch.setattr(held_out, "open_corpus_dataset", open_corpus_dataset)
+    held_out.prepare(tmp_path, _HPO_EXPERIMENT_ID, k_experiment_id)
+    held_out_id = UUID(capsys.readouterr().out.strip())
+    assert set(opened_corpora) == set(_CORPUS_IDS.values())
+    assert len(opened_corpora) == len(_CORPUS_IDS)
     held_out_bundle = tmp_path / "experiments" / "held_out" / f".{held_out_id}"
     evaluation_rows = read_tsv_rows(held_out_bundle / "cells.tsv")
     evaluation_requests = [

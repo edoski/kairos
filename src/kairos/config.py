@@ -37,12 +37,6 @@ def _validate_transformer_dimensions(model_width: int, attention_heads: int) -> 
         raise ValueError("model_width must be divisible by attention_heads")
 
 
-class CorpusDefinition(StrictFrozenRecord):
-    chain_id: int
-    first_block: int
-    last_block: int
-
-
 class BlockWindow(StrictFrozenRecord):
     first_parent_block: _NonNegativeInt
     last_parent_block: _NonNegativeInt

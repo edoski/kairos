@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from kairos.config import CorpusDefinition, FeatureName
+from kairos.config import FeatureName
 from kairos.corpus import BlockFrame
 from kairos.temporal import FeatureState, fit_feature_state, transform_feature_rows
 
@@ -37,9 +37,7 @@ def _blocks(
             ),
         }
     )
-    return BlockFrame(
-        frame, CorpusDefinition(chain_id=chain_id, first_block=0, last_block=count - 1)
-    )
+    return BlockFrame(frame, chain_id=chain_id)
 
 
 def test_requested_feature_formulas_fit_in_order_and_transform_held_out_rows() -> None:

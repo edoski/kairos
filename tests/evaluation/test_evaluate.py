@@ -27,10 +27,10 @@ from kairos.config import (
     SelectedStudySource,
     TrainRequest,
 )
+from kairos.corpus import BlockFrame
 from kairos.min_block_fee import MinBlockFeeOutput, TargetState
 from kairos.modeling import ArtifactAssociation
 from kairos.temporal import FeatureState
-from tests.helpers import write_blockweaver_dataset
 
 _CORPUS_ID = UUID("10000000-0000-4000-8000-000000000001")
 _OTHER_CORPUS_ID = UUID("10000000-0000-4000-8000-000000000002")
@@ -90,6 +90,11 @@ _OBSERVATION_SCHEMA = pl.Schema(
 )
 
 
+@pytest.fixture(autouse=True)
+def _use_corpus_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(evaluation_module, "load_corpus_blocks", lambda *_args: _blocks())
+
+
 def _experiment() -> ExperimentSemantics:
     return ExperimentSemantics(
         training_window=BlockWindow(first_parent_block=10, last_parent_block=11),
@@ -137,11 +142,9 @@ def _association(experiment: ExperimentSemantics | None = None) -> ArtifactAssoc
     )
 
 
-def _write_corpus(storage_root: Path, corpus_id: UUID) -> None:
+def _blocks() -> BlockFrame:
     blocks = np.arange(10, 31, dtype=np.int64)
-    write_blockweaver_dataset(
-        storage_root,
-        corpus_id,
+    return BlockFrame(
         pl.DataFrame(
             {
                 "block_number": blocks,
@@ -202,7 +205,6 @@ class _Model(nn.Module):
 def test_evaluate_publishes_exact_observations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _write_corpus(tmp_path, _CORPUS_ID)
     association = _association()
     model = _Model()
     monkeypatch.setattr(
@@ -233,11 +235,15 @@ def test_evaluate_rejects_owned_association(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     corpus_id = _OTHER_CORPUS_ID
-    _write_corpus(tmp_path, corpus_id)
     association = _association()
     model = _Model()
     monkeypatch.setattr(
         evaluation_module, "load_artifact", lambda storage_root, artifact_id: (association, model)
+    )
+    monkeypatch.setattr(
+        evaluation_module,
+        "load_corpus_blocks",
+        lambda *_args: pytest.fail("Corpus rows must not hydrate before association validation"),
     )
     monkeypatch.setattr(evaluation_module, "_DEVICE", torch.device("cpu"))
     request = _request(corpus_id=corpus_id)
@@ -252,7 +258,6 @@ def test_evaluate_rejects_owned_association(
 def test_evaluate_discards_failed_publication_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _write_corpus(tmp_path, _CORPUS_ID)
     association = _association()
     monkeypatch.setattr(
         evaluation_module,

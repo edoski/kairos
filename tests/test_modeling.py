@@ -44,7 +44,7 @@ from kairos.modeling import ArtifactAssociation, load_artifact, run_candidate, t
 from kairos.observations import OBSERVATION_SCHEMA, reduce_observations
 from kairos.study import RetainedResult, Study, load_study, publish_study
 from kairos.temporal import FeatureState, prepare_fit_history
-from tests.helpers import write_blockweaver_dataset
+from tests.helpers import single_process_loader, write_blockweaver_dataset
 
 ARTIFACT_ID = UUID("10000000-0000-4000-8000-000000000001")
 CORPUS_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -68,7 +68,7 @@ _METHOD = Method(
 
 @pytest.fixture(autouse=True)
 def _use_single_process_loaders(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(modeling._runtime, "NUM_WORKERS", 0)
+    monkeypatch.setattr(modeling._runtime, "data_loader", single_process_loader)
 
 
 def _experiment() -> ExperimentSemantics:

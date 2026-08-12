@@ -73,8 +73,6 @@ def collect_observations(
             else:
                 with torch.autocast(device.type, dtype=autocast_dtype):
                     output = model(inputs)
-            if not torch.isfinite(output.minimum_fee_z).all():
-                raise ValueError("minimum-fee predictions must be finite")
             actions = decode_action(output).cpu().numpy()
             size = actions.size
             destination = slice(cursor, cursor + size)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
@@ -47,13 +48,18 @@ def test_submit_uses_one_durable_campaign_per_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     request = _evaluate_request()
-    request_path = tmp_path / "request.json"
-    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+    request_paths = (tmp_path / "request-0.json", tmp_path / "request-1.json")
+    for request_path in request_paths:
+        request_path.write_text(request.model_dump_json(), encoding="utf-8")
     target, resources = write_servatus_config(tmp_path)
+    load_target = Mock(wraps=cli.SlurmTarget.from_toml)
+    load_resources = Mock(wraps=cli.ResourceRequest.from_toml)
+    monkeypatch.setattr(cli.SlurmTarget, "from_toml", load_target)
+    monkeypatch.setattr(cli.ResourceRequest, "from_toml", load_resources)
     open_campaign, campaign = fake_campaign(monkeypatch, cli)
     arguments = (
         "submit",
-        str(request_path),
+        *(str(request_path) for request_path in request_paths),
         "--target",
         str(target),
         "--resources",
@@ -64,17 +70,17 @@ def test_submit_uses_one_durable_campaign_per_request(
     result = dispatch(app, *arguments)
 
     assert result.exit_code == 0
-    assert result.output == "1001;research\n"
+    assert result.output == "1001;research\n" * 2
+    load_target.assert_called_once_with(target)
+    load_resources.assert_called_once_with(resources)
+    assert open_campaign.call_count == 2
     campaign_path, tasks = open_campaign.call_args.args
-    assert campaign_path == tmp_path / f".request.json.evaluation-{EVALUATION_ID}.campaign"
+    assert campaign_path == tmp_path / f".request-1.json.evaluation-{EVALUATION_ID}.campaign"
     assert tasks[0].key == f"evaluation:{EVALUATION_ID}"
     loaded_target, loaded_resources = campaign.plan.call_args.args
     assert loaded_target.host == "research-alias"
     assert loaded_resources.gpus_per_task == 1
-    assert campaign.plan.call_args.kwargs == {
-        "retry": (f"evaluation:{EVALUATION_ID}",),
-        "tasks_per_allocation": 1,
-    }
+    assert campaign.plan.call_args.kwargs == {"retry": (f"evaluation:{EVALUATION_ID}",)}
 
 
 def test_submit_requires_one_gpu_before_opening_campaign(

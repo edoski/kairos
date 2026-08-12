@@ -81,7 +81,7 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
     target, resources = campaign.plan.call_args.args
     assert target.host == "research-alias"
     assert resources.gpus_per_task == 1
-    assert campaign.plan.call_args.kwargs == {"retry": (), "tasks_per_allocation": 1}
+    assert campaign.plan.call_args.kwargs == {"retry": ()}
 
 
 def test_remote_candidate_dispatches_input(monkeypatch: pytest.MonkeyPatch) -> None:

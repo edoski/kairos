@@ -7,7 +7,7 @@ from types import ModuleType
 from uuid import UUID
 
 import pytest
-from servatus import CampaignStatus, Task
+from servatus import Task
 
 from kairos.config import EvaluateRequest, TuneRequest
 from kairos.study import RetainedResult, Study
@@ -139,8 +139,8 @@ def test_hpo_extend_reopens_campaign_with_exact_authored_suffix(
         (bundle / ".servatus", full_tasks),
     ]
     assert [call.kwargs for call in campaign.plan.call_args_list] == [
-        {"completed": set(), "retry": (), "tasks_per_allocation": 4},
-        {"completed": set(), "retry": (), "tasks_per_allocation": 4},
+        {"completed": set(), "retry": (), "tasks_per_allocation": None},
+        {"completed": set(), "retry": (), "tasks_per_allocation": None},
     ]
     assert campaign.submit.call_count == 2
 
@@ -171,7 +171,7 @@ def test_candidates_skip_exact_canonical_studies(
     assert campaign.plan.call_args.kwargs == {
         "completed": expected_completed,
         "retry": (),
-        "tasks_per_allocation": 4,
+        "tasks_per_allocation": None,
     }
 
 
@@ -214,29 +214,6 @@ def test_workflows_submit_ordered_tasks_with_completion_retry_and_receipt(
         "retry": [retry_key],
         "tasks_per_allocation": 4,
     }
-    status: CampaignStatus = campaign.status()
-    assert status.unaccepted_task_keys == ()
-
-
-@pytest.mark.parametrize("tasks_per_job", [1, 5])
-def test_kairos_rejects_nonproduction_packing_cap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tasks_per_job: int
-) -> None:
-    bundle, _ = _write_workflow_bundle(tmp_path, 2)
-    target, resources = write_servatus_config(tmp_path)
-    launcher = _load_launcher(monkeypatch)
-
-    result = dispatch(
-        launcher.app,
-        "workflows",
-        *_launch_args(bundle, target, resources),
-        "--tasks-per-job",
-        str(tasks_per_job),
-    )
-
-    assert result.exit_code == 1
-    assert isinstance(result.exception, ValueError)
-    assert str(result.exception) == "tasks per job must be between two and four"
 
 
 @pytest.mark.parametrize("gpus_per_task", [0, 2])

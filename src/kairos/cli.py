@@ -43,8 +43,12 @@ def submit_command(
     retry: Annotated[bool, typer.Option("--retry")] = False,
 ) -> None:
     requests = [WORKFLOW_REQUEST_ADAPTER.validate_json(path.read_bytes()) for path in request_paths]
-    for request_path, request in zip(request_paths, requests, strict=True):
-        _submit_task(request_path, workflow_task(request), target_path, resource_path, retry=retry)
+    target = SlurmTarget.from_toml(target_path)
+    resources = ResourceRequest.from_toml(resource_path)
+    if resources.gpus_per_task != 1:
+        raise ValueError("KAIROS tasks require exactly one GPU")
+    for index, request_path in enumerate(request_paths):
+        _submit_task(request_path, workflow_task(requests[index]), target, resources, retry=retry)
 
 
 @remote_app.command("workflow")
@@ -79,20 +83,18 @@ def study_run_command(
 ) -> None:
     request = TuneRequest.model_validate_json(request_path.read_bytes())
     task = candidate_task(CandidateProcessInput(request=request, method_index=method_index))
-    _submit_task(request_path, task, target_path, resource_path, retry=retry)
-
-
-def _submit_task(
-    request_path: Path, task: Task, target_path: Path, resource_path: Path, *, retry: bool
-) -> None:
     target = SlurmTarget.from_toml(target_path)
     resources = ResourceRequest.from_toml(resource_path)
     if resources.gpus_per_task != 1:
         raise ValueError("KAIROS tasks require exactly one GPU")
+    _submit_task(request_path, task, target, resources, retry=retry)
+
+
+def _submit_task(
+    request_path: Path, task: Task, target: SlurmTarget, resources: ResourceRequest, *, retry: bool
+) -> None:
     campaign = Campaign.open(_request_campaign_path(request_path, task.key), (task,))
-    plan = campaign.plan(
-        target, resources, retry=(task.key,) if retry else (), tasks_per_allocation=1
-    )
+    plan = campaign.plan(target, resources, retry=(task.key,) if retry else ())
     for receipt in campaign.submit(plan):
         typer.echo(receipt)
 

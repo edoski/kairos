@@ -30,7 +30,7 @@ from kairos.config import (
 from kairos.min_block_fee import MinBlockFeeOutput, TargetState
 from kairos.modeling import ArtifactAssociation
 from kairos.temporal import FeatureState
-from tests.helpers import write_blockweaver_dataset
+from tests.helpers import single_process_loader, write_blockweaver_dataset
 
 _CORPUS_ID = UUID("10000000-0000-4000-8000-000000000001")
 _OTHER_CORPUS_ID = UUID("10000000-0000-4000-8000-000000000002")
@@ -92,7 +92,7 @@ _OBSERVATION_SCHEMA = pl.Schema(
 
 @pytest.fixture(autouse=True)
 def _use_single_process_loader(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(evaluation_module._runtime, "NUM_WORKERS", 0)
+    monkeypatch.setattr(evaluation_module._runtime, "data_loader", single_process_loader)
 
 
 def _experiment() -> ExperimentSemantics:

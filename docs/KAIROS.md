@@ -996,8 +996,9 @@ and Method index. The hidden workers hydrate those bytes and call the direct KAI
 
 The public CLI and experiment launcher load cwd-local `REMOTE.toml` and `RESOURCES.toml` directly
 through Servatus. The committed profiles request one GPU, 24 CPUs, 65536 MiB, and three days per
-process. Experiment launch accepts two to four tasks per allocation; direct request commands use
-one. KAIROS rejects any profile that does not request exactly one GPU per process.
+process. Experiment launch optionally caps tasks per allocation with `--tasks-per-job`; without a
+cap, Servatus derives the feasible capacity from the profiles. Direct request commands create one
+task per Campaign. KAIROS rejects any profile that does not request exactly one GPU per process.
 
 Servatus owns campaign identity, packing, target ceilings, native OpenSSH/Slurm/Apptainer command
 construction, durable receipts, ambiguity refusal, and explicit retry. KAIROS owns typed task bytes,

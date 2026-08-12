@@ -2409,6 +2409,47 @@ Implementation and review record:
   No push, tag, release, PyPI publication, or KAIROS repin is authorized by local acceptance; those
   remain the next external gate.
 
+External release record:
+
+- The user authorized the Servatus 0.6.0 external gate. Servatus `main` was fast-forwarded and
+  pushed to exact accepted head `281c381548489c1dcf7a6ca8d045908d0b50ba3f`. Branch CI run
+  `31597737876` and annotated-tag CI run `31597794856` passed on Ubuntu and macOS. Annotated tag
+  `v0.6.0` dereferences to that exact commit; the public GitHub Release is
+  `https://github.com/edoski/servatus/releases/tag/v0.6.0`.
+- Trusted-publishing run `31597843846` succeeded. PyPI published wheel
+  `servatus-0.6.0-py3-none-any.whl` with SHA-256
+  `d1770b961bf14e9afeed731d4cee55a4eff09238db33ebaa1a5cdc32627c638f` and sdist
+  `servatus-0.6.0.tar.gz` with SHA-256
+  `16c99b3c10a62d63064a98ac78e665a821fea418f52fc9bab7a1c173a0e7b457`. A fresh no-cache
+  public-index install verified version 0.6.0, zero runtime dependencies, public API/CLI, atomic
+  hard-link publication, output bytes, and cleanup status. An initial smoke compared unresolved
+  `/tmp` with canonical `/private/tmp`; the corrected canonical-path/content check passed and was a
+  command assertion mistake, not a product defect.
+
+#### Consolidation slice C5B: Servatus 0.6.0 repin
+
+Baseline: exact clean accepted C5A head `919e93bbd3173bea09e8a6af6f17a097f197198f`
+plus the exact published 0.6.0 artifacts/hashes above.
+
+Scope:
+
+- Change only root and mobile Servatus pins from 0.5.0 to 0.6.0 and regenerate their locks against
+  the public artifacts. Preserve Blockweaver's current KAIROS pin and every dataset/corpus contract;
+  the separate Blockweaver task owns later v0.3.3/K1 adoption after this handoff.
+- Update directly affected active dependency documentation only. Do not add transition tests or
+  mirror artifact hashes in product tests.
+- Run root/mobile locks and frozen syncs, root/mobile/App tests, Ruff check/format, strict Pyright,
+  manually verified Vulture, installed Servatus 0.6.0 public API/CLI/link publication smoke,
+  residue/diff/status checks, and independent fixed-range review.
+- Do not integrate main/compact, push KAIROS, build an image, edit `REMOTE.toml`, touch outputs/data/
+  corpora, or create/launch a Campaign in this slice.
+
+Expected outcome:
+
+One reviewed KAIROS client head uses the public Servatus 0.6.0 contract with exact reproducible
+locks and no source behavior change. C6 may then integrate that head into current main and
+compact-CUDA while the Blockweaver task remains paused.
+
 #### Rejected consolidation findings
 
 - A Servatus `run()`, `dispatch()`, or `open_plan_submit()` facade is rejected. It saves about a

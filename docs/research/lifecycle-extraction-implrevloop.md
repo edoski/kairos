@@ -2572,6 +2572,31 @@ KAIROS C5/C6 resumption authority on 2026-08-12:
   installed public-interface smokes, and residue/diff checks. A final source-deletion audit is
   active before C6 integration; C6 remains blocked until it either records no supported deletion or
   a separately reviewed cleanup is accepted.
+- The source-deletion and execution-ownership audits found no generic execution, submission, or
+  filesystem module left in KAIROS to move into Servatus. Servatus already owns roster lineage,
+  packing and resource arithmetic, submission intents and receipts, ambiguity, reconciliation,
+  publication, and retirement. A new run/dispatch facade, completion callback, Campaign close,
+  GPU predicate, or queue policy would be a shallow second lifecycle path and is rejected.
+- C5A is a bounded KAIROS deletion slice from exact accepted C5 head `67c1367c`. It loads target and
+  resources once per raw CLI command, removes a meaningless one-task packing override, delegates
+  experiment packing bounds to Servatus while retaining the existing `--tasks-per-job` spelling,
+  and removes redundant candidate-index, exhaustive-union, strict-zip, finiteness, rolling-roster,
+  test-driven DataLoader-profile, and one-use figure-helper machinery. It must retain exact task
+  bytes/order, canonical completion and scientific association/schema checks, explicit retry,
+  one-GPU policy, receipt presentation, and the committed resource/profile values. The earlier
+  fake-only `unaccepted_task_keys` test requirement is superseded: KAIROS production never calls
+  Campaign status, and testing a configured fake or real Servatus status here would retest the
+  dependency. Expected outcome: fewer KAIROS source concepts and runtime checks, roughly 12–20
+  fewer production lines plus a smaller test surface, with no new interface and no output/config
+  change. A fresh implementer and reviewer own C5A before C6 can start.
+- A separate read-only audit of released Servatus 0.5.0 found an internal-only slimming candidate:
+  redundant typed-object checks, repeated durable-list checks after one raw-ingress validation,
+  kernel-impossible file-stage branches, repeated inode-type clauses, private ingress repeats, and
+  one unreachable CLI branch. Adversarial review estimates 45–60 definitely safe source-line
+  deletions, with a further clean-break set requiring an explicit source-linearization decision.
+  This finding does not reveal another KAIROS ownership leak. It is not part of C5A/C6: changing the
+  already published dependency requires a separately authorized Servatus version/release and KAIROS
+  repin, so the current 0.5.0 adoption must not be silently rewritten around it.
 
 ### Historical final deployment gates for the initial extraction
 

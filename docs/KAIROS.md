@@ -846,9 +846,11 @@ results, or scientific definitions. The completed experiment directory contains 
 bundle under `experiments/feature_ablation/.<experiment_id>/`. For each architecture and chain it
 tests the full feature contract, each individual feature unit omitted, and a base-fee-only
 reference. Hour and day-of-week sine/cosine coordinates each remain one indivisible encoded unit.
-`experiments/launch.py candidates BUNDLE` submits its cells at a selected two- to four-GPU node
-capacity. It uses the fewest balanced allocations and avoids singleton tails when possible: nine
-pending cells at capacity four become `3 + 3 + 3`. After all canonical
+`experiments/launch.py candidates BUNDLE` submits its cells through Servatus. Without
+`--tasks-per-job`, Servatus derives feasible capacity from the profiles; an explicit cap of one is
+valid, while a cap above target feasibility fails in Servatus. Packing uses the fewest balanced
+allocations and avoids singleton tails when possible: nine pending cells at capacity four become
+`3 + 3 + 3`. After all canonical
 Studies exist, `close STORAGE_ROOT EXPERIMENT_ID` publishes the canonical manifest and retires the
 owner-only authored bundle in the same post-commit transaction; `report` derives each
 chain/configuration mean from canonical Studies.

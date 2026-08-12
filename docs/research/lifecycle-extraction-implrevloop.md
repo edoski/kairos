@@ -2384,6 +2384,31 @@ run. It can save another roughly 35-40 lines, but it weakens exact cleanup-targe
 small internal simplification and deserves a concrete production need or failure model before the
 accepted safety contract is reopened.
 
+Implementation and review record:
+
+- Initial S2 implementation `b18c13158609ab49e28c7b5af718d29d8157a09a` was rejected after
+  review reproduced two races under the original too-strong wording: post-link replacement could
+  be accepted, and check-then-unlink could remove a replacement. Portable POSIX cannot return the
+  inode selected by pathname `link` or condition `unlink` on an expected inode. The user accepted
+  the revised trusted/quiescent private-draft contract above instead of nonportable machinery or
+  restored pre-open source linearization.
+- Correction `efde60c563d96a0f710abcf3f0825014391f3ed7` documented the boundary, removed the
+  redundant post-link device check, and cleaned ordinary rejected links. Rereview found one P1:
+  inspection plus cleanup failure could leave residue that a builder caught and later published;
+  it also found dead private device callback plumbing and an over-specific private test.
+- Final correction `281c381548489c1dcf7a6ca8d045908d0b50ba3f` adds one narrow private poison only when
+  rejected-link cleanup cannot be proven, checks it after the builder callback and aborts before
+  sync/commit, removes the dead callback argument, and replaces the private probe with one public
+  caught-error/no-destination regression. Fully cleaned rejection remains catchable; the source is
+  untouched; transaction cleanup and the regular-file cleanup pin remain.
+- The same reviewer returned final GREEN LIGHT with Standards 0 and Spec 0. Cumulative S2 product
+  source is net 18 lines smaller; the combined S1+S2 candidate is version 0.6.0. Final gates passed
+  289 tests with one environmental skip plus Ruff, formatting, strict Pyright, Vulture, lock,
+  build/archive/version/zero-dependency inspection, and fresh-wheel public API/CLI/file/tree/link/
+  Workspace smokes. Exact accepted candidate head is `281c381548489c1dcf7a6ca8d045908d0b50ba3f`.
+  No push, tag, release, PyPI publication, or KAIROS repin is authorized by local acceptance; those
+  remain the next external gate.
+
 #### Rejected consolidation findings
 
 - A Servatus `run()`, `dispatch()`, or `open_plan_submit()` facade is rejected. It saves about a

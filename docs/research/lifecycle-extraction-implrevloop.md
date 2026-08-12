@@ -2325,6 +2325,17 @@ Servatus loses roughly 45-60 source lines and the corresponding nonsense tests w
 its public interface, accepted filesystem threat model, durable-state contract, scheduler
 behavior, or KAIROS ownership seam. Each retained check has one owning raw/racy boundary.
 
+Implementation and review record:
+
+- S1 implementation `0f2547f2259156f4722698d92090ded980133a6b` is one clean commit from exact
+  0.5.0 baseline `79ee407c`. Product source is `+16/-74`, net 58 lines smaller; tests delete 15
+  lines. Independent fixed-range review returned GREEN with Standards 0 and Spec 0. The reviewer
+  confirmed every raw-state, lineage, scheduler, pathname/inode, mutable-permission, cross-device,
+  no-clobber, durability, cleanup-residue, and cleanup-pin contract remains. Gates passed 284 tests
+  with one environmental skip plus Ruff, formatting, strict Pyright, Vulture, lock, build/archive,
+  metadata/zero-dependency, fresh-wheel public API/CLI, and file/directory publication smokes. S2
+  starts from exact accepted `0f2547f`.
+
 #### Post-release source audit S2: quiescent-source linearization
 
 Status: user-approved for local implementation and independent review after S1 GREEN.
@@ -2762,7 +2773,13 @@ KAIROS C5/C6 resumption authority on 2026-08-12:
   approved local S1 and S2 implementation/review as one 0.6.0 candidate. The separate Blockweaver
   task may continue Blockweaver-only slices concurrently but holds K1, KAIROS refs, image/config,
   and corpus cleanup until this task supplies exact accepted main/compact heads; the coordination
-  message was delivered on 2026-08-12.
+  message was delivered on 2026-08-12. That task subsequently completed and independently reviewed
+  Blockweaver Slices 3A-3F and publicly verified release v0.3.3 at exact head
+  `e69c02c2d72cc5250834233d3eee9a525e386eb0` (wheel SHA-256
+  `42f368fb94daab2fdf12f8d4763be82917f4f0b37255a16be98d735c3443ec0b`; sdist
+  `a5f8c55f6310e8766c23b2adb6a5000159a36bf9adb26de24027eb816b8dd9c1`). It remains paused
+  before K1/KAIROS/image/config/corpus actions and instructed this task to finish S1/S2, then stop
+  at any ungranted Servatus release gate.
 
 ### Historical final deployment gates for the initial extraction
 

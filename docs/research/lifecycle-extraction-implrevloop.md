@@ -2557,6 +2557,13 @@ KAIROS C5/C6 resumption authority on 2026-08-12:
   pre-existing alias `codex/compact-dataset-alignment` at the compact head. Both remotes already
   match. Any new C5 branch/worktree is run-owned; the three existing refs and primary worktree are
   not.
+- C5 implementation `ef817b301e7d0c68584408a2a3e2034671d413c2` passed 110 root, 9 mobile,
+  and 43 App tests plus every required static/lock/installed-interface gate; production Python is
+  net 15 lines smaller. Standards review returned zero findings. Spec review rejected two P2s: the
+  old pending-status assertion lacked one lean `unaccepted_task_keys` replacement, and tests grew
+  by 43 lines because the new public Campaign fake was too large instead of delivering the planned
+  test simplification. The same implementer/reviewer pair owns a focused correction; C6 remains
+  blocked.
 
 ### Historical final deployment gates for the initial extraction
 

@@ -165,29 +165,58 @@ describe("InferenceRuntime", () => {
     await inference.dispose();
   });
 
-  it("returns short chain and model failures with their causes", async () => {
+  it("propagates RPC and native failures from their owners", async () => {
+    const rpcError = new Error("HTTP transport details");
     const unavailable = session(async () => {
-      throw new Error("HTTP transport details");
+      throw rpcError;
     });
     const chainFailure = createTestRuntime({
       sessions: sessions({ avalanche: unavailable }),
     }).inference;
-    await expect(chainFailure.run("avalanche", 2)).rejects.toMatchObject({
-      message: "Could not read the selected chain.",
-      cause: expect.objectContaining({ message: "HTTP transport details" }),
-    });
+    await expect(chainFailure.run("avalanche", 2)).rejects.toBe(rpcError);
     await chainFailure.dispose();
 
     const model = runtime();
-    vi.mocked(model.execute).mockRejectedValue(
-      new Error("native load details"),
-    );
-    const modelFailure = createTestRuntime({ model }).inference;
-    await expect(modelFailure.run("ethereum", 2)).rejects.toMatchObject({
-      message: "Could not run the selected model.",
-      cause: expect.objectContaining({ message: "native load details" }),
+    const nativeCause = new Error("native cause");
+    const nativeError = new Error("native load details", {
+      cause: nativeCause,
     });
+    vi.mocked(model.execute).mockRejectedValue(nativeError);
+    const modelFailure = createTestRuntime({ model }).inference;
+    await expect(modelFailure.run("ethereum", 2)).rejects.toBe(nativeError);
+    expect(nativeError.cause).toBe(nativeCause);
     await modelFailure.dispose();
+  });
+
+  it("propagates feature validation from its owner", async () => {
+    const model = runtime();
+    const invalidManifest = {
+      ...chainManifest,
+      features: [
+        {
+          name: "log_base_fee_per_gas" as const,
+          mean: 0,
+          standard_deviation: 0,
+        },
+      ],
+    };
+    const invalidCatalog: ModelCatalog = {
+      chainManifest: vi.fn(() => invalidManifest),
+      select: vi.fn((_chain, K) => ({
+        ...modelSelection(K),
+        chainManifest: invalidManifest,
+      })),
+    };
+    const inference = createTestRuntime({
+      catalog: invalidCatalog,
+      model,
+    }).inference;
+
+    await expect(inference.run("ethereum", 2)).rejects.toThrow(
+      "Model input must contain finite float32 values",
+    );
+    expect(model.execute).not.toHaveBeenCalled();
+    await inference.dispose();
   });
 
   it("rejects a nonfinite decoded fee", async () => {
@@ -197,12 +226,9 @@ describe("InferenceRuntime", () => {
         minimumFeeZ: 2_000,
       }),
     }).inference;
-    await expect(inference.run("ethereum", 2)).rejects.toMatchObject({
-      message: "Could not run the selected model.",
-      cause: expect.objectContaining({
-        message: "Predicted fee must be positive and finite",
-      }),
-    });
+    await expect(inference.run("ethereum", 2)).rejects.toThrow(
+      "Predicted fee must be positive and finite",
+    );
     await inference.dispose();
   });
 
@@ -228,12 +254,9 @@ describe("InferenceRuntime", () => {
       sessions: sessions({ ethereum: unsafeHead }),
     }).inference;
 
-    await expect(inference.run("ethereum", 2)).rejects.toMatchObject({
-      message: "Chain data is incomplete or invalid.",
-      cause: expect.objectContaining({
-        message: "head block exceeds the safe integer range",
-      }),
-    });
+    await expect(inference.run("ethereum", 2)).rejects.toThrow(
+      "head block exceeds the safe integer range",
+    );
     await inference.dispose();
   });
 
@@ -250,14 +273,9 @@ describe("InferenceRuntime", () => {
     vi.mocked(avalanche.readHead).mockResolvedValueOnce(
       BigInt(Number.MAX_SAFE_INTEGER) + 1n,
     );
-    await expect(
-      inference.currentHead("avalanche"),
-    ).rejects.toMatchObject({
-      message: "Could not read the selected chain.",
-      cause: expect.objectContaining({
-        message: "head block exceeds the safe integer range",
-      }),
-    });
+    await expect(inference.currentHead("avalanche")).rejects.toThrow(
+      "head block exceeds the safe integer range",
+    );
     await inference.dispose();
   });
 

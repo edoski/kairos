@@ -51,50 +51,35 @@ export function createInferenceRuntime(
   async function run(chain: Chain, K: Horizon): Promise<InferenceResult> {
     const selection = catalog.select(chain, K);
     const session = sessions[chain];
-    const context = await attempt("Could not read the selected chain.", () =>
-      session.sync(),
-    );
+    const context = await session.sync();
 
     const head = context.blocks[context.blocks.length - 1];
-    const input = await attempt(
-      "Chain data is incomplete or invalid.",
-      async () =>
-        buildModelInput(
-          context.blocks,
-          context.priorityFeeRewards,
-          selection.chainManifest,
-        ),
+    const input = buildModelInput(
+      context.blocks,
+      context.priorityFeeRewards,
+      selection.chainManifest,
     );
-    const prediction = await attempt(
-      "Could not run the selected model.",
-      async () =>
-        decodePrediction(
-          selection,
-          await model.execute(selection, input),
-        ),
+    const prediction = decodePrediction(
+      selection,
+      await model.execute(selection, input),
     );
-    return attempt("Chain data is incomplete or invalid.", () => {
-      const immediateBlock = head.number + 1n;
-      const targetBlock =
-        immediateBlock + BigInt(prediction.selectedAction);
-      return {
-        chain,
-        K: selection.K,
-        artifact_id: selection.modelManifest.artifact_id,
-        head_block: safeBigInt(head.number, "head block"),
-        head_hash: head.hash,
-        selected_action_k: prediction.selectedAction,
-        target_block: safeBigInt(targetBlock, "target block"),
-        predicted_minimum_base_fee_per_gas: prediction.predictedFee,
-      };
-    });
+    const immediateBlock = head.number + 1n;
+    const targetBlock = immediateBlock + BigInt(prediction.selectedAction);
+    return {
+      chain,
+      K: selection.K,
+      artifact_id: selection.modelManifest.artifact_id,
+      head_block: safeBigInt(head.number, "head block"),
+      head_hash: head.hash,
+      selected_action_k: prediction.selectedAction,
+      target_block: safeBigInt(targetBlock, "target block"),
+      predicted_minimum_base_fee_per_gas: prediction.predictedFee,
+    };
   }
 
   async function currentHead(chain: Chain): Promise<number> {
     const session = sessions[chain];
-    return attempt("Could not read the selected chain.", async () =>
-      safeBigInt(await session.readHead(), "head block"),
-    );
+    return safeBigInt(await session.readHead(), "head block");
   }
 
   async function resolveOutcome(
@@ -180,15 +165,4 @@ function safeBigInt(value: bigint, label: string): number {
     throw new Error(`${label} exceeds the safe integer range`);
   }
   return Number(value);
-}
-
-async function attempt<T>(
-  message: string,
-  work: () => T | Promise<T>,
-): Promise<T> {
-  try {
-    return await work();
-  } catch (error) {
-    throw new Error(message, { cause: error });
-  }
 }

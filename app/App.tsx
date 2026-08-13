@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomTabs, type AppTab } from "./src/components/BottomTabs";
 import type { Chain, Horizon } from "./src/domain";
+import { presentationError } from "./src/errors";
 import {
   createRunHistory,
   type InferenceRun,
@@ -123,7 +124,7 @@ export default function App() {
       result = await runtime.run(selected.chain, selected.horizon);
     } catch (error) {
       if (isCurrent()) {
-        fail(error instanceof Error ? error.message : String(error));
+        fail(presentationError(error));
       }
       return;
     }

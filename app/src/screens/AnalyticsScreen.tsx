@@ -22,6 +22,7 @@ import { HorizonChoices } from "../components/HorizonChoices";
 import { NetworkChoices } from "../components/NetworkChoices";
 import { Overlay } from "../components/Overlay";
 import { CHAIN_LABELS, type Chain, type Horizon } from "../domain";
+import { presentationError } from "../errors";
 import type { InferenceRun } from "../history";
 import { styles } from "../styles";
 import { colors, radii } from "../theme";
@@ -397,7 +398,7 @@ export function AnalyticsScreen({
     } catch (error) {
       setRefreshState({
         status: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: presentationError(error),
       });
     }
   }

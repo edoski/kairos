@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type PropsWithChildren, type ReactNode, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -7,25 +7,23 @@ import {
   Text,
   View,
 } from "react-native";
-import { BarChart as GiftedBarChart } from "react-native-gifted-charts";
 
 import {
-  formatGwei,
   formatRunDate,
+  formatSavings,
   realizedSavingsPercent,
   summarizeRuns,
-  type WaitBucket,
   waitBuckets,
 } from "../analytics";
-import { DetailRow } from "../components/DetailRow";
 import { HorizonChoices } from "../components/HorizonChoices";
 import { NetworkChoices } from "../components/NetworkChoices";
-import { Overlay } from "../components/Overlay";
-import { CHAIN_LABELS, type Chain, type Horizon } from "../domain";
+import { type Chain, type Horizon } from "../domain";
 import { presentationError } from "../errors";
 import type { InferenceRun } from "../history";
 import { styles } from "../styles";
-import { colors, radii } from "../theme";
+import { colors } from "../theme";
+import { AnalyticsCharts } from "./AnalyticsCharts";
+import { RunDetails } from "./RunDetails";
 
 function SummaryCard({
   format,
@@ -50,212 +48,6 @@ function SummaryCard({
   );
 }
 
-function formatSavings(value: number): string {
-  return `${value.toFixed(1)}%`;
-}
-
-const CHART_HEIGHT = 138;
-const AXIS_PROPS = {
-  barBorderRadius: radii.small / 2,
-  disablePress: true,
-  endSpacing: 10,
-  initialSpacing: 10,
-  rulesColor: colors.border,
-  xAxisColor: colors.muted,
-  xAxisLabelsAtBottom: true,
-  xAxisLabelsHeight: 14,
-  xAxisLabelTextStyle: styles.graphAxisText,
-  yAxisLabelWidth: 34,
-  yAxisTextStyle: styles.graphAxisText,
-  yAxisThickness: 0,
-} as const;
-
-function niceStep(range: number): number {
-  const rough = range / 3;
-  const magnitude = 10 ** Math.floor(Math.log10(rough));
-  const normalized = rough / magnitude;
-  const multiplier =
-    normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
-  return multiplier * magnitude;
-}
-
-function chartScale(values: readonly number[]) {
-  const rawMinimum = Math.min(0, ...values);
-  const rawMaximum = Math.max(0, ...values);
-  const step = niceStep(
-    rawMinimum === rawMaximum ? 1 : rawMaximum - rawMinimum,
-  );
-  const minimum = Math.floor(rawMinimum / step) * step;
-  const maximum = Math.max(step, Math.ceil(rawMaximum / step) * step);
-  const positiveSections = Math.round(maximum / step);
-  const negativeSections = Math.round(Math.abs(minimum) / step);
-
-  return {
-    maxValue: maximum,
-    mostNegativeValue: minimum,
-    negativeStepValue: step,
-    noOfSections: positiveSections,
-    noOfSectionsBelowXAxis: negativeSections,
-    stepHeight: CHART_HEIGHT / (positiveSections + negativeSections),
-    stepValue: step,
-  };
-}
-
-function ChartCard({
-  children,
-  empty,
-  legend,
-  title,
-  xAxisTitle,
-}: PropsWithChildren<{
-  empty: "runs" | "outcomes" | null;
-  legend?: ReactNode;
-  title: string;
-  xAxisTitle: string;
-}>) {
-  return (
-    <View style={[styles.surface, styles.chartCard]}>
-      <View style={styles.headerRow}>
-        <Text style={styles.chartTitle}>{title}</Text>
-        {legend}
-      </View>
-      {empty === null ? (
-        <View style={styles.graph}>
-          {children}
-          <Text style={styles.graphXAxisTitle}>{xAxisTitle}</Text>
-        </View>
-      ) : (
-        <View style={styles.emptyGraph}>
-          <Text style={styles.emptyGraphTitle}>
-            {empty === "outcomes" ? "No outcomes yet" : "No runs yet"}
-          </Text>
-          <Text style={styles.emptyGraphText}>
-            {empty === "outcomes"
-              ? "Resolved inferences will populate this graph."
-              : "Runs will populate this graph."}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-function RecommendedWaitChart({
-  buckets,
-}: {
-  buckets: readonly WaitBucket[];
-}) {
-  return (
-    <ChartCard
-      empty={buckets.length === 0 ? "runs" : null}
-      title="Recommended wait distribution"
-      xAxisTitle="Wait (blocks)"
-    >
-      <GiftedBarChart
-        {...AXIS_PROPS}
-        {...chartScale(buckets.map((bucket) => bucket.runCount))}
-        data={buckets.map((bucket) => ({
-          frontColor: colors.blue,
-          label: bucket.label,
-          value: bucket.runCount,
-        }))}
-      />
-    </ChartCard>
-  );
-}
-
-function SavingsByWaitChart({
-  buckets,
-}: {
-  buckets: readonly WaitBucket[];
-}) {
-  const data = buckets.flatMap((bucket) =>
-    bucket.savingsPercent === null
-      ? []
-      : [
-          {
-            frontColor:
-              bucket.savingsPercent < 0 ? colors.red : colors.teal,
-            label: bucket.label,
-            value: bucket.savingsPercent,
-          },
-        ],
-  );
-  return (
-    <ChartCard
-      empty={data.length === 0 ? "outcomes" : null}
-      title="Savings by wait (%)"
-      xAxisTitle="Wait (blocks)"
-    >
-      <GiftedBarChart
-        {...AXIS_PROPS}
-        {...chartScale(data.map(({ value }) => value))}
-        data={data}
-        formatYLabel={(label) => `${Number(label).toFixed(0)}%`}
-      />
-    </ChartCard>
-  );
-}
-
-function BaseFeeByWaitChart({
-  buckets,
-}: {
-  buckets: readonly WaitBucket[];
-}) {
-  const data = buckets.filter(
-    (
-      bucket,
-    ): bucket is WaitBucket & {
-      kairosGwei: number;
-      immediateGwei: number;
-    } => bucket.kairosGwei !== null && bucket.immediateGwei !== null,
-  );
-  return (
-    <ChartCard
-      legend={
-        <View style={styles.graphLegend}>
-          <View
-            style={[styles.graphLegendDot, styles.graphImmediateDot]}
-          />
-          <Text style={styles.graphLegendLabel}>Act now</Text>
-          <View style={[styles.graphLegendDot, styles.graphKairosDot]} />
-          <Text style={styles.graphLegendLabel}>KAIROS</Text>
-        </View>
-      }
-      title="Base fee by wait (Gwei)"
-      empty={data.length === 0 ? "outcomes" : null}
-      xAxisTitle="Recommended wait (blocks)"
-    >
-      <GiftedBarChart
-        {...AXIS_PROPS}
-        {...chartScale(
-          data.flatMap((bucket) => [bucket.immediateGwei, bucket.kairosGwei]),
-        )}
-        barWidth={18}
-        data={data.flatMap((bucket, index) => [
-          {
-            frontColor: colors.amberSoft,
-            label: bucket.label,
-            labelWidth: 36,
-            spacing: 4,
-            value: bucket.immediateGwei,
-          },
-          {
-            frontColor: colors.blue,
-            spacing: index === data.length - 1 ? 0 : 20,
-            value: bucket.kairosGwei,
-          },
-        ])}
-        formatYLabel={(label) => {
-          const value = Number(label);
-          return value >= 10 ? value.toFixed(0) : value.toFixed(1);
-        }}
-        spacing={0}
-      />
-    </ChartCard>
-  );
-}
-
 function runSummary(run: InferenceRun): string {
   const wait =
     run.selected_action_k === 0
@@ -270,96 +62,6 @@ function runSummary(run: InferenceRun): string {
       ? `Saved ${formatSavings(savings)}`
       : `${formatSavings(Math.abs(savings))} higher`;
   return `${wait} · ${outcome}`;
-}
-
-function RunDetails({
-  run,
-  onClose,
-}: {
-  run: InferenceRun;
-  onClose: () => void;
-}) {
-  const savings = realizedSavingsPercent(run);
-  return (
-    <Overlay animationType="slide" onClose={onClose}>
-      <View style={[styles.dialog, styles.sheet, styles.runDialog]}>
-        <View style={styles.handle} />
-        <View style={styles.dialogHeader}>
-          <View>
-            <Text style={styles.dialogTitle}>Run details</Text>
-            <Text style={styles.dialogDate}>{formatRunDate(run.ran_at)}</Text>
-          </View>
-          <Pressable hitSlop={10} onPress={onClose}>
-            <Ionicons color={colors.muted} name="close" size={27} />
-          </Pressable>
-        </View>
-
-        <View style={styles.selectionSummary}>
-          <View style={styles.selectionItem}>
-            <Text style={styles.detailLabel}>Network</Text>
-            <Text style={styles.detailStrong}>
-              {CHAIN_LABELS[run.chain]}
-            </Text>
-          </View>
-          <View style={styles.selectionItem}>
-            <Text style={styles.detailLabel}>Horizon</Text>
-            <Text style={styles.detailStrong}>{run.K} blocks</Text>
-          </View>
-        </View>
-
-        <Text style={styles.groupTitle}>Prediction</Text>
-        <View style={[styles.surface, styles.detailsCard]}>
-          <DetailRow
-            label="Head block"
-            value={run.head_block.toLocaleString()}
-          />
-          <DetailRow
-            label="Action offset"
-            value={String(run.selected_action_k)}
-          />
-          <DetailRow
-            label="Target block"
-            value={run.target_block.toLocaleString()}
-          />
-          <DetailRow
-            label="Predicted base fee"
-            last
-            value={formatGwei(run.predicted_minimum_base_fee_per_gas)}
-          />
-        </View>
-        <Text style={styles.groupTitle}>Outcome</Text>
-        <View style={[styles.surface, styles.detailsCard]}>
-          <DetailRow
-            label="Act-now base fee"
-            value={
-              run.outcome === undefined
-                ? "Pending"
-                : formatGwei(run.outcome.immediate_base_fee_per_gas)
-            }
-          />
-          <DetailRow
-            label="Selected base fee"
-            value={
-              run.outcome === undefined
-                ? "Pending"
-                : formatGwei(run.outcome.selected_base_fee_per_gas)
-            }
-          />
-          <DetailRow
-            label="Realized savings"
-            last
-            value={savings === null ? "Pending" : formatSavings(savings)}
-          />
-        </View>
-        <Pressable
-          onPress={onClose}
-          style={[styles.button, styles.closeButton]}
-        >
-          <Text style={styles.buttonText}>Close</Text>
-        </Pressable>
-      </View>
-    </Overlay>
-  );
 }
 
 export function AnalyticsScreen({
@@ -414,7 +116,6 @@ export function AnalyticsScreen({
           <Text style={styles.sectionTitle}>Network</Text>
           <NetworkChoices
             chain={chain}
-            disabled={false}
             onChange={onChainChange}
           />
         </View>
@@ -485,11 +186,7 @@ export function AnalyticsScreen({
               value={horizon}
             />
           </View>
-          <View style={styles.chartCards}>
-            <RecommendedWaitChart buckets={buckets} />
-            <SavingsByWaitChart buckets={buckets} />
-            <BaseFeeByWaitChart buckets={buckets} />
-          </View>
+          <AnalyticsCharts buckets={buckets} />
         </View>
 
         <Text style={styles.sectionTitle}>Runs ({graphRuns.length})</Text>

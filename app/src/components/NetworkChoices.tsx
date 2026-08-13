@@ -8,11 +8,11 @@ import { NetworkIcon } from "./NetworkIcon";
 
 export function NetworkChoices({
   chain,
-  disabled,
+  disabled = false,
   onChange,
 }: {
   chain: Chain;
-  disabled: boolean;
+  disabled?: boolean;
   onChange: (chain: Chain) => void;
 }) {
   return (

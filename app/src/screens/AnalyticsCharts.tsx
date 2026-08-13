@@ -1,0 +1,270 @@
+import { type PropsWithChildren, type ReactNode } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { BarChart as GiftedBarChart } from "react-native-gifted-charts";
+
+import type { WaitBucket } from "../analytics";
+import { styles as sharedStyles } from "../styles";
+import { colors, radii } from "../theme";
+
+const CHART_HEIGHT = 138;
+const GRAPH_AXIS_TEXT = { color: colors.muted, fontSize: 9 } as const;
+const AXIS_PROPS = {
+  barBorderRadius: radii.small / 2,
+  disablePress: true,
+  endSpacing: 10,
+  initialSpacing: 10,
+  rulesColor: colors.border,
+  xAxisColor: colors.muted,
+  xAxisLabelsAtBottom: true,
+  xAxisLabelsHeight: 14,
+  xAxisLabelTextStyle: GRAPH_AXIS_TEXT,
+  yAxisLabelWidth: 34,
+  yAxisTextStyle: GRAPH_AXIS_TEXT,
+  yAxisThickness: 0,
+} as const;
+
+function niceStep(range: number): number {
+  const rough = range / 3;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const normalized = rough / magnitude;
+  const multiplier =
+    normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return multiplier * magnitude;
+}
+
+function chartScale(values: readonly number[]) {
+  const rawMinimum = Math.min(0, ...values);
+  const rawMaximum = Math.max(0, ...values);
+  const step = niceStep(
+    rawMinimum === rawMaximum ? 1 : rawMaximum - rawMinimum,
+  );
+  const minimum = Math.floor(rawMinimum / step) * step;
+  const maximum = Math.max(step, Math.ceil(rawMaximum / step) * step);
+  const positiveSections = Math.round(maximum / step);
+  const negativeSections = Math.round(Math.abs(minimum) / step);
+
+  return {
+    maxValue: maximum,
+    mostNegativeValue: minimum,
+    negativeStepValue: step,
+    noOfSections: positiveSections,
+    noOfSectionsBelowXAxis: negativeSections,
+    stepHeight: CHART_HEIGHT / (positiveSections + negativeSections),
+    stepValue: step,
+  };
+}
+
+function ChartCard({
+  children,
+  empty,
+  legend,
+  title,
+  xAxisTitle,
+}: PropsWithChildren<{
+  empty: "runs" | "outcomes" | null;
+  legend?: ReactNode;
+  title: string;
+  xAxisTitle: string;
+}>) {
+  return (
+    <View style={[sharedStyles.surface, styles.chartCard]}>
+      <View style={styles.headerRow}>
+        <Text style={styles.chartTitle}>{title}</Text>
+        {legend}
+      </View>
+      {empty === null ? (
+        <View style={styles.graph}>
+          {children}
+          <Text style={styles.graphXAxisTitle}>{xAxisTitle}</Text>
+        </View>
+      ) : (
+        <View style={styles.emptyGraph}>
+          <Text style={styles.emptyGraphTitle}>
+            {empty === "outcomes" ? "No outcomes yet" : "No runs yet"}
+          </Text>
+          <Text style={styles.emptyGraphText}>
+            {empty === "outcomes"
+              ? "Resolved inferences will populate this graph."
+              : "Runs will populate this graph."}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function RecommendedWaitChart({
+  buckets,
+}: {
+  buckets: readonly WaitBucket[];
+}) {
+  return (
+    <ChartCard
+      empty={buckets.length === 0 ? "runs" : null}
+      title="Recommended wait distribution"
+      xAxisTitle="Wait (blocks)"
+    >
+      <GiftedBarChart
+        {...AXIS_PROPS}
+        {...chartScale(buckets.map((bucket) => bucket.runCount))}
+        data={buckets.map((bucket) => ({
+          frontColor: colors.blue,
+          label: String(bucket.wait),
+          value: bucket.runCount,
+        }))}
+      />
+    </ChartCard>
+  );
+}
+
+function SavingsByWaitChart({
+  buckets,
+}: {
+  buckets: readonly WaitBucket[];
+}) {
+  const data = buckets.flatMap((bucket) =>
+    bucket.savingsPercent === null
+      ? []
+      : [
+          {
+            frontColor:
+              bucket.savingsPercent < 0 ? colors.red : colors.teal,
+            label: String(bucket.wait),
+            value: bucket.savingsPercent,
+          },
+        ],
+  );
+  return (
+    <ChartCard
+      empty={data.length === 0 ? "outcomes" : null}
+      title="Savings by wait (%)"
+      xAxisTitle="Wait (blocks)"
+    >
+      <GiftedBarChart
+        {...AXIS_PROPS}
+        {...chartScale(data.map(({ value }) => value))}
+        data={data}
+        formatYLabel={(label) => `${Number(label).toFixed(0)}%`}
+      />
+    </ChartCard>
+  );
+}
+
+function BaseFeeByWaitChart({
+  buckets,
+}: {
+  buckets: readonly WaitBucket[];
+}) {
+  const data = buckets.filter(
+    (
+      bucket,
+    ): bucket is WaitBucket & {
+      kairosGwei: number;
+      immediateGwei: number;
+    } => bucket.kairosGwei !== null && bucket.immediateGwei !== null,
+  );
+  return (
+    <ChartCard
+      legend={
+        <View style={styles.graphLegend}>
+          <View
+            style={[styles.graphLegendDot, styles.graphImmediateDot]}
+          />
+          <Text style={styles.graphLegendLabel}>Act now</Text>
+          <View style={[styles.graphLegendDot, styles.graphKairosDot]} />
+          <Text style={styles.graphLegendLabel}>KAIROS</Text>
+        </View>
+      }
+      title="Base fee by wait (Gwei)"
+      empty={data.length === 0 ? "outcomes" : null}
+      xAxisTitle="Recommended wait (blocks)"
+    >
+      <GiftedBarChart
+        {...AXIS_PROPS}
+        {...chartScale(
+          data.flatMap((bucket) => [bucket.immediateGwei, bucket.kairosGwei]),
+        )}
+        barWidth={18}
+        data={data.flatMap((bucket, index) => [
+          {
+            frontColor: colors.amberSoft,
+            label: String(bucket.wait),
+            labelWidth: 36,
+            spacing: 4,
+            value: bucket.immediateGwei,
+          },
+          {
+            frontColor: colors.blue,
+            spacing: index === data.length - 1 ? 0 : 20,
+            value: bucket.kairosGwei,
+          },
+        ])}
+        formatYLabel={(label) => {
+          const value = Number(label);
+          return value >= 10 ? value.toFixed(0) : value.toFixed(1);
+        }}
+        spacing={0}
+      />
+    </ChartCard>
+  );
+}
+
+export function AnalyticsCharts({
+  buckets,
+}: {
+  buckets: readonly WaitBucket[];
+}) {
+  return (
+    <View style={styles.chartCards}>
+      <RecommendedWaitChart buckets={buckets} />
+      <SavingsByWaitChart buckets={buckets} />
+      <BaseFeeByWaitChart buckets={buckets} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  chartCards: { gap: 12 },
+  chartCard: {
+    borderRadius: radii.large,
+    gap: 14,
+    overflow: "hidden",
+    padding: 14,
+  },
+  headerRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  chartTitle: { color: colors.ink, fontSize: 15, fontWeight: "700" },
+  graph: { gap: 2 },
+  graphXAxisTitle: {
+    color: colors.muted,
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 3,
+    textAlign: "center",
+  },
+  graphLegend: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+  },
+  graphLegendDot: { borderRadius: 4, height: 7, marginLeft: 5, width: 7 },
+  graphImmediateDot: { backgroundColor: colors.amberSoft },
+  graphKairosDot: { backgroundColor: colors.blue },
+  graphLegendLabel: { color: colors.muted, fontSize: 8 },
+  emptyGraph: {
+    alignItems: "center",
+    height: 184,
+    justifyContent: "center",
+    padding: 24,
+  },
+  emptyGraphTitle: { color: colors.ink, fontSize: 16, fontWeight: "700" },
+  emptyGraphText: {
+    color: colors.muted,
+    fontSize: 13,
+    marginTop: 5,
+    textAlign: "center",
+  },
+});

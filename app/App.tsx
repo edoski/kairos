@@ -4,29 +4,21 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomTabs, type AppTab } from "./src/components/BottomTabs";
 import type { Chain, Horizon } from "./src/domain";
+import { presentationError } from "./src/errors";
 import {
-  addRun,
-  loadRuns,
-  resolvePendingRuns,
-  saveRuns,
+  createRunHistory,
   type InferenceRun,
 } from "./src/history";
 import {
-  createInferenceEngine,
-  type InferenceEngine,
+  createInferenceRuntime,
+  type InferenceRuntime,
 } from "./src/inference";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
 import {
   InferenceScreen,
   type InferenceState,
 } from "./src/screens/InferenceScreen";
-import { createSerialQueue } from "./src/serialQueue";
 import { colors } from "./src/theme";
-
-type ActiveEngine = {
-  chain: Chain;
-  engine: InferenceEngine;
-};
 
 type Selection = {
   chain: Chain;
@@ -44,154 +36,100 @@ export default function App() {
   const [inference, setInference] = useState<InferenceState>({
     status: "idle",
   });
-  const [runs, setRuns] = useState<InferenceRun[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const activeEngine = useRef<ActiveEngine | null>(null);
-  const selectionState = useRef({
-    applied: INITIAL_SELECTION,
-    intended: INITIAL_SELECTION,
-  });
-  const runsRef = useRef<InferenceRun[]>([]);
-  const enqueueOrderedUpdate = useRef(createSerialQueue()).current;
+  const [runHistory] = useState(createRunHistory);
+  const [runs, setRuns] = useState<readonly InferenceRun[]>(
+    runHistory.runs,
+  );
+  const [storageError, setStorageError] = useState<string | null>(
+    runHistory.storageError,
+  );
+  const activeRuntime = useRef<InferenceRuntime | null>(null);
+  const selectionRef = useRef<Selection>(INITIAL_SELECTION);
+  const inferenceGeneration = useRef(0);
 
   function fail(message: string): void {
     setInference({ status: "error", message });
   }
 
-  function commitRuns(
-    update: (
-      current: readonly InferenceRun[],
-    ) => InferenceRun[] | Promise<InferenceRun[]>,
-    isCurrent: () => boolean,
-  ): Promise<void> {
-    return enqueueOrderedUpdate(async () => {
-      const current = runsRef.current;
-      if (!isCurrent()) return;
-      const next = await update(current);
-      if (
-        !isCurrent() ||
-        (next.length === current.length &&
-          next.every((run, index) => run === current[index]))
-      ) {
-        return;
-      }
-      await saveRuns(next);
-      runsRef.current = next;
-      setRuns(next);
+  useEffect(() => {
+    return runHistory.subscribe(() => {
+      setRuns(runHistory.runs);
+      setStorageError(runHistory.storageError);
     });
-  }
+  }, [runHistory]);
 
   useEffect(() => {
-    void enqueueOrderedUpdate(async () => {
-      try {
-        const storedRuns = await loadRuns();
-        runsRef.current = storedRuns;
-        setRuns(storedRuns);
-        setLoadError(null);
-      } catch (error) {
-        setLoadError(
-          error instanceof Error ? error.message : String(error),
-        );
-      }
-    });
-  }, [enqueueOrderedUpdate]);
-
-  useEffect(() => {
-    const engine = createInferenceEngine(selection.chain);
-    const current: ActiveEngine = {
-      chain: selection.chain,
-      engine,
-    };
-    activeEngine.current = current;
+    const runtime = createInferenceRuntime();
+    activeRuntime.current = runtime;
 
     return () => {
-      if (activeEngine.current === current) {
-        activeEngine.current = null;
+      if (activeRuntime.current === runtime) {
+        activeRuntime.current = null;
       }
-      void engine.dispose().catch(() => {});
+      void runtime.dispose().catch(() => {});
     };
-  }, [selection.chain]);
+  }, []);
 
   function select(next: Selection): void {
-    const owner = selectionState.current;
+    const current = selectionRef.current;
     if (
-      next.chain === owner.intended.chain &&
-      next.horizon === owner.intended.horizon
+      next.chain === current.chain &&
+      next.horizon === current.horizon
     ) {
       return;
     }
-    owner.intended = next;
-    void enqueueOrderedUpdate(async () => {
-      const current = owner.applied;
-      const intended = owner.intended;
-      const chainChanged = intended.chain !== current.chain;
-      const horizonChanged = intended.horizon !== current.horizon;
-      if (!chainChanged && !horizonChanged) return;
-
-      owner.applied = intended;
-      setInference({ status: "idle" });
-      if (chainChanged) {
-        activeEngine.current = null;
-      }
-      setSelection(intended);
-    });
+    selectionRef.current = next;
+    inferenceGeneration.current += 1;
+    setSelection(next);
+    setInference({ status: "idle" });
   }
 
   function selectChain(chain: Chain): void {
-    select({ ...selectionState.current.intended, chain });
+    select({ ...selectionRef.current, chain });
+  }
+
+  function selectHorizon(horizon: Horizon): void {
+    select({ ...selectionRef.current, horizon });
   }
 
   async function refreshOutcomes(): Promise<void> {
-    const selected = selectionState.current.applied;
-    const current = activeEngine.current;
-    if (current === null || current.chain !== selected.chain) {
+    const chain = selectionRef.current.chain;
+    const runtime = activeRuntime.current;
+    if (runtime === null) {
       throw new Error("Could not connect to the selected chain.");
     }
-    const isCurrent = () =>
-      activeEngine.current === current &&
-      selectionState.current.applied === selected;
-    const headBlock = await current.engine.currentHead();
-    if (!isCurrent()) return;
-    await commitRuns(
-      (storedRuns) =>
-        resolvePendingRuns(
-          storedRuns,
-          current.chain,
-          headBlock,
-          current.engine.resolveOutcome,
-        ),
-      isCurrent,
+    const headBlock = await runtime.currentHead(chain);
+    await runHistory.resolvePending(
+      chain,
+      headBlock,
+      (immediateBlock, selectedBlock) =>
+        runtime.resolveOutcome(chain, immediateBlock, selectedBlock),
     );
   }
 
   async function runInference() {
-    const selected = selectionState.current.applied;
-    const current = activeEngine.current;
-    if (current === null || current.chain !== selected.chain) {
+    const selected = selectionRef.current;
+    inferenceGeneration.current += 1;
+    const generation = inferenceGeneration.current;
+    const runtime = activeRuntime.current;
+    if (runtime === null) {
       fail("Could not connect to the selected chain.");
       return;
     }
-    const isCurrent = () =>
-      activeEngine.current === current &&
-      selectionState.current.applied === selected;
+    const isCurrent = () => inferenceGeneration.current === generation;
 
     setInference({ status: "loading" });
     let result;
     try {
-      result = await current.engine.run(selected.horizon);
+      result = await runtime.run(selected.chain, selected.horizon);
     } catch (error) {
       if (isCurrent()) {
-        fail(error instanceof Error ? error.message : String(error));
+        fail(presentationError(error));
       }
       return;
     }
-    if (!isCurrent()) return;
-
     try {
-      await commitRuns(
-        (storedRuns) => addRun(storedRuns, result),
-        isCurrent,
-      );
+      await runHistory.record(result);
     } catch {
       if (isCurrent()) {
         fail("Could not save this run.");
@@ -213,9 +151,7 @@ export default function App() {
               chain={selection.chain}
               horizon={selection.horizon}
               onChainChange={selectChain}
-              onHorizonChange={(horizon) =>
-                select({ ...selectionState.current.intended, horizon })
-              }
+              onHorizonChange={selectHorizon}
               onRun={() => void runInference()}
               onRunAgain={() => setInference({ status: "idle" })}
               state={inference}
@@ -223,11 +159,12 @@ export default function App() {
           ) : (
             <AnalyticsScreen
               chain={selection.chain}
-              initialHorizon={selection.horizon}
-              loadError={loadError}
+              horizon={selection.horizon}
               onChainChange={selectChain}
+              onHorizonChange={selectHorizon}
               onRefresh={refreshOutcomes}
               runs={runs}
+              storageError={storageError}
             />
           )}
         </View>

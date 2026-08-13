@@ -7,18 +7,15 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 import typer
-from bundle import (
-    StorageRoot,
-    append_tune_cells,
-    bundle_path,
-    open_bundle,
-    print_study_metrics,
-    publish_bundle,
-    read_cells,
-    run,
-    write_tune_cells,
-)
 from c_study import report_context_selections, selected_context_studies
+from campaign import (
+    StorageRoot,
+    append_experiment,
+    author_experiment,
+    close_experiment,
+    print_study_metrics,
+    run,
+)
 
 from kairos.config import (
     LstmDefinition,
@@ -127,8 +124,7 @@ def prepare(
     experiment_id = uuid4()
     chains = _chains(chain)
     selected, context_winners = selected_context_studies(storage_root, c_experiment_id, chains)
-    bundle = open_bundle(storage_root, _KIND, experiment_id)
-    write_tune_cells(bundle, _cells(selected, chains))
+    author_experiment(storage_root, _KIND, experiment_id, _cells(selected, chains), seal=False)
 
     report_context_selections(context_winners)
     print(experiment_id)
@@ -142,27 +138,20 @@ def extend(
 ) -> None:
     chains = _chains(chain)
     selected, context_winners = selected_context_studies(storage_root, c_experiment_id, chains)
-    append_tune_cells(bundle_path(storage_root, _KIND, experiment_id), _cells(selected, chains))
+    append_experiment(storage_root, _KIND, experiment_id, _cells(selected, chains))
 
     report_context_selections(context_winners)
     print(experiment_id)
 
 
 def select(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    bundle = bundle_path(storage_root, _KIND, experiment_id)
-    rows = read_cells(bundle)
-
-    expected_cells = {f"{chain}.{family}" for chain, family in product(_CHAINS, _FAMILIES)}
-    if {row["cell"] for row in rows} != expected_cells:
-        raise ValueError("HPO roster is incomplete")
-
-    cells = {row["cell"]: UUID(row["study_id"]) for row in rows}
+    expected_cells = tuple(f"{chain}.{family}" for chain, family in product(_CHAINS, _FAMILIES))
+    cells = close_experiment(storage_root, _KIND, experiment_id, expected_cells=expected_cells)
     selections = [
         (cell, *load_study(storage_root, study_id).best_result())
         for cell, study_id in cells.items()
     ]
 
-    publish_bundle(storage_root, _KIND, experiment_id, cells)
     for cell, selected_index, result in selections:
         print(f"{cell}\t{selected_index}\t{result.objective:g}")
 

@@ -31,6 +31,11 @@ type MobileManifest = {
   chains: Record<Chain, MobileChainManifest>;
 };
 
+export type ModelCatalog = {
+  chainManifest(chain: Chain): MobileChainManifest;
+  select(chain: Chain, K: Horizon): ModelSelection;
+};
+
 export type ModelSelection = {
   K: Horizon;
   source: number;
@@ -61,9 +66,7 @@ type NativeModuleFactory = () => NativeModule;
 
 initExecutorch({ resourceFetcher: ExpoResourceFetcher });
 
-const serializeNativeOperation = createSerialQueue();
-
-export function createDefaultModelCatalog() {
+export function createDefaultModelCatalog(): ModelCatalog {
   const manifest = require("../assets/models/manifest.json") as MobileManifest;
   const resources = {
     ethereum: {
@@ -103,6 +106,7 @@ export function createDefaultModelCatalog() {
 export function createModelRuntime(
   createNativeModule: NativeModuleFactory = () => new ExecutorchModule(),
 ): ModelRuntime {
+  const serialize = createSerialQueue();
   let current: { artifactId: string; module: NativeModule } | null = null;
   let disposal: Promise<void> | null = null;
 
@@ -133,7 +137,7 @@ export function createModelRuntime(
     input: Float32Array,
   ): Promise<ModelOutput> {
     if (disposal !== null) throw new Error("Model runtime is disposed");
-    return serializeNativeOperation(async () => {
+    return serialize(async () => {
       const module = await ensureLoaded(selection);
       const outputs = await module.forward([
         {
@@ -152,7 +156,7 @@ export function createModelRuntime(
 
   function dispose(): Promise<void> {
     if (disposal !== null) return disposal;
-    disposal = serializeNativeOperation(async () => {
+    disposal = serialize(async () => {
       if (current === null) return;
       const model = current;
       current = null;

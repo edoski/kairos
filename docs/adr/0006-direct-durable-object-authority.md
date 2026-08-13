@@ -21,9 +21,9 @@ completed object owns its exact typed request once at a direct canonical address
 
 Typed requests, embedded associations, and the selected Study result index plus exact Method establish meaning. Study and artifact loaders validate the requested UUID and association. Each completed fit retains its selected checkpoint and one deterministic pass over the exact validation window. Validation and testing use the same observation schema and transient reducer. Evaluation publication validates its inputs before atomically publishing the request and observations at the requested evaluation address.
 
-Before an experiment closes, another experiment author may read its hidden authored `cells.tsv`
-to identify canonical records that already exist. After closure, the manifest is authoritative.
-Downstream scientific inputs always come from the canonical records, never private work state.
+Before an experiment closes, its Servatus Campaign Task roster is the sole private authoring
+authority. After closure, the manifest is the sole scientific roster. Downstream experiment
+authors require that manifest and never read private Campaign state.
 
 A completed evaluation owns its exact `EvaluateRequest` plus sufficient canonical prediction and outcome observations. Atomic publication owns request pairing, ordered window coverage, and observation value consistency. Transient reduction validates the exact observation schema, trusts those publisher-owned facts, and is recomputed directly from `observations.parquet`; Artifact and Corpus availability is not required after publication. Selection remains recomputed from its canonical Study object.
 

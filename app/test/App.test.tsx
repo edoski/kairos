@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import {
   act,
   create,
@@ -8,28 +8,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppTab } from "../src/components/BottomTabs";
 import type { Chain, Horizon } from "../src/domain";
+import type { InferenceRun, RunHistory } from "../src/history";
 import type {
-  InferenceEngine,
+  InferenceRuntime,
   InferenceResult,
 } from "../src/inference";
 import {
   deferred,
-  flushMicrotasks,
   inferenceResult,
   inferenceRun,
 } from "./helpers";
 
 const mocks = vi.hoisted(() => ({
-  addRun: vi.fn(),
   analyticsProps: null as {
     chain: Chain;
-    loadError: string | null;
+    horizon: Horizon;
     onChainChange(chain: Chain): void;
+    onHorizonChange(horizon: Horizon): void;
     onRefresh(): Promise<void>;
-    runs: readonly ReturnType<typeof inferenceRun>[];
+    runs: readonly InferenceRun[];
+    storageError: string | null;
   } | null,
   bottomTabsProps: null as { onSelect(tab: AppTab): void } | null,
-  createInferenceEngine: vi.fn(),
+  createInferenceRuntime: vi.fn(),
+  createRunHistory: vi.fn(),
   inferenceProps: null as {
     chain: Chain;
     horizon: Horizon;
@@ -38,9 +40,6 @@ const mocks = vi.hoisted(() => ({
     onRun(): void;
     state: Record<string, unknown>;
   } | null,
-  loadRuns: vi.fn(),
-  resolvePendingRuns: vi.fn(),
-  saveRuns: vi.fn(),
 }));
 
 vi.mock("react-native", () => {
@@ -82,40 +81,86 @@ vi.mock("../src/screens/InferenceScreen", () => ({
 }));
 
 vi.mock("../src/history", () => ({
-  addRun: mocks.addRun,
-  loadRuns: mocks.loadRuns,
-  resolvePendingRuns: mocks.resolvePendingRuns,
-  saveRuns: mocks.saveRuns,
+  createRunHistory: mocks.createRunHistory,
 }));
 
 vi.mock("../src/inference", () => ({
-  createInferenceEngine: mocks.createInferenceEngine,
+  createInferenceRuntime: mocks.createInferenceRuntime,
 }));
 
 import App from "../App";
 
-type EngineHarness = {
-  engine: InferenceEngine;
-  resolveRun(result: InferenceResult): void;
+type RuntimeHarness = {
+  runtime: InferenceRuntime;
+  rejectRun(index: number, error: unknown): void;
+  resolveRun(index: number, result: InferenceResult): void;
 };
 
-const engines: EngineHarness[] = [];
+type HistoryHarness = {
+  owner: RunHistory;
+  publish(
+    runs: readonly InferenceRun[],
+    storageError?: string | null,
+  ): void;
+};
+
+const runtimes: RuntimeHarness[] = [];
+let history: HistoryHarness;
 let root: ReactTestRenderer | null = null;
 
-function engine(): EngineHarness {
-  const run = deferred<InferenceResult>();
-  const value: InferenceEngine = {
-    currentHead: vi.fn(async () => 100),
-    run: vi.fn(() => run.promise),
-    resolveOutcome: vi.fn(async () => {
+function runtime(): RuntimeHarness {
+  const pending: Array<ReturnType<typeof deferred<InferenceResult>>> = [];
+  const value: InferenceRuntime = {
+    currentHead: vi.fn(async (_chain) => 100),
+    run: vi.fn((_chain, _horizon) => {
+      const request = deferred<InferenceResult>();
+      pending.push(request);
+      return request.promise;
+    }),
+    resolveOutcome: vi.fn(async (_chain, _immediate, _selected) => {
       throw new Error("unused");
     }),
     dispose: vi.fn(async () => undefined),
   };
   return {
-    engine: value,
-    resolveRun(result) {
-      run.resolve(result);
+    runtime: value,
+    rejectRun(index, error) {
+      pending[index].reject(error);
+    },
+    resolveRun(index, result) {
+      pending[index].resolve(result);
+    },
+  };
+}
+
+function runHistory(): HistoryHarness {
+  let runs: readonly InferenceRun[] = [];
+  let storageError: string | null = null;
+  const listeners = new Set<() => void>();
+  const owner: RunHistory = {
+    get runs() {
+      return runs;
+    },
+    get storageError() {
+      return storageError;
+    },
+    record: vi.fn(async (result) => {
+      runs = [inferenceRun({ ...result, id: `run-${runs.length}` }), ...runs];
+      listeners.forEach((listener) => listener());
+    }),
+    resolvePending: vi.fn(async () => undefined),
+    subscribe: vi.fn((listener) => {
+      listeners.add(listener);
+      listener();
+      return () => listeners.delete(listener);
+    }),
+  };
+  return {
+    owner,
+    publish(nextRuns, nextStorageError = storageError) {
+      runs = nextRuns;
+      storageError = nextStorageError;
+      listeners.forEach((listener) => listener());
     },
   };
 }
@@ -126,18 +171,16 @@ beforeEach(() => {
       IS_REACT_ACT_ENVIRONMENT: boolean;
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
-  engines.length = 0;
+  runtimes.length = 0;
+  history = runHistory();
   mocks.analyticsProps = null;
   mocks.bottomTabsProps = null;
   mocks.inferenceProps = null;
-  mocks.addRun.mockReset();
-  mocks.loadRuns.mockReset().mockResolvedValue([]);
-  mocks.resolvePendingRuns.mockReset().mockResolvedValue([]);
-  mocks.saveRuns.mockReset().mockResolvedValue(undefined);
-  mocks.createInferenceEngine.mockReset().mockImplementation(() => {
-    const created = engine();
-    engines.push(created);
-    return created.engine;
+  mocks.createRunHistory.mockReset().mockReturnValue(history.owner);
+  mocks.createInferenceRuntime.mockReset().mockImplementation(() => {
+    const created = runtime();
+    runtimes.push(created);
+    return created.runtime;
   });
 });
 
@@ -148,209 +191,235 @@ afterEach(async () => {
   }
 });
 
-async function renderApp(): Promise<void> {
+async function renderApp(strict = false): Promise<void> {
   await act(async () => {
-    root = create(<App />);
+    root = create(
+      strict ? (
+        <StrictMode>
+          <App />
+        </StrictMode>
+      ) : (
+        <App />
+      ),
+    );
   });
 }
 
-describe("App engine selection", () => {
-  it("applies the latest selection after an accepted history commit", async () => {
+describe("App inference presentation", () => {
+  it("applies selection immediately while an old result records durably", async () => {
     const result = inferenceResult();
-    const acceptedRun = inferenceRun();
-    const firstSave = deferred<void>();
-    mocks.addRun.mockReturnValue([acceptedRun]);
-    mocks.saveRuns.mockImplementationOnce(() => firstSave.promise);
+    const recorded = deferred<void>();
+    vi.mocked(history.owner.record).mockReturnValueOnce(recorded.promise);
     await renderApp();
 
     act(() => mocks.inferenceProps!.onRun());
-    expect(engines[0].engine.run).toHaveBeenCalledWith(5);
+    act(() => runtimes[0].resolveRun(0, result));
+    await vi.waitFor(() =>
+      expect(history.owner.record).toHaveBeenCalledWith(result),
+    );
 
-    act(() => engines[0].resolveRun(result));
-    await vi.waitFor(() => expect(mocks.saveRuns).toHaveBeenCalledOnce());
-    expect(mocks.saveRuns).toHaveBeenLastCalledWith([acceptedRun]);
+    act(() => mocks.inferenceProps!.onChainChange("polygon"));
+    expect(mocks.inferenceProps).toMatchObject({
+      chain: "polygon",
+      horizon: 5,
+      state: { status: "idle" },
+    });
+
+    await act(async () => recorded.resolve());
+    expect(mocks.inferenceProps!.state).toEqual({ status: "idle" });
+  });
+
+  it("invalidates an original run across A to B to A", async () => {
+    const result = inferenceResult();
+    await renderApp();
+    act(() => mocks.inferenceProps!.onRun());
 
     act(() => {
       mocks.inferenceProps!.onChainChange("polygon");
-      mocks.inferenceProps!.onHorizonChange(4);
+      mocks.inferenceProps!.onChainChange("ethereum");
+    });
+    expect(mocks.inferenceProps!.chain).toBe("ethereum");
+
+    await act(async () => runtimes[0].resolveRun(0, result));
+    expect(history.owner.record).toHaveBeenCalledWith(result);
+    expect(mocks.inferenceProps!.state).toEqual({ status: "idle" });
+  });
+
+  it("lets the newer run own presentation while both results record", async () => {
+    const older = inferenceResult({ head_block: 10, head_hash: "0xolder" });
+    const newer = inferenceResult({ head_block: 20, head_hash: "0xnewer" });
+    await renderApp();
+
+    act(() => {
+      mocks.inferenceProps!.onRun();
+      mocks.inferenceProps!.onRun();
+    });
+    await act(async () => runtimes[0].resolveRun(1, newer));
+    expect(mocks.inferenceProps!.state).toEqual({
+      status: "success",
+      result: newer,
+    });
+
+    await act(async () => runtimes[0].resolveRun(0, older));
+    expect(history.owner.record).toHaveBeenNthCalledWith(1, newer);
+    expect(history.owner.record).toHaveBeenNthCalledWith(2, older);
+    expect(mocks.inferenceProps!.state).toEqual({
+      status: "success",
+      result: newer,
+    });
+  });
+
+  it("does nothing for same-value selection changes", async () => {
+    const result = inferenceResult();
+    await renderApp();
+    act(() => mocks.inferenceProps!.onRun());
+    act(() => {
       mocks.inferenceProps!.onChainChange("ethereum");
       mocks.inferenceProps!.onHorizonChange(5);
     });
-    expect(mocks.inferenceProps).toMatchObject({
-      chain: "ethereum",
-      horizon: 5,
-      state: { status: "loading" },
-    });
-    expect(engines).toHaveLength(1);
 
-    await act(async () => {
-      firstSave.resolve();
-      await flushMicrotasks();
+    await act(async () => runtimes[0].resolveRun(0, result));
+    expect(mocks.inferenceProps!.state).toEqual({
+      status: "success",
+      result,
     });
-
-    expect(mocks.saveRuns).toHaveBeenCalledOnce();
-    expect(mocks.inferenceProps).toMatchObject({
-      chain: "ethereum",
-      horizon: 5,
-      state: { status: "success", result },
-    });
-    expect(engines).toHaveLength(1);
-    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-    expect(mocks.analyticsProps!.runs).toEqual([acceptedRun]);
   });
 
-  it("does not publish a result from a replaced engine", async () => {
-    const result = inferenceResult();
+  it("publishes only current-generation errors", async () => {
     await renderApp();
     act(() => mocks.inferenceProps!.onRun());
-    vi.mocked(engines[0].engine.dispose).mockRejectedValueOnce(
-      new Error("native disposal failed"),
+    act(() => mocks.inferenceProps!.onChainChange("polygon"));
+
+    await act(async () =>
+      runtimes[0].rejectRun(0, new Error("Old failure")),
+    );
+    expect(mocks.inferenceProps!.state).toEqual({ status: "idle" });
+  });
+
+  it("keeps stale save failures out of inference presentation", async () => {
+    const save = deferred<void>();
+    vi.mocked(history.owner.record).mockReturnValueOnce(save.promise);
+    await renderApp();
+    act(() => mocks.inferenceProps!.onRun());
+    act(() => runtimes[0].resolveRun(0, inferenceResult()));
+    await vi.waitFor(() =>
+      expect(history.owner.record).toHaveBeenCalledOnce(),
     );
 
+    act(() => mocks.inferenceProps!.onChainChange("polygon"));
     await act(async () => {
-      mocks.inferenceProps!.onChainChange("polygon");
-      await flushMicrotasks();
+      history.publish([], "Storage unavailable");
+      save.reject(new Error("Storage unavailable"));
+      await Promise.resolve();
     });
-    expect(mocks.inferenceProps!.chain).toBe("polygon");
-    expect(engines).toHaveLength(2);
-    expect(engines[0].engine.dispose).toHaveBeenCalledOnce();
-
-    await act(async () => {
-      engines[0].resolveRun(result);
-      await flushMicrotasks();
-    });
-
     expect(mocks.inferenceProps!.state).toEqual({ status: "idle" });
-    expect(mocks.addRun).not.toHaveBeenCalled();
-    expect(mocks.saveRuns).not.toHaveBeenCalled();
+
+    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
+    expect(mocks.analyticsProps!.storageError).toBe("Storage unavailable");
   });
 });
 
-describe("App history persistence", () => {
-  it("reports initial history load failures in Analytics", async () => {
-    mocks.loadRuns.mockRejectedValueOnce(new Error("Corrupt history"));
-    await renderApp();
+describe("App owners", () => {
+  it("uses a fresh live runtime after development setup-cleanup-setup", async () => {
+    await renderApp(true);
 
-    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-
-    expect(mocks.analyticsProps!.loadError).toBe("Corrupt history");
-  });
-
-  it("reports inference save failures only through the inference state", async () => {
-    const result = inferenceResult();
-    mocks.addRun.mockReturnValue([inferenceRun()]);
-    mocks.saveRuns.mockRejectedValueOnce(new Error("Storage unavailable"));
-    await renderApp();
+    expect(runtimes).toHaveLength(2);
+    expect(runtimes[0].runtime.dispose).toHaveBeenCalledOnce();
+    expect(runtimes[1].runtime.dispose).not.toHaveBeenCalled();
 
     act(() => mocks.inferenceProps!.onRun());
-    await act(async () => {
-      engines[0].resolveRun(result);
-      await flushMicrotasks();
-    });
+    expect(runtimes[0].runtime.run).not.toHaveBeenCalled();
+    expect(runtimes[1].runtime.run).toHaveBeenCalledWith("ethereum", 5);
 
+    await act(async () => root?.unmount());
+    root = null;
+    expect(runtimes[0].runtime.dispose).toHaveBeenCalledOnce();
+    expect(runtimes[1].runtime.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("shows load and save failures through one history error", async () => {
+    await renderApp();
+    act(() => history.publish([], "Corrupt history"));
+    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
+    expect(mocks.analyticsProps!.storageError).toBe("Corrupt history");
+
+    act(() => mocks.bottomTabsProps!.onSelect("inference"));
+    vi.mocked(history.owner.record).mockImplementationOnce(async () => {
+      history.publish([], "Storage unavailable");
+      throw new Error("Storage unavailable");
+    });
+    act(() => mocks.inferenceProps!.onRun());
+    await act(async () =>
+      runtimes[0].resolveRun(0, inferenceResult()),
+    );
     expect(mocks.inferenceProps!.state).toEqual({
       message: "Could not save this run.",
       status: "error",
     });
+
     act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-    expect(mocks.analyticsProps!.loadError).toBeNull();
+    expect(mocks.analyticsProps!.storageError).toBe("Storage unavailable");
   });
 });
 
-describe("App outcome refresh", () => {
-  it("reads the applied engine head and saves resolved runs before publishing", async () => {
-    const pending = inferenceRun({ id: "pending" });
-    const resolved = inferenceRun({
-      id: pending.id,
-      outcome: {
-        immediate_base_fee_per_gas: 12_000_000_000,
-        selected_base_fee_per_gas: 10_000_000_000,
-      },
-    });
-    const save = deferred<void>();
-    mocks.loadRuns.mockResolvedValueOnce([pending]);
-    mocks.resolvePendingRuns.mockResolvedValueOnce([resolved]);
-    mocks.saveRuns.mockImplementationOnce(() => save.promise);
-    await renderApp();
-    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-
-    let refresh!: Promise<void>;
-    act(() => {
-      refresh = mocks.analyticsProps!.onRefresh();
-    });
-    await vi.waitFor(() => expect(mocks.saveRuns).toHaveBeenCalledOnce());
-
-    expect(engines[0].engine.currentHead).toHaveBeenCalledOnce();
-    expect(mocks.resolvePendingRuns).toHaveBeenCalledWith(
-      [pending],
-      "ethereum",
-      100,
-      engines[0].engine.resolveOutcome,
-    );
-    expect(mocks.saveRuns).toHaveBeenCalledWith([resolved]);
-    expect(mocks.analyticsProps!.runs).toEqual([pending]);
-
-    await act(async () => {
-      save.resolve();
-      await refresh;
-    });
-    expect(mocks.analyticsProps!.runs).toEqual([resolved]);
-  });
-
-  it("does not save when refresh leaves every run unchanged", async () => {
-    const pending = inferenceRun({ id: "pending" });
-    mocks.loadRuns.mockResolvedValueOnce([pending]);
-    mocks.resolvePendingRuns.mockResolvedValueOnce([pending]);
-    await renderApp();
-    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-
-    await act(async () => mocks.analyticsProps!.onRefresh());
-
-    expect(engines[0].engine.currentHead).toHaveBeenCalledOnce();
-    expect(mocks.saveRuns).not.toHaveBeenCalled();
-    expect(mocks.analyticsProps!.runs).toEqual([pending]);
-  });
-
-  it("does not resolve or publish after the selected engine changes", async () => {
+describe("App outcome refresh and global selection", () => {
+  it("finishes refresh for its captured chain after selection changes", async () => {
     const head = deferred<number>();
     await renderApp();
-    vi.mocked(engines[0].engine.currentHead).mockReturnValueOnce(head.promise);
+    vi.mocked(runtimes[0].runtime.currentHead).mockReturnValueOnce(
+      head.promise,
+    );
     act(() => mocks.bottomTabsProps!.onSelect("analytics"));
 
     const refresh = mocks.analyticsProps!.onRefresh();
-    await act(async () => {
+    act(() => {
       mocks.analyticsProps!.onChainChange("polygon");
-      await flushMicrotasks();
+      mocks.analyticsProps!.onHorizonChange(4);
     });
-    expect(mocks.analyticsProps!.chain).toBe("polygon");
-    expect(engines).toHaveLength(2);
+    expect(mocks.analyticsProps).toMatchObject({
+      chain: "polygon",
+      horizon: 4,
+    });
 
     await act(async () => {
       head.resolve(100);
       await refresh;
     });
-    expect(mocks.resolvePendingRuns).not.toHaveBeenCalled();
-    expect(mocks.saveRuns).not.toHaveBeenCalled();
+    expect(history.owner.resolvePending).toHaveBeenCalledWith(
+      "ethereum",
+      100,
+      expect.any(Function),
+    );
+    const resolver = vi.mocked(history.owner.resolvePending).mock.calls[0][2];
+    await expect(resolver(101, 102)).rejects.toThrow("unused");
+    expect(runtimes[0].runtime.resolveOutcome).toHaveBeenCalledWith(
+      "ethereum",
+      101,
+      102,
+    );
   });
 
-  it("rejects refresh when resolved runs cannot be saved", async () => {
-    const pending = inferenceRun({ id: "pending" });
-    const resolved = inferenceRun({
-      id: pending.id,
-      outcome: {
-        immediate_base_fee_per_gas: 12_000_000_000,
-        selected_base_fee_per_gas: 10_000_000_000,
-      },
-    });
-    mocks.loadRuns.mockResolvedValueOnce([pending]);
-    mocks.resolvePendingRuns.mockResolvedValueOnce([resolved]);
-    mocks.saveRuns.mockRejectedValueOnce(new Error("Storage unavailable"));
+  it("keeps Analytics horizon global across tab remounts", async () => {
+    await renderApp();
+    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
+    act(() => mocks.analyticsProps!.onHorizonChange(3));
+    expect(mocks.analyticsProps!.horizon).toBe(3);
+
+    act(() => mocks.bottomTabsProps!.onSelect("inference"));
+    expect(mocks.inferenceProps!.horizon).toBe(3);
+    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
+    expect(mocks.analyticsProps!.horizon).toBe(3);
+  });
+
+  it("propagates history save failure from refresh", async () => {
+    vi.mocked(history.owner.resolvePending).mockRejectedValueOnce(
+      new Error("Storage unavailable"),
+    );
     await renderApp();
     act(() => mocks.bottomTabsProps!.onSelect("analytics"));
 
     await expect(mocks.analyticsProps!.onRefresh()).rejects.toThrow(
       "Storage unavailable",
     );
-    expect(mocks.analyticsProps!.runs).toEqual([pending]);
   });
 });

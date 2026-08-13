@@ -79,7 +79,12 @@ function Setup({
   state,
   onHorizonChange,
   onRun,
-}: Props) {
+}: {
+  horizon: Horizon;
+  state: InferenceState;
+  onHorizonChange: (horizon: Horizon) => void;
+  onRun: () => void;
+}) {
   const loading = state.status === "loading";
   return (
     <>
@@ -236,7 +241,12 @@ export function InferenceScreen(props: Props) {
             result={props.state.result}
           />
         ) : (
-          <Setup {...props} />
+          <Setup
+            horizon={props.horizon}
+            onHorizonChange={props.onHorizonChange}
+            onRun={props.onRun}
+            state={props.state}
+          />
         )}
       </ScrollView>
       {props.state.status === "error" && (

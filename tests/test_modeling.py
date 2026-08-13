@@ -164,9 +164,24 @@ def _write_selected_study(storage_root: Path, request: TrainRequest, method: Met
     checkpoint = study_trial_checkpoint_path(storage_root, source.study_id, 0)
     checkpoint.parent.mkdir(parents=True)
     checkpoint.touch()
-    pl.DataFrame(schema=OBSERVATION_SCHEMA).write_parquet(
-        study_trial_observations_path(storage_root, source.study_id, 0)
-    )
+    pl.DataFrame(
+        [
+            {
+                "origin_block": 1,
+                "predicted_action_k": 0,
+                "predicted_minimum_log_base_fee": 1.0,
+                "minimum_action_k": 0,
+                "immediate_base_fee_per_gas": 20,
+                "immediate_effective_priority_fee_per_gas_p50": 2,
+                "selected_base_fee_per_gas": 15,
+                "selected_effective_priority_fee_per_gas_p50": 1,
+                "deadline_base_fee_per_gas": 15,
+                "deadline_effective_priority_fee_per_gas_p50": 1,
+                "minimum_base_fee_per_gas": 10,
+            }
+        ],
+        schema=OBSERVATION_SCHEMA,
+    ).write_parquet(study_trial_observations_path(storage_root, source.study_id, 0))
 
 
 def _use_cpu_trainer(monkeypatch: pytest.MonkeyPatch) -> None:

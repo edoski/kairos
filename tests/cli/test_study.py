@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from uuid import UUID
 
@@ -9,6 +8,7 @@ import pytest
 import kairos.cli as cli
 from kairos.cli import app
 from kairos.config import ExperimentSemantics, FitMethod, LstmDefinition, Method, TuneRequest
+from kairos.workers import ExecutionTask
 from tests.helpers import dispatch, fake_campaign, window, write_servatus_config
 
 STUDY_ID = UUID("10000000-0000-4000-8000-000000000001")
@@ -49,20 +49,12 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
 ) -> None:
     request_path = tmp_path / "TUNE_REQUEST.json"
     request_path.write_text(REQUEST.model_dump_json(), encoding="utf-8")
-    target_path, resource_path = write_servatus_config(tmp_path)
+    write_servatus_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("STORAGE_ROOT", str(tmp_path))
     open_campaign, campaign = fake_campaign(monkeypatch, cli)
 
-    result = dispatch(
-        app,
-        "study",
-        "run",
-        str(request_path),
-        "0",
-        "--target",
-        str(target_path),
-        "--resources",
-        str(resource_path),
-    )
+    result = dispatch(app, "study", "run", str(request_path), "0")
 
     assert result.exit_code == 0
     assert result.output == "1001;research\n"
@@ -71,44 +63,41 @@ def test_study_run_submits_typed_candidate_and_prints_job_id(
         f".{request_path.name}.study-{STUDY_ID}-method-0.campaign"
     )
     assert tasks[0].key == f"study:{STUDY_ID}:method:0"
-    assert tasks[0].args == ("remote", "candidate")
-    assert tasks[0].stdin == (
-        json.dumps(
-            {"request": REQUEST.model_dump(mode="json"), "method_index": 0}, separators=(",", ":")
-        ).encode()
-        + b"\n"
+    assert tasks[0].args == ("remote", "worker")
+    assert (
+        tasks[0].stdin
+        == ExecutionTask(request=REQUEST, method_index=0).model_dump_json().encode() + b"\n"
     )
-    target, resources = campaign.plan.call_args.args
-    assert target.host == "research-alias"
-    assert resources.gpus_per_task == 1
-    assert campaign.plan.call_args.kwargs == {"retry": ()}
+    profile = campaign.plan.call_args.args[0]
+    assert profile.label == "TEST"
+    assert campaign.plan.call_args.kwargs == {"view": campaign.inspect.return_value, "retry": ()}
 
 
-def test_remote_candidate_dispatches_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    payload = json.dumps(
-        {"request": REQUEST.model_dump(mode="json"), "method_index": 0}, separators=(",", ":")
-    )
+def test_remote_worker_dispatches_candidate_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = ExecutionTask(request=REQUEST, method_index=0).model_dump_json()
     calls: list[tuple[Path, TuneRequest, int]] = []
 
-    def fake_run_candidate(storage_root: Path, request: TuneRequest, method_index: int) -> None:
-        calls.append((storage_root, request, method_index))
+    def fake_run_task(storage_root: Path, task: ExecutionTask) -> None:
+        calls.append((storage_root, task.request, task.method_index or 0))
 
     monkeypatch.setenv("STORAGE_ROOT", str(STORAGE_ROOT))
-    monkeypatch.setattr(cli, "run_candidate", fake_run_candidate)
+    monkeypatch.setattr(cli, "run_task", fake_run_task)
 
-    result = dispatch(app, "remote", "candidate", input=payload)
+    result = dispatch(app, "remote", "worker", input=payload)
 
     assert result.exit_code == 0
     assert result.output == ""
     assert calls == [(STORAGE_ROOT, REQUEST, 0)]
 
 
-def test_remote_candidate_rejects_method_index_outside_request() -> None:
-    payload = json.dumps(
-        {"request": REQUEST.model_dump(mode="json"), "method_index": 1}, separators=(",", ":")
+def test_remote_worker_rejects_method_index_outside_request() -> None:
+    payload = (
+        ExecutionTask(request=REQUEST, method_index=0)
+        .model_dump_json()
+        .replace('"method_index":0', '"method_index":1')
     )
 
-    result = dispatch(app, "remote", "candidate", input=payload)
+    result = dispatch(app, "remote", "worker", input=payload)
 
     assert result.exit_code == 1
     assert "method_index must identify a request Method" in str(result.exception)

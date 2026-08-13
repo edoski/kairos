@@ -4,9 +4,9 @@ import type { InferenceRun } from "./history";
 export type WaitBucket = {
   kairosGwei: number | null;
   immediateGwei: number | null;
-  label: string;
   runCount: number;
   savingsPercent: number | null;
+  wait: number;
 };
 
 const RUN_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
@@ -50,6 +50,10 @@ export function formatRunDate(value: string): string {
   return RUN_DATE_FORMATTER.format(new Date(value));
 }
 
+export function formatSavings(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
 export function formatGwei(value: number): string {
   const gwei = value / GWEI;
   if (gwei >= 100) {
@@ -87,9 +91,9 @@ export function waitBuckets(
       kairosGwei: kairosFeeMean === null ? null : kairosFeeMean / GWEI,
       immediateGwei:
         immediateFeeMean === null ? null : immediateFeeMean / GWEI,
-      label: String(offset),
       runCount: matchingRuns.length,
       savingsPercent: mean(outcomes.map(savingsPercent)),
+      wait: offset,
     };
   });
 }

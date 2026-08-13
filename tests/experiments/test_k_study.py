@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -20,7 +21,7 @@ from kairos.config import (
 from kairos.experiments import ExperimentKind, ExperimentManifest, experiment_manifest_path
 from kairos.study import RetainedResult, Study
 from tests.experiments.helpers import publish_test_study
-from tests.helpers import read_tsv_rows, run_script
+from tests.helpers import experiment_envelopes, run_script
 
 _ROOT = Path(__file__).parents[2]
 _K_STUDY_SCRIPT = _ROOT / "experiments" / "k_study.py"
@@ -93,11 +94,12 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(
     k_experiment_id = UUID(
         run_script(_K_STUDY_SCRIPT, "prepare", tmp_path, _HPO_EXPERIMENT_ID).stdout.strip()
     )
-    k_bundle = tmp_path / "experiments" / "k_study" / f".{k_experiment_id}"
-    rows = read_tsv_rows(k_bundle / "cells.tsv")
-    requests = [TrainRequest.model_validate_json(Path(row["request"]).read_bytes()) for row in rows]
+    tasks = experiment_envelopes(tmp_path, ExperimentKind.K_STUDY, k_experiment_id)
+    assert all(task.cell is not None and isinstance(task.request, TrainRequest) for task in tasks)
+    train_cells = [(cast(str, task.cell), cast(TrainRequest, task.request)) for task in tasks]
+    requests = [request for _, request in train_cells]
 
-    assert [row["cell"] for row in rows] == [
+    assert [envelope.cell for envelope in tasks] == [
         f"{chain}.lstm.K{horizon}"
         for chain in ("ethereum", "polygon", "avalanche")
         for horizon in _HORIZONS
@@ -106,7 +108,9 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(
     assert {request.source.study_result_index for request in requests} == {1}
     assert len({request.artifact_id for request in requests}) == 27
 
-    k_manifest = ExperimentManifest(root={row["cell"]: UUID(row["artifact_id"]) for row in rows})
+    k_manifest = ExperimentManifest(
+        root={cell: request.artifact_id for cell, request in train_cells}
+    )
     canonical_path = experiment_manifest_path(tmp_path, ExperimentKind.K_STUDY, k_experiment_id)
     canonical_path.parent.mkdir(parents=True)
     canonical_path.write_text(k_manifest.model_dump_json(), encoding="utf-8")
@@ -124,14 +128,14 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(
     held_out_id = UUID(capsys.readouterr().out.strip())
     assert set(opened_corpora) == set(_CORPUS_IDS.values())
     assert len(opened_corpora) == len(_CORPUS_IDS)
-    held_out_bundle = tmp_path / "experiments" / "held_out" / f".{held_out_id}"
-    evaluation_rows = read_tsv_rows(held_out_bundle / "cells.tsv")
-    evaluation_requests = [
-        EvaluateRequest.model_validate_json(Path(row["request"]).read_bytes())
-        for row in evaluation_rows
-    ]
+    evaluation_tasks = experiment_envelopes(tmp_path, ExperimentKind.HELD_OUT, held_out_id)
+    assert all(
+        task.cell is not None and isinstance(task.request, EvaluateRequest)
+        for task in evaluation_tasks
+    )
+    evaluation_requests = [cast(EvaluateRequest, task.request) for task in evaluation_tasks]
 
-    assert [row["cell"] for row in evaluation_rows] == [
+    assert [envelope.cell for envelope in evaluation_tasks] == [
         f"{chain}.lstm.K{horizon}"
         for chain in ("ethereum", "polygon", "avalanche")
         for horizon in _HORIZONS

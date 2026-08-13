@@ -2,19 +2,20 @@ from pathlib import Path
 from uuid import UUID
 
 from kairos.config import BlockWindow, TuneRequest
-from tests.helpers import read_tsv_rows, run_script
+from kairos.experiments import ExperimentKind
+from tests.helpers import experiment_envelopes, run_script
 
 _SCRIPT = Path(__file__).parents[2] / "experiments" / "feature_ablation.py"
 
 
 def test_prepare_authors_the_exact_feature_roster(tmp_path: Path) -> None:
     experiment_id = UUID(run_script(_SCRIPT, "prepare", tmp_path).stdout.strip())
-    bundle = tmp_path / "experiments" / "feature_ablation" / f".{experiment_id}"
-    rows = read_tsv_rows(bundle / "cells.tsv")
-    requests = [TuneRequest.model_validate_json(Path(row["request"]).read_bytes()) for row in rows]
+    envelopes = experiment_envelopes(tmp_path, ExperimentKind.FEATURE_ABLATION, experiment_id)
+    requests = [envelope.request for envelope in envelopes]
+    assert all(isinstance(request, TuneRequest) for request in requests)
 
-    assert len(rows) == 102
-    assert [row["cell"] for row in rows[:12]] == [
+    assert len(envelopes) == 102
+    assert [envelope.cell for envelope in envelopes[:12]] == [
         "ethereum.lstm.full",
         "ethereum.lstm.without_base_fee",
         "ethereum.lstm.without_gas_utilization",
@@ -28,10 +29,10 @@ def test_prepare_authors_the_exact_feature_roster(tmp_path: Path) -> None:
         "ethereum.lstm.without_priority_fee_p90",
         "ethereum.lstm.base_only",
     ]
-    assert rows[-1]["cell"] == "avalanche.transformer_lstm.base_only"
+    assert envelopes[-1].cell == "avalanche.transformer_lstm.base_only"
     assert len({request.study_id for request in requests}) == 102
     assert {len(request.methods) for request in requests} == {1}
-    assert {row["method_index"] for row in rows} == {"0"}
+    assert {envelope.method_index for envelope in envelopes} == {0}
     assert requests[0].experiment.training_window == BlockWindow(
         first_parent_block=23_936_094, last_parent_block=25_118_158
     )

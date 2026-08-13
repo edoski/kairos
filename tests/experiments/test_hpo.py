@@ -4,14 +4,16 @@ import importlib.util
 import subprocess
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 from uuid import UUID
 
 import pytest
 
 from kairos.config import FitMethod, Method, TransformerLstmDefinition, TuneRequest
 from kairos.experiments import ExperimentKind, ExperimentManifest, experiment_manifest_path
+from kairos.workers import ExecutionTask
 from tests.experiments.helpers import publish_generated_studies
-from tests.helpers import read_tsv_rows, run_script
+from tests.helpers import experiment_envelopes, run_script
 
 _ROOT = Path(__file__).parents[2]
 _FEATURE_SCRIPT = _ROOT / "experiments" / "feature_ablation.py"
@@ -20,6 +22,11 @@ _HPO_SCRIPT = _ROOT / "experiments" / "hpo.py"
 _CHAINS = ("ethereum", "polygon", "avalanche")
 _FAMILIES = ("lstm", "transformer", "transformer_lstm")
 _CONTEXTS = (1, 2, 3, 4, 5, 10, 15, 20, 25, 50, 100, 200, 400)
+
+
+def _tune_cells(tasks: list[ExecutionTask]) -> list[tuple[str, TuneRequest]]:
+    assert all(task.cell is not None and isinstance(task.request, TuneRequest) for task in tasks)
+    return [(cast(str, task.cell), cast(TuneRequest, task.request)) for task in tasks]
 
 
 def _load_hpo(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
@@ -121,23 +128,35 @@ def test_methods_derive_search_from_the_selected_method(monkeypatch: pytest.Monk
     ]
 
 
+def test_downstream_author_requires_the_canonical_manifest(tmp_path: Path) -> None:
+    feature_id = UUID(run_script(_FEATURE_SCRIPT, "prepare", tmp_path).stdout.strip())
+
+    with pytest.raises(subprocess.CalledProcessError) as absent:
+        run_script(_C_SCRIPT, "prepare", tmp_path, feature_id)
+
+    assert "/manifest.json" in absent.value.stderr
+
+
 def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: Path) -> None:
     feature_experiment_id = UUID(run_script(_FEATURE_SCRIPT, "prepare", tmp_path).stdout.strip())
-    feature_bundle = tmp_path / "experiments" / "feature_ablation" / f".{feature_experiment_id}"
-    feature_rows = read_tsv_rows(feature_bundle / "cells.tsv")
+    feature_tasks = experiment_envelopes(
+        tmp_path, ExperimentKind.FEATURE_ABLATION, feature_experiment_id
+    )
+    feature_cells = _tune_cells(feature_tasks)
     feature_objectives = {
         f"{chain}.{family}.without_hour": objective
         for chain, objective in (("ethereum", 0.26), ("polygon", 1.0), ("avalanche", 1.0))
         for family in _FAMILIES
     }
     publish_generated_studies(
-        tmp_path, feature_rows, default_objective=2.0, objectives=feature_objectives
+        tmp_path, feature_tasks, default_objective=2.0, objectives=feature_objectives
     )
     feature_winners = {
-        row["cell"].removesuffix(".without_hour"): UUID(row["study_id"])
-        for row in feature_rows
-        if row["cell"].endswith(".without_hour")
+        cell.removesuffix(".without_hour"): request.study_id
+        for cell, request in feature_cells
+        if cell.endswith(".without_hour")
     }
+    run_script(_FEATURE_SCRIPT, "close", tmp_path, feature_experiment_id)
 
     c_result = run_script(_C_SCRIPT, "prepare", tmp_path, feature_experiment_id)
     c_experiment_id = UUID(c_result.stdout.strip())
@@ -146,22 +165,20 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
         "polygon\twithout_hour\t1",
         "avalanche\twithout_hour\t1",
     ]
-    c_bundle = tmp_path / "experiments" / "c_study" / f".{c_experiment_id}"
-    c_rows = read_tsv_rows(c_bundle / "cells.tsv")
-    c_requests = [
-        TuneRequest.model_validate_json(Path(row["request"]).read_bytes()) for row in c_rows
-    ]
+    c_tasks = experiment_envelopes(tmp_path, ExperimentKind.C_STUDY, c_experiment_id)
+    c_cells = _tune_cells(c_tasks)
+    c_requests = [request for _, request in c_cells]
 
-    assert len(c_rows) == 117
-    assert [row["cell"] for row in c_rows[:13]] == [
+    assert len(c_tasks) == 117
+    assert [envelope.cell for envelope in c_tasks[:13]] == [
         f"ethereum.lstm.C{context}" for context in _CONTEXTS
     ]
-    assert c_rows[-1]["cell"] == "avalanche.transformer_lstm.C400"
+    assert c_tasks[-1].cell == "avalanche.transformer_lstm.C400"
     assert [request.experiment.context_blocks for request in c_requests[:13]] == list(_CONTEXTS)
     assert {
-        row["cell"].removesuffix(".C25"): UUID(row["study_id"])
-        for row in c_rows
-        if row["cell"].endswith(".C25")
+        cell.removesuffix(".C25"): request.study_id
+        for cell, request in c_cells
+        if cell.endswith(".C25")
     } == feature_winners
     assert len({request.study_id for request in c_requests} - set(feature_winners.values())) == 108
 
@@ -182,7 +199,8 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
             "ethereum.transformer_lstm.C50": 0.4,
         }
     )
-    publish_generated_studies(tmp_path, c_rows, default_objective=1.0, objectives=objectives)
+    publish_generated_studies(tmp_path, c_tasks, default_objective=1.0, objectives=objectives)
+    run_script(_C_SCRIPT, "close", tmp_path, c_experiment_id)
 
     hpo_result = run_script(
         _HPO_SCRIPT,
@@ -200,12 +218,11 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
         "ethereum\t25\t0.26\t50\t0.25\t0.2625",
         "polygon\t50\t0.524\t100\t0.5\t0.525",
     ]
-    hpo_bundle = tmp_path / "experiments" / "hpo" / f".{hpo_experiment_id}"
-    assert len(read_tsv_rows(hpo_bundle / "cells.tsv")) == 54
+    assert len(experiment_envelopes(tmp_path, ExperimentKind.HPO, hpo_experiment_id)) == 54
 
     with pytest.raises(subprocess.CalledProcessError, match="returned non-zero") as incomplete:
         run_script(_HPO_SCRIPT, "select", tmp_path, hpo_experiment_id)
-    assert "HPO roster is incomplete" in incomplete.value.stderr
+    assert "experiment roster does not match expected cells" in incomplete.value.stderr
 
     extension = run_script(
         _HPO_SCRIPT, "extend", tmp_path, c_experiment_id, hpo_experiment_id, "--chain", "avalanche"
@@ -226,12 +243,9 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
         )
     assert "experiment cells must be new and unique" in duplicate.value.stderr
 
-    rows = read_tsv_rows(hpo_bundle / "cells.tsv")
-    requests = {
-        row["cell"]: TuneRequest.model_validate_json(Path(row["request"]).read_bytes())
-        for row in rows
-    }
-    assert len(rows) == 81
+    tasks = experiment_envelopes(tmp_path, ExperimentKind.HPO, hpo_experiment_id)
+    requests = dict(_tune_cells(tasks))
+    assert len(tasks) == 81
     assert len(requests) == 9
     assert {
         chain: {
@@ -243,7 +257,7 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
     } == {"ethereum": {25}, "polygon": {50}, "avalanche": {200}}
     assert {len(request.methods) for request in requests.values()} == {9}
 
-    publish_generated_studies(tmp_path, rows, default_objective=0.5)
+    publish_generated_studies(tmp_path, tasks, default_objective=0.5)
     selected = run_script(_HPO_SCRIPT, "select", tmp_path, hpo_experiment_id)
     expected_cells = [f"{chain}.{family}" for chain in _CHAINS for family in _FAMILIES]
     assert [line.split("\t")[0] for line in selected.stdout.splitlines()] == expected_cells
@@ -252,14 +266,6 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
     )
     assert list(manifest.root) == expected_cells
 
-    c_manifest_path = experiment_manifest_path(tmp_path, ExperimentKind.C_STUDY, c_experiment_id)
-    c_manifest_path.parent.mkdir(parents=True)
-    c_manifest_path.write_text(
-        ExperimentManifest(
-            root={row["cell"]: UUID(row["study_id"]) for row in c_rows}
-        ).model_dump_json(),
-        encoding="utf-8",
-    )
     report = run_script(_C_SCRIPT, "report", tmp_path, c_experiment_id)
     assert len(report.stdout.splitlines()) == 118
     assert report.stderr.splitlines()[-3:] == [

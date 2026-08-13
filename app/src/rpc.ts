@@ -119,8 +119,6 @@ export function createChainSession(
       const [p50, p90] = rewards;
       if (
         rewards.length !== 2 ||
-        typeof p50 !== "bigint" ||
-        typeof p90 !== "bigint" ||
         p50 < 0n ||
         p90 < 0n
       ) {

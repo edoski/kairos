@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from bundle import StorageRoot, close_bundle, open_bundle, run, write_train_cells
+from campaign import StorageRoot, author_experiment, close_experiment, run
 
 from kairos.config import SelectedStudySource, TrainRequest
 from kairos.experiments import ExperimentKind, load_experiment_manifest
-from kairos.modeling import load_artifact
 from kairos.study import load_study
 
 _KIND = ExperimentKind.K_STUDY
@@ -21,8 +20,6 @@ def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID) -> None:
     manifest = load_experiment_manifest(storage_root, ExperimentKind.HPO, hpo_experiment_id)
     if not set(_LSTM_CELLS) <= manifest.keys():
         raise ValueError("HPO manifest is missing selected LSTM Studies")
-    bundle = open_bundle(storage_root, _KIND, experiment_id)
-
     cells: list[tuple[str, TrainRequest]] = []
     for cell in _LSTM_CELLS:
         study_id = manifest[cell]
@@ -41,13 +38,14 @@ def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID) -> None:
             )
             cells.append((f"{cell}.K{horizon}", request))
 
-    write_train_cells(bundle, cells)
+    author_experiment(storage_root, _KIND, experiment_id, cells)
 
     print(experiment_id)
 
 
 def close(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    close_bundle(storage_root, _KIND, experiment_id, "artifact_id", load_artifact)
+    close_experiment(storage_root, _KIND, experiment_id)
+    print(experiment_id)
 
 
 if __name__ == "__main__":

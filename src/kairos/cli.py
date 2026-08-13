@@ -9,13 +9,11 @@ from typing import Annotated
 from uuid import UUID
 
 import typer
-from servatus import Campaign, ResourceRequest, SlurmTarget, Task
+from servatus import Campaign, Profile, ResultProbe, Task
 
-from .config import WORKFLOW_REQUEST_ADAPTER, TrainRequest, TuneRequest
-from .evaluation import evaluate
-from .modeling import run_candidate, train
+from .config import WORKFLOW_REQUEST_ADAPTER, TuneRequest
 from .study import publish_study
-from .workers import CandidateProcessInput, candidate_task, workflow_task
+from .workers import ExecutionTask, load_profile, result_probe, run_task
 
 app = typer.Typer(add_completion=False)
 remote_app = typer.Typer()
@@ -34,76 +32,56 @@ def _resolve_storage_root() -> Path:
 @app.command("submit")
 def submit_command(
     request_paths: Annotated[list[Path], typer.Argument(metavar="REQUEST.json")],
-    target_path: Annotated[Path, typer.Option("--target", dir_okay=False, readable=True)] = Path(
-        "REMOTE.toml"
-    ),
-    resource_path: Annotated[
-        Path, typer.Option("--resources", dir_okay=False, readable=True)
-    ] = Path("RESOURCES.toml"),
+    profile_name: Annotated[str | None, typer.Option("--profile")] = None,
     retry: Annotated[bool, typer.Option("--retry")] = False,
 ) -> None:
     requests = [WORKFLOW_REQUEST_ADAPTER.validate_json(path.read_bytes()) for path in request_paths]
-    target = SlurmTarget.from_toml(target_path)
-    resources = ResourceRequest.from_toml(resource_path)
-    if resources.gpus_per_task != 1:
-        raise ValueError("KAIROS tasks require exactly one GPU")
+    profile = load_profile(profile_name)
+    storage_root = _resolve_storage_root()
+    probe = result_probe(storage_root)
     for index, request_path in enumerate(request_paths):
-        _submit_task(request_path, workflow_task(requests[index]), target, resources, retry=retry)
+        _submit_task(
+            request_path, ExecutionTask(request=requests[index]).task(), profile, probe, retry=retry
+        )
 
 
-@remote_app.command("workflow")
-def workflow_command() -> None:
-    request = WORKFLOW_REQUEST_ADAPTER.validate_json(sys.stdin.buffer.read())
-    storage_root = _resolve_storage_root()
-
-    if isinstance(request, TrainRequest):
-        train(request, storage_root)
-    else:
-        evaluate(request, storage_root)
-
-
-@remote_app.command("candidate", hidden=True)
-def candidate_command() -> None:
-    candidate = CandidateProcessInput.model_validate_json(sys.stdin.buffer.read())
-    storage_root = _resolve_storage_root()
-    run_candidate(storage_root, candidate.request, candidate.method_index)
+@remote_app.command("worker")
+def worker_command() -> None:
+    task = ExecutionTask.model_validate_json(sys.stdin.buffer.read())
+    run_task(_resolve_storage_root(), task)
 
 
 @study_app.command("run")
 def study_run_command(
     request_path: Annotated[Path, typer.Argument(metavar="TUNE_REQUEST.json")],
     method_index: Annotated[int, typer.Argument(metavar="METHOD_INDEX")],
-    target_path: Annotated[Path, typer.Option("--target", dir_okay=False, readable=True)] = Path(
-        "REMOTE.toml"
-    ),
-    resource_path: Annotated[
-        Path, typer.Option("--resources", dir_okay=False, readable=True)
-    ] = Path("RESOURCES.toml"),
+    profile_name: Annotated[str | None, typer.Option("--profile")] = None,
     retry: Annotated[bool, typer.Option("--retry")] = False,
 ) -> None:
     request = TuneRequest.model_validate_json(request_path.read_bytes())
-    task = candidate_task(CandidateProcessInput(request=request, method_index=method_index))
-    target = SlurmTarget.from_toml(target_path)
-    resources = ResourceRequest.from_toml(resource_path)
-    if resources.gpus_per_task != 1:
-        raise ValueError("KAIROS tasks require exactly one GPU")
-    _submit_task(request_path, task, target, resources, retry=retry)
+    probe = result_probe(_resolve_storage_root())
+    _submit_task(
+        request_path,
+        ExecutionTask(request=request, method_index=method_index).task(),
+        load_profile(profile_name),
+        probe,
+        retry=retry,
+    )
 
 
 def _submit_task(
-    request_path: Path, task: Task, target: SlurmTarget, resources: ResourceRequest, *, retry: bool
+    request_path: Path, task: Task, profile: Profile, probe: ResultProbe, *, retry: bool
 ) -> None:
-    campaign = Campaign.open(_request_campaign_path(request_path, task.key), (task,))
-    plan = campaign.plan(target, resources, retry=(task.key,) if retry else ())
-    for receipt in campaign.submit(plan):
+    safe_key = task.key.replace(":", "-")
+    campaign_path = request_path.resolve().with_name(f".{request_path.name}.{safe_key}.campaign")
+    campaign = Campaign.open(campaign_path, (task,))
+    campaign.seal()
+    view = campaign.inspect(probe)
+    plan = campaign.plan(profile, view=view, retry=(task.key,) if retry else ())
+    for receipt in campaign.submit(plan, probe=probe):
         typer.echo(receipt)
 
 
 @study_app.command("finalize")
 def study_finalize_command(study_id: Annotated[UUID, typer.Argument(metavar="STUDY_ID")]) -> None:
     publish_study(_resolve_storage_root(), study_id)
-
-
-def _request_campaign_path(request_path: Path, task_key: str) -> Path:
-    safe_key = task_key.replace(":", "-")
-    return request_path.resolve().with_name(f".{request_path.name}.{safe_key}.campaign")

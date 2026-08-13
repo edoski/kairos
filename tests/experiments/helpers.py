@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 import polars as pl
@@ -14,6 +15,7 @@ from kairos.addresses import (
 from kairos.config import TuneRequest
 from kairos.observations import OBSERVATION_SCHEMA
 from kairos.study import RetainedResult, Study
+from kairos.workers import ExecutionTask
 
 
 def publish_test_study(storage_root: Path, study: Study) -> None:
@@ -50,19 +52,19 @@ def publish_test_study(storage_root: Path, study: Study) -> None:
 
 def publish_generated_studies(
     storage_root: Path,
-    rows: list[dict[str, str]],
+    tasks: list[ExecutionTask],
     *,
     default_objective: float,
     objectives: Mapping[str, float] | None = None,
 ) -> None:
     objectives = objectives or {}
     seen: set[UUID] = set()
-    for row in rows:
-        request = TuneRequest.model_validate_json(Path(row["request"]).read_bytes())
+    for task in tasks:
+        request = cast(TuneRequest, task.request)
         if request.study_id in seen:
             continue
         seen.add(request.study_id)
-        objective = objectives.get(row["cell"], default_objective)
+        objective = objectives.get(cast(str, task.cell), default_objective)
         study = Study(
             request=request,
             trials=tuple(

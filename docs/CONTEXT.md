@@ -8,6 +8,10 @@ This glossary defines KAIROS's active domain language.
 
 **Typed association.** An exact request/object relationship expressed by the owning schema, UUID, embedded request, or selected Study result index plus Method.
 
+**Execution Task.** One opaque Servatus Task containing a strict KAIROS execution envelope. Its
+optional cell and scientific record UUID reconstruct the sole private experiment roster before
+manifest publication.
+
 **BlockFrame.** One isolated, nonempty eight-column value covering an exact contiguous single-chain block range, including gas-used-weighted effective priority-fee P50 and P90. It stores chain identity once, derives its extent from its rows, and provides range selection, not finality or provenance.
 
 **Rolling comparison.** One transient held-out reduction that runs completed `K=5`, `K=4`, `K=3`, and `K=2` Evaluation predictions once in descending order under an immutable five-block deadline; each smaller model replaces the preceding prediction and moves one origin forward only after a terminal action.

@@ -48,6 +48,13 @@ class ExecutionTask(StrictFrozenRecord):
         return Task(key, ("remote", "worker"), self.model_dump_json().encode("utf-8") + b"\n")
 
 
+def execution_envelope(task: Task) -> ExecutionTask:
+    envelope = ExecutionTask.model_validate_json(task.stdin)
+    if task != envelope.task():
+        raise ValueError("Servatus Task does not match its execution envelope")
+    return envelope
+
+
 def load_profile(name: str | None) -> Profile:
     return Profile.load(Path.cwd() / "SERVATUS.toml", name=name)
 
@@ -66,9 +73,7 @@ def result_probe(storage_root: Path) -> ResultProbe:
     studies: dict[UUID, TuneRequest] = {}
 
     def probe(task: Task) -> bool:
-        envelope = ExecutionTask.model_validate_json(task.stdin)
-        if task != envelope.task():
-            raise ValueError("Servatus Task does not match its execution envelope")
+        envelope = execution_envelope(task)
         request = envelope.request
         if isinstance(request, TuneRequest):
             study = study_directory(storage_root, request.study_id)

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import csv
 import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
+from uuid import UUID
 
 import pytest
 from click.testing import Result
@@ -16,6 +16,8 @@ from typer import Typer
 from typer.testing import CliRunner
 
 from kairos.config import BlockWindow
+from kairos.experiments import ExperimentKind, experiment_campaign_directory
+from kairos.workers import ExecutionTask, execution_envelope
 
 SERVATUS_TOML = """default_profile = "TEST"
 
@@ -87,9 +89,13 @@ def run_script(script: Path, *arguments: object) -> subprocess.CompletedProcess[
     )
 
 
-def read_tsv_rows(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="", encoding="utf-8") as source:
-        return list(csv.DictReader(source, delimiter="\t"))
+def experiment_envelopes(
+    storage_root: Path, kind: ExperimentKind, experiment_id: UUID
+) -> list[ExecutionTask]:
+    from servatus import Campaign
+
+    campaign = Campaign.load(experiment_campaign_directory(storage_root, kind, experiment_id))
+    return [execution_envelope(task) for task in campaign.tasks]
 
 
 def write_servatus_config(root: Path) -> Path:

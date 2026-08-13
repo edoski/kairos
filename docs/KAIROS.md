@@ -840,32 +840,22 @@ artifact, or evaluation. Manifests group canonical references only; they do not 
 results, or scientific definitions. The completed experiment directory contains only
 `manifest.json`.
 
-`experiments/feature_ablation.py prepare STORAGE_ROOT` authors the frozen 102-cell request
-bundle under `experiments/feature_ablation/.<experiment_id>/`. For each architecture and chain it
-tests the full feature contract, each individual feature unit omitted, and a base-fee-only
-reference. Hour and day-of-week sine/cosine coordinates each remain one indivisible encoded unit.
-`experiments/launch.py candidates BUNDLE` submits its cells through Servatus. Without
-`--tasks-per-job`, Servatus derives feasible capacity from the profiles; an explicit cap of one is
-valid, while a cap above target feasibility fails in Servatus. Packing uses the fewest balanced
-allocations and avoids singleton tails when possible: nine pending cells at capacity four become
-`3 + 3 + 3`. After all canonical
-Studies exist, `close STORAGE_ROOT EXPERIMENT_ID` publishes the canonical manifest and retires the
-owner-only authored bundle in the same post-commit transaction; `report` derives each
-chain/configuration mean from canonical Studies.
+`experiments/feature_ablation.py prepare STORAGE_ROOT` authors the frozen 102-cell roster directly
+as sealed Servatus Tasks. Each Task contains one strict KAIROS execution envelope with its cell,
+typed request, and candidate index. The Campaign is the sole pre-publication roster at
+`experiments/.servatus/<kind>/<experiment_id>/`; fixed experiments seal during prepare, while HPO
+appends exact suffixes until selection seals it.
 
-Study bundles keep each complete Method roster inside its TuneRequest. Their `cells.tsv` rows
-carry the request path, zero-based `method_index`, and Study ID; they do not write separate Method
-JSON files. Packed launch maps the rows to strict KAIROS execution envelopes and stores Servatus
-Campaign state under `experiments/.servatus/<kind>/<experiment_id>/`, outside the authored bundle.
-A repeated launch inspects durable scheduler and canonical-result evidence; an explicit
-`--retry TASK_KEY` resubmits only named eligible work. Closure validates every referenced canonical
-record and publishes a manifest-only directory. The authored bundle is retired only after the
-manifest commits; Campaign history remains available as private operational evidence.
+`experiments/launch.py launch STORAGE_ROOT KIND EXPERIMENT_ID` loads the selected Profile, inspects
+canonical results through the KAIROS probe, plans exact retry keys, and submits through public
+Campaign calls. Without `--tasks-per-job`, Servatus derives feasible capacity from the Profile.
+Packing remains balanced: nine pending cells at capacity four become `3 + 3 + 3`.
 
-Before closure, an experiment author's hidden `cells.tsv` is its active cell-to-record roster;
-consumers use it only to locate records that are already canonical. After closure, the manifest
-replaces that roster as authority. `experiments/c_study.py` loads exactly the nine canonical
-feature-ablation winners through this interface, reuses their reference-geometry `C=25` Studies,
+Closure uses result-only Campaign inspection, assembles any required Study, validates every
+cell-to-record association, and publishes only the canonical manifest. Campaign state remains as
+private execution history. Downstream experiments read completed manifests only; there is no
+private authoring fallback or duplicate request roster. `experiments/c_study.py` loads exactly the
+nine canonical feature-ablation winners, reuses their reference-geometry `C=25` Studies,
 and authors the other 108 architecture-chain-context Studies for
 `C={1,2,3,4,5,10,15,20,25,50,100,200,400}`. The completed manifest contains all 117 cells. For
 each chain, selection averages validation Cost over optimum equally across the three architectures
@@ -888,8 +878,7 @@ its last block, so all horizons share the same first testing origin.
 The explicit `K=2…5` rolling policy remains fixed: the `K=2…4` ranges extend their last origin by
 three, two, or one blocks so the fixed-deadline comparison has every reachable decision origin. Its
 report commands print, but do not persist, the ordinary and rolling reductions. Closure publishes
-the exact 27 evaluation references and removes the temporary bundle. `experiments/launch.py
-workflows BUNDLE` packs Train or Evaluate cells with the same packed execution contract.
+the exact 27 evaluation references and retains only private Campaign history.
 
 Research figures remain outside `src/kairos` and outside the experiment command flow. The five
 self-contained scripts load completed manifests and canonical Studies, Artifacts, or Evaluations

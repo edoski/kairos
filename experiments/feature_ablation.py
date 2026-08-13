@@ -4,14 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from bundle import (
-    StorageRoot,
-    close_bundle,
-    open_bundle,
-    print_study_metrics,
-    run,
-    write_tune_cells,
-)
+from campaign import StorageRoot, author_experiment, close_experiment, print_study_metrics, run
 
 from kairos.config import (
     BlockWindow,
@@ -25,7 +18,6 @@ from kairos.config import (
     TuneRequest,
 )
 from kairos.experiments import ExperimentKind
-from kairos.study import load_study
 
 _KIND = ExperimentKind.FEATURE_ABLATION
 _CHAINS = (
@@ -124,8 +116,6 @@ def _feature_configurations(chain: str) -> tuple[tuple[str, tuple[FeatureName, .
 
 def prepare(storage_root: StorageRoot) -> None:
     experiment_id = uuid4()
-    bundle = open_bundle(storage_root, _KIND, experiment_id)
-
     cells: list[tuple[str, TuneRequest]] = []
     for chain, corpus_id, training_window, validation_window in _CHAINS:
         for method in _METHODS:
@@ -144,13 +134,14 @@ def prepare(storage_root: StorageRoot) -> None:
                 )
                 cells.append((f"{chain}.{family}.{configuration}", request))
 
-    write_tune_cells(bundle, cells)
+    author_experiment(storage_root, _KIND, experiment_id, cells)
 
     print(experiment_id)
 
 
 def close(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    close_bundle(storage_root, _KIND, experiment_id, "study_id", load_study)
+    close_experiment(storage_root, _KIND, experiment_id)
+    print(experiment_id)
 
 
 def report(storage_root: StorageRoot, experiment_id: UUID) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from bundle import StorageRoot, close_bundle, open_bundle, print_metrics, run, write_evaluate_cells
+from campaign import StorageRoot, author_experiment, close_experiment, print_metrics, run
 
 from kairos.config import BlockWindow, EvaluateRequest
 from kairos.corpus import open_corpus_dataset
@@ -27,8 +27,6 @@ def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID, k_experiment_id:
         corpus_id: open_corpus_dataset(storage_root, corpus_id).last_block
         for corpus_id in corpus_ids
     }
-    bundle = open_bundle(storage_root, _KIND, experiment_id)
-
     cells: list[tuple[str, EvaluateRequest]] = []
     for cell, artifact_id in k_study.items():
         chain, family, _ = cell.split(".")
@@ -46,13 +44,14 @@ def prepare(storage_root: StorageRoot, hpo_experiment_id: UUID, k_experiment_id:
         )
         cells.append((cell, request))
 
-    write_evaluate_cells(bundle, cells)
+    author_experiment(storage_root, _KIND, experiment_id, cells)
 
     print(experiment_id)
 
 
 def close(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    close_bundle(storage_root, _KIND, experiment_id, "evaluation_id", reduce_evaluation)
+    close_experiment(storage_root, _KIND, experiment_id)
+    print(experiment_id)
 
 
 def report(storage_root: StorageRoot, experiment_id: UUID) -> None:

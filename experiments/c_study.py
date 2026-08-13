@@ -8,18 +8,10 @@ from typing import NamedTuple
 from uuid import UUID, uuid4
 
 import typer
-from bundle import (
-    StorageRoot,
-    close_bundle,
-    load_roster,
-    open_bundle,
-    print_study_metrics,
-    run,
-    write_tune_cells,
-)
+from campaign import StorageRoot, author_experiment, close_experiment, print_study_metrics, run
 
 from kairos.config import TuneRequest
-from kairos.experiments import ExperimentKind
+from kairos.experiments import ExperimentKind, load_experiment_manifest
 from kairos.study import Study, load_study
 
 _KIND = ExperimentKind.C_STUDY
@@ -41,7 +33,7 @@ class _ContextSelection(NamedTuple):
 def _selected_feature_studies(
     storage_root: Path, experiment_id: UUID
 ) -> tuple[dict[tuple[str, str], Study], tuple[tuple[str, str, float], ...]]:
-    roster = load_roster(storage_root, ExperimentKind.FEATURE_ABLATION, experiment_id, "study_id")
+    roster = load_experiment_manifest(storage_root, ExperimentKind.FEATURE_ABLATION, experiment_id)
     studies = {
         tuple(cell.split(".")): load_study(storage_root, study_id)
         for cell, study_id in roster.items()
@@ -73,7 +65,7 @@ def _selected_feature_studies(
 def selected_context_studies(
     storage_root: Path, experiment_id: UUID, chains: tuple[str, ...]
 ) -> tuple[dict[tuple[str, str], Study], tuple[_ContextSelection, ...]]:
-    roster = load_roster(storage_root, _KIND, experiment_id, "study_id")
+    roster = load_experiment_manifest(storage_root, _KIND, experiment_id)
     studies = {}
     for cell, study_id in roster.items():
         chain, family, context_label = cell.split(".")
@@ -115,8 +107,6 @@ def report_context_selections(selections: tuple[_ContextSelection, ...]) -> None
 def prepare(storage_root: StorageRoot, feature_experiment_id: UUID) -> None:
     experiment_id = uuid4()
     selected, winners = _selected_feature_studies(storage_root, feature_experiment_id)
-    bundle = open_bundle(storage_root, _KIND, experiment_id)
-
     cells: list[tuple[str, TuneRequest]] = []
     for chain in _CHAINS:
         for family in _FAMILIES:
@@ -136,7 +126,7 @@ def prepare(storage_root: StorageRoot, feature_experiment_id: UUID) -> None:
                 )
                 cells.append((f"{chain}.{family}.C{context}", request))
 
-    write_tune_cells(bundle, cells)
+    author_experiment(storage_root, _KIND, experiment_id, cells)
 
     for chain, configuration, mean in winners:
         typer.echo(f"{chain}\t{configuration}\t{mean:g}", err=True)
@@ -144,7 +134,8 @@ def prepare(storage_root: StorageRoot, feature_experiment_id: UUID) -> None:
 
 
 def close(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    close_bundle(storage_root, _KIND, experiment_id, "study_id", load_study)
+    close_experiment(storage_root, _KIND, experiment_id)
+    print(experiment_id)
 
 
 def report(storage_root: StorageRoot, experiment_id: UUID) -> None:

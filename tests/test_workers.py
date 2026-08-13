@@ -8,7 +8,7 @@ from uuid import UUID
 import polars as pl
 import pytest
 from pydantic import ValidationError
-from servatus import ConfigurationError, Profile, Task
+from servatus import ConfigurationError, Profile
 
 import kairos.workers as workers
 from kairos.addresses import evaluation_json_path, evaluation_observations_path
@@ -24,7 +24,7 @@ from kairos.config import (
     WorkflowRequest,
 )
 from kairos.observations import OBSERVATION_SCHEMA
-from kairos.workers import ExecutionTask, execution_task, load_profile, result_probe, run_task
+from kairos.workers import ExecutionTask, load_profile, result_probe, run_task
 from tests.helpers import SERVATUS_TOML, window
 
 _ROOT = Path(__file__).parents[1]
@@ -96,8 +96,8 @@ def _tune_request() -> TuneRequest:
 def test_execution_task_preserves_direct_and_experiment_bytes(
     workflow_value: WorkflowRequest, key: str
 ) -> None:
-    direct = execution_task(workflow_value)
-    experiment = execution_task(workflow_value, cell="ethereum.lstm")
+    direct = ExecutionTask(request=workflow_value).task()
+    experiment = ExecutionTask(request=workflow_value, cell="ethereum.lstm").task()
 
     assert direct.key == key
     assert direct.args == ("remote", "worker")
@@ -113,7 +113,7 @@ def test_execution_task_preserves_direct_and_experiment_bytes(
 def test_execution_task_owns_validated_candidate_method() -> None:
     request = _tune_request()
     envelope = ExecutionTask(request=request, method_index=0, cell="ethereum.lstm.full")
-    task = execution_task(request, method_index=0, cell="ethereum.lstm.full")
+    task = envelope.task()
 
     assert task.key == f"study:{_STUDY_ID}:method:0"
     assert task.args == ("remote", "worker")
@@ -162,7 +162,7 @@ def test_run_task_dispatches_every_execution_kind(monkeypatch: pytest.MonkeyPatc
 
 def test_result_probe_validates_exact_task_and_canonical_result(tmp_path: Path) -> None:
     request = _workflow("evaluate")
-    task = execution_task(request)
+    task = ExecutionTask(request=request).task()
     probe = result_probe(tmp_path)
     assert not probe(task)
 
@@ -190,10 +190,6 @@ def test_result_probe_validates_exact_task_and_canonical_result(tmp_path: Path) 
     ).write_parquet(evaluation_observations_path(tmp_path, request.evaluation_id))
 
     assert probe(task)
-    foreign = Task("wrong", task.args, task.stdin)
-    with pytest.raises(ValueError, match="does not match its execution envelope"):
-        probe(foreign)
-
     evaluation_json_path(tmp_path, request.evaluation_id).write_text(
         request.model_copy(
             update={"artifact_id": UUID("00000000-0000-4000-8000-000000000004")}
@@ -211,30 +207,20 @@ def test_result_probe_uses_domain_loaders_for_study_and_artifact(
     train_request = _workflow("train")
     study = SimpleNamespace(request=tune)
     association = SimpleNamespace(request=train_request)
-    candidate_calls: list[tuple[Path, TuneRequest, int]] = []
-    monkeypatch.setattr(
-        workers, "candidate_result_directory", lambda *_: SimpleNamespace(exists=lambda: True)
-    )
-    monkeypatch.setattr(
-        workers, "load_candidate_result", lambda *args: candidate_calls.append(args)
-    )
     monkeypatch.setattr(workers, "load_validated_study", lambda *_: study)
     monkeypatch.setattr(workers, "load_artifact", lambda *_: (association, object()))
-
-    assert result_probe(tmp_path)(execution_task(tune, method_index=0))
-    assert candidate_calls == [(tmp_path, tune, 0)]
 
     (tmp_path / "studies" / str(tune.study_id)).mkdir(parents=True)
     (tmp_path / "artifacts" / str(train_request.artifact_id)).mkdir(parents=True)
     probe = result_probe(tmp_path)
-    assert probe(execution_task(tune, method_index=0))
-    assert probe(execution_task(train_request))
+    assert probe(ExecutionTask(request=tune, method_index=0).task())
+    assert probe(ExecutionTask(request=train_request).task())
 
     study.request = _tune_request().model_copy(
         update={"study_id": UUID("00000000-0000-4000-8000-000000000005")}
     )
     with pytest.raises(ValueError, match="Study request does not match"):
-        result_probe(tmp_path)(execution_task(tune, method_index=0))
+        result_probe(tmp_path)(ExecutionTask(request=tune, method_index=0).task())
 
 
 def test_production_profiles_preserve_kairos_resource_contract() -> None:

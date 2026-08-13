@@ -13,7 +13,7 @@ from servatus import Campaign, Profile, ResultProbe, Task
 
 from .config import WORKFLOW_REQUEST_ADAPTER, TuneRequest
 from .study import publish_study
-from .workers import ExecutionTask, execution_task, load_profile, result_probe, run_task
+from .workers import ExecutionTask, load_profile, result_probe, run_task
 
 app = typer.Typer(add_completion=False)
 remote_app = typer.Typer()
@@ -40,7 +40,9 @@ def submit_command(
     storage_root = _resolve_storage_root()
     probe = result_probe(storage_root)
     for index, request_path in enumerate(request_paths):
-        _submit_task(request_path, execution_task(requests[index]), profile, probe, retry=retry)
+        _submit_task(
+            request_path, ExecutionTask(request=requests[index]).task(), profile, probe, retry=retry
+        )
 
 
 @remote_app.command("worker")
@@ -60,7 +62,7 @@ def study_run_command(
     probe = result_probe(_resolve_storage_root())
     _submit_task(
         request_path,
-        execution_task(request, method_index=method_index),
+        ExecutionTask(request=request, method_index=method_index).task(),
         load_profile(profile_name),
         probe,
         retry=retry,

@@ -990,9 +990,11 @@ Generated Slurm scripts call these leaves with strict JSON on standard input.
 ### Remote submission
 
 `kairos.workers` owns the thin application boundary. `ExecutionTask` holds one strict Tune, Train,
-or Evaluate request, an optional experiment cell, and the Tune Method index. `execution_task()`
-maps it to the unchanged stable scientific key, hidden `remote worker` argv, and canonical envelope
-JSON plus a trailing line feed. The worker hydrates those bytes and calls the direct KAIROS owner.
+or Evaluate request, an optional experiment cell, and the Tune Method index. Its `task()` method
+projects that validated envelope to the unchanged stable scientific key, hidden `remote worker`
+argv, and canonical JSON plus a trailing line feed. The worker validates those raw bytes once and
+calls the direct KAIROS owner; result inspection trusts the resulting typed envelope and checks only
+its scientific association with canonical KAIROS output.
 
 The public CLI and experiment launcher load `Path.cwd() / "SERVATUS.toml"` once per command through
 Servatus. The file declares complete named Profiles and `default_profile = "KAIROS"`; an explicit

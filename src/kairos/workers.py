@@ -36,20 +36,16 @@ class ExecutionTask(StrictFrozenRecord):
             raise ValueError("method_index is only valid for a TuneRequest")
         return self
 
+    def task(self) -> Task:
+        """Project this validated KAIROS envelope into one Servatus Task."""
 
-def execution_task(
-    request: ExecutionRequest, *, method_index: int | None = None, cell: str | None = None
-) -> Task:
-    """Map one typed KAIROS execution to one stable Servatus Task."""
-
-    envelope = ExecutionTask(request=request, method_index=method_index, cell=cell)
-    if isinstance(request, TuneRequest):
-        key = f"study:{request.study_id}:method:{cast(int, envelope.method_index)}"
-    elif isinstance(request, TrainRequest):
-        key = f"artifact:{request.artifact_id}"
-    else:
-        key = f"evaluation:{request.evaluation_id}"
-    return Task(key, ("remote", "worker"), envelope.model_dump_json().encode("utf-8") + b"\n")
+        if isinstance(self.request, TuneRequest):
+            key = f"study:{self.request.study_id}:method:{cast(int, self.method_index)}"
+        elif isinstance(self.request, TrainRequest):
+            key = f"artifact:{self.request.artifact_id}"
+        else:
+            key = f"evaluation:{self.request.evaluation_id}"
+        return Task(key, ("remote", "worker"), self.model_dump_json().encode("utf-8") + b"\n")
 
 
 def load_profile(name: str | None) -> Profile:
@@ -71,15 +67,10 @@ def result_probe(storage_root: Path) -> ResultProbe:
 
     def probe(task: Task) -> bool:
         envelope = ExecutionTask.model_validate_json(task.stdin)
-        expected = execution_task(
-            envelope.request, method_index=envelope.method_index, cell=envelope.cell
-        )
-        if task != expected:
-            raise ValueError("Servatus Task does not match its execution envelope")
-
         request = envelope.request
         if isinstance(request, TuneRequest):
-            if study_directory(storage_root, request.study_id).exists():
+            study = study_directory(storage_root, request.study_id)
+            if study.exists():
                 canonical = studies.get(request.study_id)
                 if canonical is None:
                     canonical = load_validated_study(storage_root, request.study_id).request
@@ -87,10 +78,13 @@ def result_probe(storage_root: Path) -> ResultProbe:
                 if canonical != request:
                     raise ValueError("canonical Study request does not match execution task")
                 return True
-            method_index = cast(int, envelope.method_index)
-            if not candidate_result_directory(storage_root, request, method_index).exists():
+            if not study.parent.exists():
                 return False
-            load_candidate_result(storage_root, request, method_index)
+            method_index = cast(int, envelope.method_index)
+            result = candidate_result_directory(storage_root, request.study_id, method_index)
+            if not result.exists():
+                return False
+            load_candidate_result(result, request, method_index)
             return True
         if isinstance(request, TrainRequest):
             if not artifact_directory(storage_root, request.artifact_id).exists():

@@ -12,7 +12,7 @@ from bundle import read_cells
 from servatus import Campaign, Profile, Task
 
 from kairos.config import WORKFLOW_REQUEST_ADAPTER, TuneRequest
-from kairos.workers import execution_task, load_profile, result_probe
+from kairos.workers import ExecutionTask, load_profile, result_probe
 
 _RetryKeys = Annotated[list[str] | None, typer.Option("--retry", metavar="TASK_KEY")]
 
@@ -33,7 +33,9 @@ def candidates(
         if existing != request:
             raise ValueError("experiment candidates disagree on one Study request")
         tasks.append(
-            execution_task(request, method_index=int(row["method_index"]), cell=row["cell"])
+            ExecutionTask(
+                request=request, method_index=int(row["method_index"]), cell=row["cell"]
+            ).task()
         )
     storage_root = bundle.parents[2]
     _launch(bundle, tasks, tasks_per_job, load_profile(profile), storage_root, retry=retry or ())
@@ -51,10 +53,10 @@ def workflows(
     _launch(
         bundle,
         tuple(
-            execution_task(
-                WORKFLOW_REQUEST_ADAPTER.validate_json(Path(row["request"]).read_bytes()),
+            ExecutionTask(
+                request=WORKFLOW_REQUEST_ADAPTER.validate_json(Path(row["request"]).read_bytes()),
                 cell=row["cell"],
-            )
+            ).task()
             for row in rows
         ),
         tasks_per_job,

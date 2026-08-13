@@ -32,11 +32,15 @@ from kairos.study import (
     RetainedResult,
     Study,
     assemble_candidate_result,
+    candidate_result_directory,
+    load_candidate_result,
     load_selected_method,
     load_study,
+    load_validated_study,
     publish_study,
     reduce_study,
 )
+from kairos.workers import ExecutionTask, result_probe
 
 STUDY_ID = UUID("10000000-0000-4000-8000-000000000001")
 OTHER_STUDY_ID = UUID("10000000-0000-4000-8000-000000000002")
@@ -180,6 +184,29 @@ def test_retain_publish_and_load_selected_method_in_request_order(tmp_path: Path
     assert not Workspace(study_directory(tmp_path, STUDY_ID), identity=STUDY_ID.bytes).path.exists()
 
 
+def test_result_probe_reads_retained_candidate_publication(tmp_path: Path) -> None:
+    request = _request()
+    task = ExecutionTask(request=request, method_index=0).task()
+    probe = result_probe(tmp_path)
+
+    assert not probe(task)
+
+    canonical = study_directory(tmp_path, STUDY_ID)
+    canonical.parent.mkdir()
+    parent = Workspace(canonical, identity=STUDY_ID.bytes)
+    retained = parent.path / "trial-0"
+
+    _retain(tmp_path, request, 0, RESULT)
+
+    assert candidate_result_directory(tmp_path, request.study_id, 0) == retained
+    assert load_candidate_result(retained, request, 0) == RESULT
+    assert probe(task)
+
+    (retained / "result.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValidationError):
+        probe(task)
+
+
 def test_retained_result_rejects_invalid_epoch_bounds() -> None:
     with pytest.raises(ValidationError, match="selected_epoch must not exceed completed_epochs"):
         RetainedResult(objective=0.5, selected_epoch=3, completed_epochs=2)
@@ -286,6 +313,14 @@ def test_load_study_rejects_embedded_id_mismatch(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Study ID does not match requested Study ID"):
         load_study(tmp_path, STUDY_ID)
+
+
+def test_validated_study_rejects_objective_mismatched_with_observations(tmp_path: Path) -> None:
+    _write_canonical_study(tmp_path, Study(request=_request(), trials=(RESULT,)))
+    _observations(0.4).write_parquet(study_trial_observations_path(tmp_path, STUDY_ID, 0))
+
+    with pytest.raises(ValueError, match="objective must equal validation observations"):
+        load_validated_study(tmp_path, STUDY_ID)
 
 
 def test_publish_study_preserves_canonical_created_during_publication(

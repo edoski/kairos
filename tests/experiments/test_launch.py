@@ -11,7 +11,7 @@ from servatus import Task
 
 from kairos.config import EvaluateRequest, TuneRequest
 from kairos.study import RetainedResult, Study
-from kairos.workers import execution_task
+from kairos.workers import ExecutionTask
 from tests.helpers import (
     dispatch,
     fake_campaign,
@@ -76,11 +76,11 @@ def _launch_args(bundle: Path) -> tuple[str, ...]:
 def _candidate_tasks(bundle: Path) -> tuple[list[dict[str, str]], tuple[Task, ...]]:
     rows = read_tsv_rows(bundle / "cells.tsv")
     return rows, tuple(
-        execution_task(
-            TuneRequest.model_validate_json(Path(row["request"]).read_bytes()),
+        ExecutionTask(
+            request=TuneRequest.model_validate_json(Path(row["request"]).read_bytes()),
             method_index=int(row["method_index"]),
             cell=row["cell"],
-        )
+        ).task()
         for row in rows
     )
 
@@ -208,7 +208,7 @@ def test_workflows_submit_ordered_tasks_with_completion_retry_and_receipt(
     monkeypatch.chdir(tmp_path)
     launcher = _load_launcher(monkeypatch)
     open_campaign, campaign = fake_campaign(monkeypatch, launcher)
-    retry_key = execution_task(requests[-1], cell="cell-8").key
+    retry_key = ExecutionTask(request=requests[-1], cell="cell-8").task().key
 
     result = dispatch(
         launcher.app,
@@ -225,7 +225,8 @@ def test_workflows_submit_ordered_tasks_with_completion_retry_and_receipt(
     assert result.exit_code == 0
     assert result.output == "1001;research\n"
     tasks = tuple(
-        execution_task(request, cell=f"cell-{index}") for index, request in enumerate(requests)
+        ExecutionTask(request=request, cell=f"cell-{index}").task()
+        for index, request in enumerate(requests)
     )
     assert open_campaign.call_args.args == (
         tmp_path / "experiments" / ".servatus" / "held_out" / "bundle",

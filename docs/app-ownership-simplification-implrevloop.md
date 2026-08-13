@@ -55,6 +55,9 @@ conflict with them. ADR 0007 is superseded.
 - Planning/first-slice baseline commit:
   `5c2fec6d481b565597086c41718bbedc65d29880`
 - Slice 1 product head: `fca527c699622a350d401e32bc162aa0cc77203d`
+- Slice 1 green ledger head and Slice 2 baseline:
+  `341cd651ae863674a3d05134f4ecb4ecb3e9c999`
+- Slice 2 final product head: `259110f21f954d62d78a25fd9068866a2487dcf4`
 - Main checkout after isolation: clean at `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`
 - Concurrent task `019fea73-abd5-7a51-9681-f0443f647884` was notified before implementation.
   It expects no `app/` product overlap, but may later change KAIROS execution code and shared docs.
@@ -338,17 +341,37 @@ inside the one model runtime that requires it.
 
 ## Slice 2 - Immediate global selection and concrete run history
 
-Status: pending Slice 1 independent `GREEN LIGHT`
+Status: independently green after one correction round
 
 ### Execution record
 
-- Immutable slice baseline: final integrated ledger head after Slice 1 is green
-- Checkout and status: record immediately before dispatch
+- Immutable slice baseline: `341cd651ae863674a3d05134f4ecb4ecb3e9c999`
+- Checkout: `/Users/edo/dev/python/kairos-app-ownership-simplification` on
+  `codex/app-ownership-simplification`; clean at dispatch
 - Allowed writer scope: App selection/presentation orchestration, history ownership and storage,
   Analytics controlled selection, focused tests, and directly affected current mobile docs
-- Implementer: unassigned; must be fresh for this slice and read/use the `implement` skill
-- Reviewer: unassigned; must be distinct and read/use the `code-review` skill
-- Implementation head, review range, result, and correction rounds: pending
+- Implementer: `/root/slice2_implement`; fresh for this slice and read/used the `implement` skill
+- Initial implementation head: `c0e48c868bddbc5de8fb04c5c37428b15fee0804`
+- Reviewer: `/root/slice2_review`; distinct and read/used the `code-review` skill with separate
+  `/root/slice2_review/standards_axis` and `/root/slice2_review/spec_axis` workers
+- Initial fixed review range:
+  `341cd651ae863674a3d05134f4ecb4ecb3e9c999...c0e48c868bddbc5de8fb04c5c37428b15fee0804`
+- Initial review: Spec 0 findings; Standards one P3 Duplicated Code finding for two identical
+  horizon-selection closures in `App.tsx`
+- Correction round 1: the same implementer added one named `selectHorizon(Horizon)` owner in
+  `259110f21f954d62d78a25fd9068866a2487dcf4`; only `app/App.tsx` changed
+- Focused correction review range:
+  `c0e48c868bddbc5de8fb04c5c37428b15fee0804...259110f21f954d62d78a25fd9068866a2487dcf4`
+- Final review result: `GREEN LIGHT`; the same reviewer confirmed the finding closed and no new
+  issue in the correction hunks
+- Implementer checks: focused App/history 19 passed; full app suite 51 passed; normal and
+  strict-unused TypeScript passed; Expo Doctor 19/19 passed; diff, scope, and residue audits passed
+- Correction checks: focused App tests 11 passed; normal and strict-unused TypeScript and
+  `git diff --check` passed
+- Orchestrator integration check: App/history 19 passed; final diff check, commit list, branch
+  status, and clean main status passed
+- Explicitly unrun: generated model assets, native simulator/device, real ExecuTorch, real RPC,
+  exporter parity, and visual acceptance
 
 ### Scope
 

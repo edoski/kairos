@@ -1,7 +1,7 @@
 # App ownership simplification implementation-review ledger
 
-Status: all four slices independently green; isolated final gates passed; final local `main`
-integration authorized and ready
+Status: complete; all four slices independently green, all local gates passed, and the work was
+integrated into local `main`
 
 Authority: the current `app/` implementation at
 `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`, the user's 2026-08-13 decisions in this
@@ -48,8 +48,9 @@ conflict with them. ADR 0007 is superseded.
     `05ca43b1c51d2c68fd61065cf69b41e7548ca58a`
 - Current run-owned write: this ledger only
 - Run-owned branch: `codex/app-ownership-simplification`, created from
-  `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`
-- Run-owned worktree: `/Users/edo/dev/python/kairos-app-ownership-simplification`
+  `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95` and removed after integration
+- Run-owned worktree: `/Users/edo/dev/python/kairos-app-ownership-simplification`, removed after
+  integration
 - Proposed implementation branch: `codex/app-ownership-simplification`; name was free at planning
 - Proposed implementation worktree: `/Users/edo/dev/python/kairos-app-ownership-simplification`;
   path was free at planning
@@ -68,35 +69,20 @@ conflict with them. ADR 0007 is superseded.
 - Main checkout after isolation: clean at `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`
 - Concurrent task `019fea73-abd5-7a51-9681-f0443f647884` was notified before implementation.
   It expects no `app/` product overlap, but may later change KAIROS execution code and shared docs.
-  This run must not integrate into `main` until that task is fully complete and integrated; re-pin
-  and reconcile against its final `main` before this run's final integration.
+  The original order waited for it through implementation and isolated gates; the user later
+  authorized app-first integration after that task confirmed no KAIROS work had started.
 - Model assets: `app/assets/models/manifest.json` and the twelve `.pte` files remain absent
 - Installed app dependencies at execution start: React 19.2.0, React Native 0.83.10, Expo 55.0.28,
   React Native ExecuTorch 0.9.2, and Viem 2.55.8
 - Planning-baseline checks at the unchanged product head: 43/43 app tests, normal TypeScript,
   strict unused-local/parameter TypeScript, and Expo Doctor 19/19 passed
 
-## Current authority
+## Execution authority
 
-Authorized now:
-
-- implement all four approved slices in order in the isolated run-owned worktree;
-- dispatch one fresh implementer and one distinct reviewer per slice under the protocol below;
-- create local commits and run the local checks required by this ledger;
-- maintain and commit this ledger on the isolated branch.
-
-Not authorized now:
-
-- integration into or mutation of the `main` checkout before concurrent task
-  `019fea73-abd5-7a51-9681-f0443f647884` is fully finished and integrated;
-- push or pull request;
-- external RPC, simulator, device, visual, exporter, generated-asset, remote, Slurm, image-build, or
-  scientific-workload execution.
-
-When implementation is explicitly authorized, use the proposed isolated branch and worktree unless
-the user supplies a different checkout policy. Preserve all pre-existing branches, worktrees, and
-unrelated changes. Keep the main checkout unchanged until every authorized slice is independently
-green and final integration is authorized.
+The user authorized all four slices, local commits, independent reviews, local gates, and final
+local `main` integration. Push, pull request, external RPC, simulator, device, visual, exporter,
+generated-asset, remote, Slurm, image-build, and scientific-workload execution remained
+unauthorized and were not performed.
 
 ## Fixed product decisions
 
@@ -690,8 +676,8 @@ is historical evidence, not the new Spec.
 - Current `docs/KAIROS.md` describes the final mounted runtime, immediate global selection,
   generation-scoped presentation, durable history owner, captured-chain refresh, and compact error
   mapping. The completed prior ledger remains unchanged.
-- Implementation worktree and the main checkout are clean. `main` and `origin/main` remain at
-  `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`.
+- At the isolated final gate, the implementation worktree and main checkout were clean, and `main`
+  plus `origin/main` remained at `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`.
 - The original wait-for-concurrent-task integration order was respected through all implementation,
   review, and isolated final gates. The revised order below now supersedes that pending gate.
 - Generated assets, Metro/custom native build, simulator/device, visual parity, real ExecuTorch,
@@ -709,6 +695,22 @@ is historical evidence, not the new Spec.
   `docs/`; it changes no ADR or `docs/CONTEXT.md` file.
 - Therefore local fast-forward integration of this independently green branch is authorized now and
   does not disturb the concurrent task. Push remains unauthorized.
+
+### Final local integration outcome
+
+- The final isolated candidate was `18a975e35f607d4e707ba250e8a4ebe64ffa6cbc`.
+- Local `main` fast-forwarded from `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95` to that candidate
+  with a clean worktree and verified ancestry. This final ledger-recording commit follows it on
+  `main`.
+- The run-owned worktree and `codex/app-ownership-simplification` branch were removed only after
+  their commits were reachable from `main`.
+- The remaining worktree shape matches the pre-run state: only
+  `/Users/edo/dev/python/kairos` on `main`. The pre-existing `codex/compact-cuda-execution` and
+  `codex/compact-dataset-alignment` branches remain untouched.
+- Documentation changed by this program is exactly `docs/KAIROS.md` and this ledger. No
+  `docs/CONTEXT.md` or ADR changed.
+- `origin/main` remains at `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`; no push or pull request
+  was performed.
 
 After all four authorized slices are independently green:
 

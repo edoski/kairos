@@ -12,7 +12,7 @@ import torch
 from servatus import Draft, publish
 
 from . import _runtime
-from .addresses import evaluation_directory, evaluation_observations_path
+from .addresses import evaluation_directory, evaluation_json_path, evaluation_observations_path
 from .config import EvaluateRequest
 from .corpus import load_corpus_blocks
 from .modeling import load_artifact
@@ -21,6 +21,7 @@ from .observations import (
     economic_metrics,
     read_observations,
     reduce_observations,
+    validate_observations,
 )
 from .temporal import prepare_historical_window
 
@@ -63,6 +64,16 @@ def evaluate(request: EvaluateRequest, storage_root: Path) -> None:
         observations.write_parquet(draft.path / "observations.parquet")
 
     publish(canonical, assemble)
+
+
+def load_evaluation(storage_root: Path, evaluation_id: UUID) -> EvaluateRequest:
+    request = EvaluateRequest.model_validate_json(
+        evaluation_json_path(storage_root, evaluation_id).read_bytes()
+    )
+    if request.evaluation_id != evaluation_id:
+        raise ValueError("embedded evaluation ID does not match the requested evaluation")
+    validate_observations(evaluation_observations_path(storage_root, evaluation_id))
+    return request
 
 
 def reduce_evaluation(storage_root: Path, evaluation_id: UUID) -> pl.DataFrame:

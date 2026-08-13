@@ -530,9 +530,9 @@ All benchmark slices belong on the local M2 Max:
 
 The configured remote is a heterogeneous CUDA Slurm target. Its current allocation route and
 resource values are execution details rather than a benchmark deployment contract
-([`REMOTE.toml`](../../REMOTE.toml), [`RESOURCES.toml`](../../RESOURCES.toml)). ADR 0008 keeps it as
-the narrow immutable-image boundary for independent training and evaluation workflows, not as the
-thesis deployment target ([ADR 0008](../adr/0008-servatus-lifecycle-boundary.md)).
+([`SERVATUS.toml`](../../SERVATUS.toml)). ADR 0008 keeps it as the narrow immutable-image boundary
+for independent training and evaluation workflows, not as the thesis deployment target
+([ADR 0008](../adr/0008-servatus-lifecycle-boundary.md)).
 
 The remote should finish canonical training and held-out evaluation. Completed artifacts,
 evaluations, and corpora are then transferred through the existing boundary before local

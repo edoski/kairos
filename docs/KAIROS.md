@@ -840,32 +840,22 @@ artifact, or evaluation. Manifests group canonical references only; they do not 
 results, or scientific definitions. The completed experiment directory contains only
 `manifest.json`.
 
-`experiments/feature_ablation.py prepare STORAGE_ROOT` authors the frozen 102-cell request
-bundle under `experiments/feature_ablation/.<experiment_id>/`. For each architecture and chain it
-tests the full feature contract, each individual feature unit omitted, and a base-fee-only
-reference. Hour and day-of-week sine/cosine coordinates each remain one indivisible encoded unit.
-`experiments/launch.py candidates BUNDLE` submits its cells through Servatus. Without
-`--tasks-per-job`, Servatus derives feasible capacity from the profiles; an explicit cap of one is
-valid, while a cap above target feasibility fails in Servatus. Packing uses the fewest balanced
-allocations and avoids singleton tails when possible: nine pending cells at capacity four become
-`3 + 3 + 3`. After all canonical
-Studies exist, `close STORAGE_ROOT EXPERIMENT_ID` publishes the canonical manifest and retires the
-owner-only authored bundle in the same post-commit transaction; `report` derives each
-chain/configuration mean from canonical Studies.
+`experiments/feature_ablation.py prepare STORAGE_ROOT` authors the frozen 102-cell roster directly
+as sealed Servatus Tasks. Each Task contains one strict KAIROS execution envelope with its cell,
+typed request, and candidate index. The Campaign is the sole pre-publication roster at
+`experiments/.servatus/<kind>/<experiment_id>/`; fixed experiments seal during prepare, while HPO
+appends exact suffixes until selection seals it.
 
-Study bundles keep each complete Method roster inside its TuneRequest. Their `cells.tsv` rows
-carry the request path, zero-based `method_index`, and Study ID; they do not write separate Method
-JSON files. Packed launch maps the rows to opaque tasks and stores Servatus campaign state under
-`.servatus/` in the bundle. A repeated launch resumes from durable receipts and canonical
-completion checks; an explicit `--retry TASK_KEY` resubmits only named accepted work. Closure
-validates every referenced canonical record and publishes a manifest-only directory. The authored
-bundle and opaque campaign state are retired only after the manifest commits; failed verification
-or publication preserves the whole authored bundle for retry.
+`experiments/launch.py launch STORAGE_ROOT KIND EXPERIMENT_ID` loads the selected Profile, inspects
+canonical results through the KAIROS probe, plans exact retry keys, and submits through public
+Campaign calls. Without `--tasks-per-job`, Servatus derives feasible capacity from the Profile.
+Packing remains balanced: nine pending cells at capacity four become `3 + 3 + 3`.
 
-Before closure, an experiment author's hidden `cells.tsv` is its active cell-to-record roster;
-consumers use it only to locate records that are already canonical. After closure, the manifest
-replaces that roster as authority. `experiments/c_study.py` loads exactly the nine canonical
-feature-ablation winners through this interface, reuses their reference-geometry `C=25` Studies,
+Closure uses result-only Campaign inspection, assembles any required Study, validates every
+cell-to-record association, and publishes only the canonical manifest. Campaign state remains as
+private execution history. Downstream experiments read completed manifests only; there is no
+private authoring fallback or duplicate request roster. `experiments/c_study.py` loads exactly the
+nine canonical feature-ablation winners, reuses their reference-geometry `C=25` Studies,
 and authors the other 108 architecture-chain-context Studies for
 `C={1,2,3,4,5,10,15,20,25,50,100,200,400}`. The completed manifest contains all 117 cells. For
 each chain, selection averages validation Cost over optimum equally across the three architectures
@@ -888,8 +878,7 @@ its last block, so all horizons share the same first testing origin.
 The explicit `K=2…5` rolling policy remains fixed: the `K=2…4` ranges extend their last origin by
 three, two, or one blocks so the fixed-deadline comparison has every reachable decision origin. Its
 report commands print, but do not persist, the ordinary and rolling reductions. Closure publishes
-the exact 27 evaluation references and removes the temporary bundle. `experiments/launch.py
-workflows BUNDLE` packs Train or Evaluate cells with the same packed execution contract.
+the exact 27 evaluation references and retains only private Campaign history.
 
 Research figures remain outside `src/kairos` and outside the experiment command flow. The five
 self-contained scripts load completed manifests and canonical Studies, Artifacts, or Evaluations
@@ -967,8 +956,8 @@ disposable and recomputed; Artifact and Study work remain resumable.
 Three public command leaves:
 
 ```text
-kairos submit [--target REMOTE.toml] [--resources RESOURCES.toml] [--retry] REQUEST.json ...
-kairos study run [--target REMOTE.toml] [--resources RESOURCES.toml] [--retry]
+kairos submit [--profile NAME] [--retry] REQUEST.json ...
+kairos study run [--profile NAME] [--retry]
                  TUNE_REQUEST.json METHOD_INDEX
 kairos study finalize STUDY_ID
 ```
@@ -979,33 +968,36 @@ kairos study finalize STUDY_ID
   candidate's durable campaign and prints its accepted receipt.
 - `study finalize` accepts standard UUID syntax, reads absolute `STORAGE_ROOT`, and publishes existing indexed results. The result files' strict TuneRequest must carry the same Study ID, and direct TuneRequest construction mints publishable Study IDs as UUIDv4.
 
-Two help-hidden generated-job leaves:
+One help-hidden generated-job leaf:
 
 ```text
-kairos remote workflow
-kairos remote candidate
+kairos remote worker
 ```
 
 Generated Slurm scripts call these leaves with strict JSON on standard input.
 
 ### Remote submission
 
-`kairos.workers` owns the thin application boundary. `workflow_task()` maps a strict Train or
-Evaluate request to a stable artifact/evaluation key, hidden `remote workflow` argv, and the exact
-request JSON plus trailing line feed. `candidate_task()` does the same for a validated TuneRequest
-and Method index. The hidden workers hydrate those bytes and call the direct KAIROS owner.
+`kairos.workers` owns the thin application boundary. `ExecutionTask` holds one strict Tune, Train,
+or Evaluate request, an optional experiment cell, and the Tune Method index. Its `task()` method
+projects that validated envelope to the unchanged stable scientific key, hidden `remote worker`
+argv, and canonical JSON plus a trailing line feed. The worker validates those raw bytes once and
+calls the direct KAIROS owner. Result inspection requires the exact Task key, argv, and bytes bound
+to that typed envelope, then checks its scientific association with canonical KAIROS output.
 
-The public CLI and experiment launcher load cwd-local `REMOTE.toml` and `RESOURCES.toml` directly
-through Servatus. The committed profiles request one GPU, 24 CPUs, 65536 MiB, and three days per
-process. Experiment launch optionally caps tasks per allocation with `--tasks-per-job`; without a
-cap, Servatus derives the feasible capacity from the profiles. Direct request commands create one
-task per Campaign. KAIROS rejects any profile that does not request exactly one GPU per process.
+The public CLI and experiment launcher load `Path.cwd() / "SERVATUS.toml"` once per command through
+Servatus. The file declares complete named Profiles and `default_profile = "KAIROS"`; an explicit
+`--profile NAME` overrides that label. There is no config search, environment fallback, inherited
+profile, or paired-file compatibility path. The committed KAIROS Profile requests one GPU, 24 CPUs,
+65536 MiB, and three days per process. Experiment launch optionally caps tasks per allocation with
+`--tasks-per-job`; without a cap, Servatus derives feasible capacity from the selected Profile.
+Direct request commands create and seal one Task Campaign.
 
 Servatus owns campaign identity, packing, target ceilings, native OpenSSH/Slurm/Apptainer command
-construction, durable receipts, ambiguity refusal, and explicit retry. KAIROS owns typed task bytes,
-canonical completion checks, target and resource values, and the immutable image. Each image path
-must remain unchanged while its jobs are queued. The image exports `STORAGE_ROOT` from its Servatus
-work root and dispatches `kairos remote workflow` or `kairos remote candidate`.
+construction, scheduler observation, result-aware planning, durable receipts, ambiguity refusal,
+and explicit retry. KAIROS owns typed execution bytes, its canonical result probe, committed Profile
+values, and the immutable image. Each image path must remain unchanged while its jobs are queued.
+The image exports `STORAGE_ROOT` from its Servatus work root and dispatches `kairos remote worker`.
 
 `STORAGE_ROOT` is the neutral implicit environment input to current CLI, remote Python, and mobile
 export paths.

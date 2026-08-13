@@ -18,7 +18,7 @@ from .addresses import (
     study_trial_observations_path,
 )
 from .config import Method, SelectedStudySource, TrainingDefinition, TuneRequest
-from .observations import reduce_observations, validate_observations
+from .observations import reduce_observations
 from .records import StrictFrozenRecord
 
 _Epoch: TypeAlias = Annotated[int, Field(ge=1)]
@@ -109,26 +109,40 @@ def publish_study(storage_root: Path, study_id: UUID4) -> None:
 
 
 def load_study(storage_root: Path, study_id: UUID) -> Study:
+    return _read_study(storage_root, study_id)[0]
+
+
+def _read_study(storage_root: Path, study_id: UUID) -> tuple[Study, pl.DataFrame]:
     study = Study.model_validate_json(study_json_path(storage_root, study_id).read_bytes())
     if study.request.study_id != study_id:
         raise ValueError("Study ID does not match requested Study ID")
-    for index in range(len(study.trials)):
+    reductions = []
+    for index, result in enumerate(study.trials):
         if not study_trial_checkpoint_path(storage_root, study_id, index).is_file():
             raise FileNotFoundError("Study trial selected checkpoint is missing")
-        validate_observations(study_trial_observations_path(storage_root, study_id, index))
-    return study
+        observations = study_trial_observations_path(storage_root, study_id, index)
+        metrics = reduce_observations(observations)
+        if result.objective != metrics["base_fee_optimality_gap"][0]:
+            raise ValueError("Study objective must equal validation observations")
+        reductions.append(pl.DataFrame({"method_index": [index]}).hstack(metrics))
+    return study, pl.concat(reductions)
+
+
+def candidate_result_directory(storage_root: Path, study_id: UUID, method_index: int) -> Path:
+    parent = Workspace(study_directory(storage_root, study_id), identity=study_id.bytes)
+    return parent.path / f"trial-{method_index}"
+
+
+def load_candidate_result(path: Path, request: TuneRequest, method_index: int) -> RetainedResult:
+    candidate = _load_candidate_result_path(path)
+    if candidate.request != request:
+        raise ValueError("candidate request does not match execution task")
+    _validate_trial(path, request, method_index, candidate.result)
+    return candidate.result
 
 
 def reduce_study(storage_root: Path, study_id: UUID) -> pl.DataFrame:
-    study = load_study(storage_root, study_id)
-    reductions = []
-    for method_index, result in enumerate(study.trials):
-        observations_path = study_trial_observations_path(storage_root, study_id, method_index)
-        metrics = reduce_observations(observations_path)
-        if result.objective != metrics["base_fee_optimality_gap"][0]:
-            raise ValueError("Study objective must equal validation observations")
-        reductions.append(pl.DataFrame({"method_index": [method_index]}).hstack(metrics))
-    return pl.concat(reductions)
+    return _read_study(storage_root, study_id)[1]
 
 
 def load_selected_method(storage_root: Path, source: SelectedStudySource) -> Method:

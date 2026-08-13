@@ -1,3 +1,6 @@
+default_profile = "KAIROS"
+
+[profiles.KAIROS.target]
 host = "research"
 slurm_bin = "/usr/bin"
 apptainer = "/usr/bin/apptainer"
@@ -13,3 +16,9 @@ max_gpus_per_allocation = 4
 max_time_limit = "3-00:00:00"
 max_allocations_per_submit = 64
 max_script_bytes = 1048576
+
+[profiles.KAIROS.resources]
+cpus_per_task = 24
+memory_mib_per_task = 65536
+gpus_per_task = 1
+time_limit = "3-00:00:00"

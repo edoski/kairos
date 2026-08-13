@@ -28,6 +28,12 @@ def experiment_directory(storage_root: Path, kind: ExperimentKind, experiment_id
     return storage_root / "experiments" / kind / str(experiment_id)
 
 
+def experiment_campaign_directory(
+    storage_root: Path, kind: ExperimentKind, experiment_id: UUID
+) -> Path:
+    return storage_root / "experiments" / ".servatus" / kind / str(experiment_id)
+
+
 def experiment_manifest_path(storage_root: Path, kind: ExperimentKind, experiment_id: UUID) -> Path:
     return experiment_directory(storage_root, kind, experiment_id) / "manifest.json"
 

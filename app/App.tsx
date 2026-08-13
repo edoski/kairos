@@ -87,6 +87,10 @@ export default function App() {
     select({ ...selectionRef.current, chain });
   }
 
+  function selectHorizon(horizon: Horizon): void {
+    select({ ...selectionRef.current, horizon });
+  }
+
   async function refreshOutcomes(): Promise<void> {
     const chain = selectionRef.current.chain;
     const runtime = activeRuntime.current;
@@ -146,9 +150,7 @@ export default function App() {
               chain={selection.chain}
               horizon={selection.horizon}
               onChainChange={selectChain}
-              onHorizonChange={(horizon) =>
-                select({ ...selectionRef.current, horizon })
-              }
+              onHorizonChange={selectHorizon}
               onRun={() => void runInference()}
               onRunAgain={() => setInference({ status: "idle" })}
               state={inference}
@@ -158,9 +160,7 @@ export default function App() {
               chain={selection.chain}
               horizon={selection.horizon}
               onChainChange={selectChain}
-              onHorizonChange={(horizon) =>
-                select({ ...selectionRef.current, horizon })
-              }
+              onHorizonChange={selectHorizon}
               onRefresh={refreshOutcomes}
               runs={runs}
               storageError={storageError}

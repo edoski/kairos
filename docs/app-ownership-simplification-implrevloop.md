@@ -1,6 +1,7 @@
 # App ownership simplification implementation-review ledger
 
-Status: implementation authorized; isolated execution starting with Slice 1
+Status: all four slices independently green; isolated final gates passed; awaiting concurrent-task
+integration before reconciling and integrating into `main`
 
 Authority: the current `app/` implementation at
 `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`, the user's 2026-08-13 decisions in this
@@ -664,6 +665,39 @@ and the `code-review` smell baseline. Spec authority is this ledger. The prior c
 is historical evidence, not the new Spec.
 
 ## Final integration gate
+
+### Isolated-branch gate record
+
+- Candidate head before this final ledger update:
+  `3b0f89d6bd31653e1c312afd66b46833fa1b5c59`
+- Full app suite: 58/58 passed
+- Normal TypeScript and strict unused-local/parameter TypeScript: passed
+- Expo Doctor: 19/19 passed
+- `npm ci --ignore-scripts`: passed and changed neither `package.json` nor `package-lock.json`; npm
+  reported the unchanged lock's 6 moderate and 14 high audit findings, and no audit-fix mutation was
+  attempted
+- `uv run vulture`: passed with no findings; its worktree-local `.venv` is ignored
+- Full planning-baseline-to-candidate `git diff --check`: passed
+- Changed-path audit: product changes are confined to `app/`; documentation changes are confined
+  to current `docs/KAIROS.md` and this run ledger. No Python, scientific, experiment, exporter,
+  Servatus, Blockweaver, CUDA, deployment, research-image, package, or lockfile changed.
+- Deleted-concept residue audit: no `ActiveEngine`, module-global `serializeNativeOperation`,
+  `selectionState`, `initialHorizon`, `analyticsHorizon`, inference `attempt`, `WaitBucket.label`,
+  explicit `disabled={false}`, or TypeScript `baseUrl` remains
+- Chart/static audit: exactly three `GiftedBarChart` render sites remain, all fed from the one
+  selected collection through the same `buckets`; `chartScale`, `AXIS_PROPS`, incremental mean,
+  visible chart and run-detail copy, and negative handling remain
+- Current `docs/KAIROS.md` describes the final mounted runtime, immediate global selection,
+  generation-scoped presentation, durable history owner, captured-chain refresh, and compact error
+  mapping. The completed prior ledger remains unchanged.
+- Implementation worktree and the main checkout are clean. `main` and `origin/main` remain at
+  `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`.
+- Final reconciliation/integration remains intentionally pending until concurrent task
+  `019fea73-abd5-7a51-9681-f0443f647884` is fully complete and integrated into `main`. Re-pin the
+  resulting `main`, reconcile this fixed branch, rerun the full final gate, then fast-forward or
+  otherwise integrate without disturbing concurrent work.
+- Generated assets, Metro/custom native build, simulator/device, visual parity, real ExecuTorch,
+  real public RPC, exported-model parity, and mobile performance remain explicitly unrun.
 
 After all four authorized slices are independently green:
 

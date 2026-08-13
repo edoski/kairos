@@ -13,7 +13,6 @@ from campaign import (
     append_experiment,
     author_experiment,
     close_experiment,
-    experiment_roster,
     print_study_metrics,
     run,
 )
@@ -146,12 +145,8 @@ def extend(
 
 
 def select(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    cells = experiment_roster(storage_root, _KIND, experiment_id)
     expected_cells = {f"{chain}.{family}" for chain, family in product(_CHAINS, _FAMILIES)}
-    if cells.keys() != expected_cells:
-        raise ValueError("HPO roster is incomplete")
-
-    close_experiment(storage_root, _KIND, experiment_id)
+    cells = close_experiment(storage_root, _KIND, experiment_id, expected_cells=expected_cells)
     selections = [
         (cell, *load_study(storage_root, study_id).best_result())
         for cell, study_id in cells.items()

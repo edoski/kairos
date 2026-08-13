@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -125,6 +126,46 @@ def test_append_preserves_exact_prefix_and_rejects_duplicate_cell(tmp_path: Path
     with pytest.raises(ValueError, match="new and unique"):
         append_experiment(
             tmp_path, ExperimentKind.HELD_OUT, _EXPERIMENT_ID, [("second", _evaluate(3))]
+        )
+
+
+def test_close_seals_and_validates_one_post_seal_roster_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    author_experiment(
+        tmp_path, ExperimentKind.HELD_OUT, _EXPERIMENT_ID, [("first", _evaluate(1))], seal=False
+    )
+    path = experiment_campaign_directory(tmp_path, ExperimentKind.HELD_OUT, _EXPERIMENT_ID)
+    real_load = Campaign.load
+
+    def load_with_concurrent_suffix(campaign_path: Path) -> Campaign:
+        campaign = real_load(campaign_path)
+        seal = campaign.seal
+
+        def append_then_seal() -> None:
+            prefix = campaign.tasks
+            Campaign.open(
+                campaign_path, (*prefix, ExecutionTask(request=_evaluate(2), cell="second").task())
+            )
+            seal()
+
+        monkeypatch.setattr(campaign, "seal", append_then_seal)
+        return campaign
+
+    monkeypatch.setattr(
+        campaign_module, "Campaign", SimpleNamespace(load=load_with_concurrent_suffix)
+    )
+
+    with pytest.raises(ValueError, match="roster does not match expected cells"):
+        close_experiment(
+            tmp_path, ExperimentKind.HELD_OUT, _EXPERIMENT_ID, expected_cells={"first"}
+        )
+
+    sealed = real_load(path)
+    assert [execution_envelope(task).cell for task in sealed.tasks] == ["first", "second"]
+    with pytest.raises(TaskConflict, match="sealed"):
+        Campaign.open(
+            path, (*sealed.tasks, ExecutionTask(request=_evaluate(3), cell="third").task())
         )
 
 

@@ -4,12 +4,14 @@ import importlib.util
 import subprocess
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 from uuid import UUID
 
 import pytest
 
 from kairos.config import FitMethod, Method, TransformerLstmDefinition, TuneRequest
 from kairos.experiments import ExperimentKind, ExperimentManifest, experiment_manifest_path
+from kairos.workers import ExecutionTask
 from tests.experiments.helpers import publish_generated_studies
 from tests.helpers import experiment_envelopes, run_script
 
@@ -20,6 +22,11 @@ _HPO_SCRIPT = _ROOT / "experiments" / "hpo.py"
 _CHAINS = ("ethereum", "polygon", "avalanche")
 _FAMILIES = ("lstm", "transformer", "transformer_lstm")
 _CONTEXTS = (1, 2, 3, 4, 5, 10, 15, 20, 25, 50, 100, 200, 400)
+
+
+def _tune_cells(tasks: list[ExecutionTask]) -> list[tuple[str, TuneRequest]]:
+    assert all(task.cell is not None and isinstance(task.request, TuneRequest) for task in tasks)
+    return [(cast(str, task.cell), cast(TuneRequest, task.request)) for task in tasks]
 
 
 def _load_hpo(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
@@ -135,6 +142,7 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
     feature_tasks = experiment_envelopes(
         tmp_path, ExperimentKind.FEATURE_ABLATION, feature_experiment_id
     )
+    feature_cells = _tune_cells(feature_tasks)
     feature_objectives = {
         f"{chain}.{family}.without_hour": objective
         for chain, objective in (("ethereum", 0.26), ("polygon", 1.0), ("avalanche", 1.0))
@@ -144,11 +152,9 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
         tmp_path, feature_tasks, default_objective=2.0, objectives=feature_objectives
     )
     feature_winners = {
-        envelope.cell.removesuffix(".without_hour"): envelope.request.study_id
-        for envelope in feature_tasks
-        if envelope.cell is not None
-        and envelope.cell.endswith(".without_hour")
-        and isinstance(envelope.request, TuneRequest)
+        cell.removesuffix(".without_hour"): request.study_id
+        for cell, request in feature_cells
+        if cell.endswith(".without_hour")
     }
     run_script(_FEATURE_SCRIPT, "close", tmp_path, feature_experiment_id)
 
@@ -160,8 +166,8 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
         "avalanche\twithout_hour\t1",
     ]
     c_tasks = experiment_envelopes(tmp_path, ExperimentKind.C_STUDY, c_experiment_id)
-    c_requests = [envelope.request for envelope in c_tasks]
-    assert all(isinstance(request, TuneRequest) for request in c_requests)
+    c_cells = _tune_cells(c_tasks)
+    c_requests = [request for _, request in c_cells]
 
     assert len(c_tasks) == 117
     assert [envelope.cell for envelope in c_tasks[:13]] == [
@@ -170,11 +176,9 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
     assert c_tasks[-1].cell == "avalanche.transformer_lstm.C400"
     assert [request.experiment.context_blocks for request in c_requests[:13]] == list(_CONTEXTS)
     assert {
-        envelope.cell.removesuffix(".C25"): envelope.request.study_id
-        for envelope in c_tasks
-        if envelope.cell is not None
-        and envelope.cell.endswith(".C25")
-        and isinstance(envelope.request, TuneRequest)
+        cell.removesuffix(".C25"): request.study_id
+        for cell, request in c_cells
+        if cell.endswith(".C25")
     } == feature_winners
     assert len({request.study_id for request in c_requests} - set(feature_winners.values())) == 108
 
@@ -216,10 +220,6 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
     ]
     assert len(experiment_envelopes(tmp_path, ExperimentKind.HPO, hpo_experiment_id)) == 54
 
-    with pytest.raises(subprocess.CalledProcessError, match="returned non-zero") as incomplete:
-        run_script(_HPO_SCRIPT, "select", tmp_path, hpo_experiment_id)
-    assert "HPO roster is incomplete" in incomplete.value.stderr
-
     extension = run_script(
         _HPO_SCRIPT, "extend", tmp_path, c_experiment_id, hpo_experiment_id, "--chain", "avalanche"
     )
@@ -240,11 +240,7 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
     assert "experiment cells must be new and unique" in duplicate.value.stderr
 
     tasks = experiment_envelopes(tmp_path, ExperimentKind.HPO, hpo_experiment_id)
-    requests = {
-        envelope.cell: envelope.request
-        for envelope in tasks
-        if isinstance(envelope.request, TuneRequest)
-    }
+    requests = dict(_tune_cells(tasks))
     assert len(tasks) == 81
     assert len(requests) == 9
     assert {

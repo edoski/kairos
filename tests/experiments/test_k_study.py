@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -94,8 +95,9 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(
         run_script(_K_STUDY_SCRIPT, "prepare", tmp_path, _HPO_EXPERIMENT_ID).stdout.strip()
     )
     tasks = experiment_envelopes(tmp_path, ExperimentKind.K_STUDY, k_experiment_id)
-    requests = [envelope.request for envelope in tasks]
-    assert all(isinstance(request, TrainRequest) for request in requests)
+    assert all(task.cell is not None and isinstance(task.request, TrainRequest) for task in tasks)
+    train_cells = [(cast(str, task.cell), cast(TrainRequest, task.request)) for task in tasks]
+    requests = [request for _, request in train_cells]
 
     assert [envelope.cell for envelope in tasks] == [
         f"{chain}.lstm.K{horizon}"
@@ -107,11 +109,7 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(
     assert len({request.artifact_id for request in requests}) == 27
 
     k_manifest = ExperimentManifest(
-        root={
-            envelope.cell: envelope.request.artifact_id
-            for envelope in tasks
-            if envelope.cell is not None and isinstance(envelope.request, TrainRequest)
-        }
+        root={cell: request.artifact_id for cell, request in train_cells}
     )
     canonical_path = experiment_manifest_path(tmp_path, ExperimentKind.K_STUDY, k_experiment_id)
     canonical_path.parent.mkdir(parents=True)
@@ -131,8 +129,11 @@ def test_k_study_and_held_out_author_the_exact_rosters_and_windows(
     assert set(opened_corpora) == set(_CORPUS_IDS.values())
     assert len(opened_corpora) == len(_CORPUS_IDS)
     evaluation_tasks = experiment_envelopes(tmp_path, ExperimentKind.HELD_OUT, held_out_id)
-    evaluation_requests = [envelope.request for envelope in evaluation_tasks]
-    assert all(isinstance(request, EvaluateRequest) for request in evaluation_requests)
+    assert all(
+        task.cell is not None and isinstance(task.request, EvaluateRequest)
+        for task in evaluation_tasks
+    )
+    evaluation_requests = [cast(EvaluateRequest, task.request) for task in evaluation_tasks]
 
     assert [envelope.cell for envelope in evaluation_tasks] == [
         f"{chain}.lstm.K{horizon}"

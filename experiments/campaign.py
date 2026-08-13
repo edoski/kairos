@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Collection, Iterable
 from pathlib import Path
 from typing import Annotated, TypeAlias, cast
 from uuid import UUID
@@ -11,6 +11,7 @@ import polars as pl
 import typer
 from servatus import Campaign, Draft, Task, publish
 
+from kairos.addresses import study_directory
 from kairos.config import EvaluateRequest, TrainRequest, TuneRequest
 from kairos.experiments import (
     ExperimentKind,
@@ -50,7 +51,8 @@ def author_experiment(
 ) -> Campaign:
     path = experiment_campaign_directory(storage_root, kind, experiment_id)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    campaign = Campaign.open(path, _tasks(kind, cells))
+    _, tasks = _author_tasks(kind, cells)
+    campaign = Campaign.open(path, tasks)
     if seal:
         campaign.seal()
     return campaign
@@ -64,24 +66,32 @@ def append_experiment(
 ) -> Campaign:
     path = experiment_campaign_directory(storage_root, kind, experiment_id)
     campaign = Campaign.load(path)
-    suffix = _tasks(kind, cells)
-    existing_cells = {execution_envelope(task).cell for task in campaign.tasks}
-    if existing_cells & {execution_envelope(task).cell for task in suffix}:
+    prefix = campaign.tasks
+    suffix_cells, suffix = _author_tasks(kind, cells)
+    existing_cells = {execution_envelope(task).cell for task in prefix}
+    if existing_cells & suffix_cells:
         raise ValueError("experiment cells must be new and unique")
-    return Campaign.open(path, (*campaign.tasks, *suffix))
+    return Campaign.open(path, (*prefix, *suffix))
 
 
 def close_experiment(
-    storage_root: Path, kind: ExperimentKind, experiment_id: UUID
+    storage_root: Path,
+    kind: ExperimentKind,
+    experiment_id: UUID,
+    *,
+    expected_cells: Collection[str] | None = None,
 ) -> dict[str, UUID]:
     campaign = Campaign.load(experiment_campaign_directory(storage_root, kind, experiment_id))
     campaign.seal()
-    cells, studies = _roster(kind, campaign.tasks)
+    tasks = campaign.tasks
+    cells, studies = _roster(kind, tasks)
+    if expected_cells is not None and cells.keys() != set(expected_cells):
+        raise ValueError("experiment roster does not match expected cells")
     if not campaign.inspect(result_probe(storage_root), scheduler=False).results_ready:
         raise RuntimeError("experiment results are incomplete")
 
     for study_id in studies:
-        if not (storage_root / "studies" / str(study_id)).exists():
+        if not study_directory(storage_root, study_id).exists():
             publish_study(storage_root, study_id)
 
     destination = experiment_directory(storage_root, kind, experiment_id)
@@ -93,13 +103,6 @@ def close_experiment(
 
     publish(destination, assemble)
     return cells
-
-
-def experiment_roster(
-    storage_root: Path, kind: ExperimentKind, experiment_id: UUID
-) -> dict[str, UUID]:
-    campaign = Campaign.load(experiment_campaign_directory(storage_root, kind, experiment_id))
-    return _roster(kind, campaign.tasks)[0]
 
 
 def print_metrics(
@@ -119,9 +122,9 @@ def print_study_metrics(storage_root: Path, kind: ExperimentKind, experiment_id:
     print_metrics(storage_root, kind, experiment_id, reduce_study)
 
 
-def _tasks(
+def _author_tasks(
     kind: ExperimentKind, cells: Iterable[tuple[str, ExperimentRequest]]
-) -> tuple[Task, ...]:
+) -> tuple[frozenset[str], tuple[Task, ...]]:
     cells = tuple(cells)
     labels = [cell for cell, _ in cells]
     if len(labels) != len(set(labels)):
@@ -137,7 +140,7 @@ def _tasks(
             )
         else:
             tasks.append(ExecutionTask(request=request, cell=cell).task())
-    return tuple(tasks)
+    return frozenset(labels), tuple(tasks)
 
 
 def _roster(

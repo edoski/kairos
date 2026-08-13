@@ -1,7 +1,7 @@
 # App ownership simplification implementation-review ledger
 
-Status: all four slices independently green; isolated final gates passed; awaiting concurrent-task
-integration before reconciling and integrating into `main`
+Status: all four slices independently green; isolated final gates passed; final local `main`
+integration authorized and ready
 
 Authority: the current `app/` implementation at
 `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`, the user's 2026-08-13 decisions in this
@@ -692,12 +692,23 @@ is historical evidence, not the new Spec.
   mapping. The completed prior ledger remains unchanged.
 - Implementation worktree and the main checkout are clean. `main` and `origin/main` remain at
   `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`.
-- Final reconciliation/integration remains intentionally pending until concurrent task
-  `019fea73-abd5-7a51-9681-f0443f647884` is fully complete and integrated into `main`. Re-pin the
-  resulting `main`, reconcile this fixed branch, rerun the full final gate, then fast-forward or
-  otherwise integrate without disturbing concurrent work.
+- The original wait-for-concurrent-task integration order was respected through all implementation,
+  review, and isolated final gates. The revised order below now supersedes that pending gate.
 - Generated assets, Metro/custom native build, simulator/device, visual parity, real ExecuTorch,
   real public RPC, exported-model parity, and mobile performance remain explicitly unrun.
+
+### Integration-order decision
+
+- The user revisited the ordering before integration and proposed landing this completed app branch
+  first.
+- Concurrent task `019fea73-abd5-7a51-9681-f0443f647884` confirmed its active work remains isolated
+  in Servatus, no KAIROS K1/K2 work or `main` mutation has started, and its later KAIROS work already
+  requires re-pinning the then-current `main`.
+- The only expected later overlap is documentation: `docs/CONTEXT.md`, `docs/KAIROS.md`, and
+  possibly ADRs 0006 and 0008. This app branch changes only `docs/KAIROS.md` and this ledger under
+  `docs/`; it changes no ADR or `docs/CONTEXT.md` file.
+- Therefore local fast-forward integration of this independently green branch is authorized now and
+  does not disturb the concurrent task. Push remains unauthorized.
 
 After all four authorized slices are independently green:
 

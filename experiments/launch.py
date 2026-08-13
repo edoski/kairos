@@ -7,10 +7,10 @@ from typing import Annotated
 from uuid import UUID
 
 import typer
-from servatus import Campaign, Profile
+from servatus import Campaign
 
 from kairos.experiments import ExperimentKind, experiment_campaign_directory
-from kairos.workers import result_probe
+from kairos.workers import load_profile, result_probe
 
 _ProfileName = Annotated[str | None, typer.Option("--profile")]
 _RetryKeys = Annotated[list[str] | None, typer.Option("--retry", metavar="TASK_KEY")]
@@ -28,7 +28,7 @@ def launch(
     retry: _RetryKeys = None,
     allow_duplicate_risk: _DuplicateRiskKeys = None,
 ) -> None:
-    profile = Profile.load(Path.cwd() / "SERVATUS.toml", name=profile_name)
+    profile = load_profile(profile_name)
     campaign = Campaign.load(experiment_campaign_directory(storage_root, kind, experiment_id))
     probe = result_probe(storage_root)
     view = campaign.inspect(probe)

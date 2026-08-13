@@ -61,6 +61,9 @@ conflict with them. ADR 0007 is superseded.
 - Slice 2 green ledger head and Slice 3 baseline:
   `b1d83a923ee644541fb3322c8960e3f1bd68f628`
 - Slice 3 product head: `f881208fd6905f091fe1b5a906aeb3a5a8bddc17`
+- Slice 3 green ledger head and Slice 4 baseline:
+  `b2a16c042c4398af094468a3479eff0a8e2d1084`
+- Slice 4 product head: `b86746c422431e71d5946282ae0bf1060d16c53c`
 - Main checkout after isolation: clean at `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`
 - Concurrent task `019fea73-abd5-7a51-9681-f0443f647884` was notified before implementation.
   It expects no `app/` product overlap, but may later change KAIROS execution code and shared docs.
@@ -546,17 +549,31 @@ guard remains intact.
 
 ## Slice 4 - Focused Analytics and presentation cleanup
 
-Status: pending Slice 3 independent `GREEN LIGHT`
+Status: independently green
 
 ### Execution record
 
-- Immutable slice baseline: final integrated ledger head after Slice 3 is green
-- Checkout and status: record immediately before dispatch
+- Immutable slice baseline: `b2a16c042c4398af094468a3479eff0a8e2d1084`
+- Checkout: `/Users/edo/dev/python/kairos-app-ownership-simplification` on
+  `codex/app-ownership-simplification`; clean at dispatch
 - Allowed writer scope: Analytics chart/run-detail extraction, styles owned by those extracted
   modules, the accepted small component/type/config cleanups, and focused tests
-- Implementer: unassigned; must be fresh for this slice and read/use the `implement` skill
-- Reviewer: unassigned; must be distinct and read/use the `code-review` skill
-- Implementation head, review range, result, and correction rounds: pending
+- Implementer: `/root/slice4_implement`; fresh for this slice and read/used the `implement` skill
+- Implementation head: `b86746c422431e71d5946282ae0bf1060d16c53c`
+- Reviewer: `/root/slice4_review`; distinct and read/used the `code-review` skill with separate
+  `/root/slice4_review/standards_axis` and `/root/slice4_review/spec_axis` workers
+- Fixed review range:
+  `b2a16c042c4398af094468a3479eff0a8e2d1084...b86746c422431e71d5946282ae0bf1060d16c53c`
+- Review result: `GREEN LIGHT`; Standards 0 findings, Spec 0 findings
+- Correction rounds: none
+- Implementer checks: focused Analytics 3 passed; full app suite 58 passed; normal and
+  strict-unused TypeScript passed; Expo Doctor 19/19 passed; diff and residue checks passed
+- Static audit: exactly three charts remain; all consume the same buckets and retain scale inputs,
+  titles, labels, legends, order, dimensions, empty copy, and run-detail copy
+- Orchestrator integration check: focused Analytics 3 passed; final diff check, commit list, branch
+  status, and clean main status passed
+- Explicitly unrun: generated model assets, native simulator/device, real ExecuTorch, real RPC,
+  exporter parity, and visual acceptance
 
 ### Scope
 

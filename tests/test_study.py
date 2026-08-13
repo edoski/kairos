@@ -36,7 +36,6 @@ from kairos.study import (
     load_candidate_result,
     load_selected_method,
     load_study,
-    load_validated_study,
     publish_study,
     reduce_study,
 )
@@ -315,12 +314,12 @@ def test_load_study_rejects_embedded_id_mismatch(tmp_path: Path) -> None:
         load_study(tmp_path, STUDY_ID)
 
 
-def test_validated_study_rejects_objective_mismatched_with_observations(tmp_path: Path) -> None:
+def test_load_study_rejects_objective_mismatched_with_observations(tmp_path: Path) -> None:
     _write_canonical_study(tmp_path, Study(request=_request(), trials=(RESULT,)))
     _observations(0.4).write_parquet(study_trial_observations_path(tmp_path, STUDY_ID, 0))
 
     with pytest.raises(ValueError, match="objective must equal validation observations"):
-        load_validated_study(tmp_path, STUDY_ID)
+        load_study(tmp_path, STUDY_ID)
 
 
 def test_publish_study_preserves_canonical_created_during_publication(

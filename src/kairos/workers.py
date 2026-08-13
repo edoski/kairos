@@ -14,7 +14,7 @@ from .config import EvaluateRequest, TrainRequest, TuneRequest
 from .evaluation import evaluate, load_evaluation
 from .modeling import load_artifact, run_candidate, train
 from .records import StrictFrozenRecord
-from .study import candidate_result_directory, load_candidate_result, load_validated_study
+from .study import candidate_result_directory, load_candidate_result, load_study
 
 ExecutionRequest: TypeAlias = Annotated[
     TuneRequest | TrainRequest | EvaluateRequest, Field(discriminator="workflow")
@@ -67,13 +67,15 @@ def result_probe(storage_root: Path) -> ResultProbe:
 
     def probe(task: Task) -> bool:
         envelope = ExecutionTask.model_validate_json(task.stdin)
+        if task != envelope.task():
+            raise ValueError("Servatus Task does not match its execution envelope")
         request = envelope.request
         if isinstance(request, TuneRequest):
             study = study_directory(storage_root, request.study_id)
             if study.exists():
                 canonical = studies.get(request.study_id)
                 if canonical is None:
-                    canonical = load_validated_study(storage_root, request.study_id).request
+                    canonical = load_study(storage_root, request.study_id).request
                     studies[request.study_id] = canonical
                 if canonical != request:
                     raise ValueError("canonical Study request does not match execution task")

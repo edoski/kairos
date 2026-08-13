@@ -8,7 +8,7 @@ from uuid import UUID
 import polars as pl
 import pytest
 from pydantic import ValidationError
-from servatus import ConfigurationError, Profile
+from servatus import ConfigurationError, Profile, Task
 
 import kairos.workers as workers
 from kairos.addresses import evaluation_json_path, evaluation_observations_path
@@ -165,6 +165,8 @@ def test_result_probe_validates_exact_task_and_canonical_result(tmp_path: Path) 
     task = ExecutionTask(request=request).task()
     probe = result_probe(tmp_path)
     assert not probe(task)
+    with pytest.raises(ValueError, match="does not match its execution envelope"):
+        probe(Task("foreign", task.args, task.stdin))
 
     evaluation_json_path(tmp_path, request.evaluation_id).parent.mkdir(parents=True)
     evaluation_json_path(tmp_path, request.evaluation_id).write_text(
@@ -207,7 +209,7 @@ def test_result_probe_uses_domain_loaders_for_study_and_artifact(
     train_request = _workflow("train")
     study = SimpleNamespace(request=tune)
     association = SimpleNamespace(request=train_request)
-    monkeypatch.setattr(workers, "load_validated_study", lambda *_: study)
+    monkeypatch.setattr(workers, "load_study", lambda *_: study)
     monkeypatch.setattr(workers, "load_artifact", lambda *_: (association, object()))
 
     (tmp_path / "studies" / str(tune.study_id)).mkdir(parents=True)

@@ -993,8 +993,8 @@ Generated Slurm scripts call these leaves with strict JSON on standard input.
 or Evaluate request, an optional experiment cell, and the Tune Method index. Its `task()` method
 projects that validated envelope to the unchanged stable scientific key, hidden `remote worker`
 argv, and canonical JSON plus a trailing line feed. The worker validates those raw bytes once and
-calls the direct KAIROS owner; result inspection trusts the resulting typed envelope and checks only
-its scientific association with canonical KAIROS output.
+calls the direct KAIROS owner. Result inspection requires the exact Task key, argv, and bytes bound
+to that typed envelope, then checks its scientific association with canonical KAIROS output.
 
 The public CLI and experiment launcher load `Path.cwd() / "SERVATUS.toml"` once per command through
 Servatus. The file declares complete named Profiles and `default_profile = "KAIROS"`; an explicit

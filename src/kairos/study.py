@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Self, TypeAlias, cast
+from typing import Annotated, Self, TypeAlias
 from uuid import UUID
 
 import polars as pl
@@ -18,7 +18,7 @@ from .addresses import (
     study_trial_observations_path,
 )
 from .config import Method, SelectedStudySource, TrainingDefinition, TuneRequest
-from .observations import reduce_observations, validate_observations
+from .observations import reduce_observations
 from .records import StrictFrozenRecord
 
 _Epoch: TypeAlias = Annotated[int, Field(ge=1)]
@@ -109,12 +109,10 @@ def publish_study(storage_root: Path, study_id: UUID4) -> None:
 
 
 def load_study(storage_root: Path, study_id: UUID) -> Study:
-    return _read_study(storage_root, study_id, with_reductions=False)[0]
+    return _read_study(storage_root, study_id)[0]
 
 
-def _read_study(
-    storage_root: Path, study_id: UUID, *, with_reductions: bool
-) -> tuple[Study, pl.DataFrame | None]:
+def _read_study(storage_root: Path, study_id: UUID) -> tuple[Study, pl.DataFrame]:
     study = Study.model_validate_json(study_json_path(storage_root, study_id).read_bytes())
     if study.request.study_id != study_id:
         raise ValueError("Study ID does not match requested Study ID")
@@ -123,14 +121,11 @@ def _read_study(
         if not study_trial_checkpoint_path(storage_root, study_id, index).is_file():
             raise FileNotFoundError("Study trial selected checkpoint is missing")
         observations = study_trial_observations_path(storage_root, study_id, index)
-        if not with_reductions:
-            validate_observations(observations)
-            continue
         metrics = reduce_observations(observations)
         if result.objective != metrics["base_fee_optimality_gap"][0]:
             raise ValueError("Study objective must equal validation observations")
         reductions.append(pl.DataFrame({"method_index": [index]}).hstack(metrics))
-    return study, pl.concat(reductions) if with_reductions else None
+    return study, pl.concat(reductions)
 
 
 def candidate_result_directory(storage_root: Path, study_id: UUID, method_index: int) -> Path:
@@ -147,11 +142,7 @@ def load_candidate_result(path: Path, request: TuneRequest, method_index: int) -
 
 
 def reduce_study(storage_root: Path, study_id: UUID) -> pl.DataFrame:
-    return cast(pl.DataFrame, _read_study(storage_root, study_id, with_reductions=True)[1])
-
-
-def load_validated_study(storage_root: Path, study_id: UUID) -> Study:
-    return _read_study(storage_root, study_id, with_reductions=True)[0]
+    return _read_study(storage_root, study_id)[1]
 
 
 def load_selected_method(storage_root: Path, source: SelectedStudySource) -> Method:

@@ -220,6 +220,10 @@ def test_context_and_hpo_pipeline_preserves_rosters_selection_and_l9(tmp_path: P
     ]
     assert len(experiment_envelopes(tmp_path, ExperimentKind.HPO, hpo_experiment_id)) == 54
 
+    with pytest.raises(subprocess.CalledProcessError, match="returned non-zero") as incomplete:
+        run_script(_HPO_SCRIPT, "select", tmp_path, hpo_experiment_id)
+    assert "experiment roster does not match expected cells" in incomplete.value.stderr
+
     extension = run_script(
         _HPO_SCRIPT, "extend", tmp_path, c_experiment_id, hpo_experiment_id, "--chain", "avalanche"
     )

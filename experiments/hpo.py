@@ -145,7 +145,7 @@ def extend(
 
 
 def select(storage_root: StorageRoot, experiment_id: UUID) -> None:
-    expected_cells = {f"{chain}.{family}" for chain, family in product(_CHAINS, _FAMILIES)}
+    expected_cells = tuple(f"{chain}.{family}" for chain, family in product(_CHAINS, _FAMILIES))
     cells = close_experiment(storage_root, _KIND, experiment_id, expected_cells=expected_cells)
     selections = [
         (cell, *load_study(storage_root, study_id).best_result())

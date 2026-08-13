@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Annotated, TypeAlias, cast
 from uuid import UUID
@@ -79,14 +79,20 @@ def close_experiment(
     kind: ExperimentKind,
     experiment_id: UUID,
     *,
-    expected_cells: Collection[str] | None = None,
+    expected_cells: tuple[str, ...] | None = None,
 ) -> dict[str, UUID]:
     campaign = Campaign.load(experiment_campaign_directory(storage_root, kind, experiment_id))
-    campaign.seal()
     tasks = campaign.tasks
     cells, studies = _roster(kind, tasks)
-    if expected_cells is not None and cells.keys() != set(expected_cells):
+    if expected_cells is not None and tuple(cells) != expected_cells:
         raise ValueError("experiment roster does not match expected cells")
+
+    campaign.seal()
+    sealed_tasks = campaign.tasks
+    if sealed_tasks != tasks:
+        cells, studies = _roster(kind, sealed_tasks)
+        if expected_cells is not None and tuple(cells) != expected_cells:
+            raise ValueError("experiment roster does not match expected cells")
     if not campaign.inspect(result_probe(storage_root), scheduler=False).results_ready:
         raise RuntimeError("experiment results are incomplete")
 

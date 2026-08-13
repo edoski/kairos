@@ -158,7 +158,7 @@ def test_close_seals_and_validates_one_post_seal_roster_snapshot(
 
     with pytest.raises(ValueError, match="roster does not match expected cells"):
         close_experiment(
-            tmp_path, ExperimentKind.HELD_OUT, _EXPERIMENT_ID, expected_cells={"first"}
+            tmp_path, ExperimentKind.HELD_OUT, _EXPERIMENT_ID, expected_cells=("first",)
         )
 
     sealed = real_load(path)

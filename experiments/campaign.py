@@ -30,6 +30,7 @@ _REQUEST_TYPE = {
     ExperimentKind.C_STUDY: TuneRequest,
     ExperimentKind.HPO: TuneRequest,
     ExperimentKind.K_STUDY: TrainRequest,
+    ExperimentKind.COMPARATOR_STUDY: TrainRequest,
     ExperimentKind.HELD_OUT: EvaluateRequest,
 }
 

@@ -31,6 +31,7 @@ from kairos.temporal import FeatureState, HistoricalDataset, _HistoricalBacking
 
 _K_STUDY_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 _HELD_OUT_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+_COMPARATOR_ID = UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
 _CORPUS_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 _STUDY_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 _METHOD = Method(
@@ -87,6 +88,16 @@ def _request(index: int, horizon: int) -> EvaluateRequest:
     )
 
 
+def _selection(index: int, horizon: int) -> benchmark.Selection:
+    request = _request(index, horizon)
+    return benchmark.Selection(
+        artifact_id=request.artifact_id,
+        support_evaluation_id=request.evaluation_id,
+        corpus_id=request.corpus_id,
+        testing_window=request.testing_window,
+    )
+
+
 class _Dataset:
     def __init__(self, origins: tuple[int, ...]) -> None:
         self.origins = origins
@@ -128,6 +139,7 @@ def _cell(events: list[str]) -> benchmark._Cell:
             )
             for horizon in reversed(benchmark.ROLLING_HORIZONS)
         },
+        device=torch.device("cpu"),
     )
 
 
@@ -141,18 +153,18 @@ def _energy_cell(events: list[str]) -> benchmark._Cell:
             )
             for horizon in reversed(benchmark.ROLLING_HORIZONS)
         },
+        device=torch.device("cpu"),
     )
 
 
-def _resolved() -> dict[str, dict[int, EvaluateRequest]]:
-    resolved: dict[str, dict[int, EvaluateRequest]] = {}
-    for index, (chain, family, horizon) in enumerate(
-        (chain, family, horizon)
+def _resolved() -> dict[str, dict[int, benchmark.Selection]]:
+    resolved: dict[str, dict[int, benchmark.Selection]] = {}
+    for index, (chain, horizon) in enumerate(
+        (chain, horizon)
         for chain in ("ethereum", "polygon", "avalanche")
-        for family in ("lstm", "transformer", "transformer_lstm")
         for horizon in reversed(benchmark.ROLLING_HORIZONS)
     ):
-        resolved.setdefault(f"{chain}.{family}", {})[horizon] = _request(index, horizon)
+        resolved.setdefault(f"{chain}.lstm", {})[horizon] = _selection(index, horizon)
     return resolved
 
 
@@ -162,18 +174,51 @@ def _protocol() -> benchmark.Protocol:
     )
 
 
+def _architecture_resolved() -> dict[str, dict[int, benchmark.Selection]]:
+    return {
+        f"{chain}.{family}": {5: _selection(index + 100, 5)}
+        for index, (chain, family) in enumerate(
+            (chain, family)
+            for chain in ("avalanche", "ethereum", "polygon")
+            for family in ("lstm", "transformer", "transformer_lstm")
+        )
+    }
+
+
+def _architecture_protocol() -> benchmark.Protocol:
+    return benchmark._architecture_protocol(
+        _K_STUDY_ID,
+        _HELD_OUT_ID,
+        _COMPARATOR_ID,
+        _architecture_resolved(),
+        warmup_iterations=2,
+        sweeps=1,
+    )
+
+
 def test_resolve_joins_canonical_artifacts_and_evaluations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     k_study = {}
     held_out = {}
     source = _resolved()
-    for group, requests in source.items():
-        for horizon, request in requests.items():
+    for group, selections in source.items():
+        for horizon, selection in selections.items():
             label = f"{group}.K{horizon}"
-            k_study[label] = request.artifact_id
-            held_out[label] = request.evaluation_id
-            path = tmp_path / "evaluations" / str(request.evaluation_id) / "evaluation.json"
+            k_study[label] = selection.artifact_id
+            held_out[label] = selection.support_evaluation_id
+            request = EvaluateRequest(
+                evaluation_id=selection.support_evaluation_id,
+                artifact_id=selection.artifact_id,
+                corpus_id=selection.corpus_id,
+                testing_window=selection.testing_window,
+            )
+            path = (
+                tmp_path
+                / "evaluations"
+                / str(selection.support_evaluation_id)
+                / "evaluation.json"
+            )
             path.parent.mkdir(parents=True)
             path.write_text(request.model_dump_json())
     for index, (group, horizon) in enumerate(
@@ -195,32 +240,70 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
 
     assert resolved == source
     protocol = benchmark._protocol(_K_STUDY_ID, _HELD_OUT_ID, resolved, 2, 10)
-    assert len(protocol.roster) == 36
+    assert len(protocol.roster) == 12
     assert sorted(protocol.roster) == [
         f"{group}.K{horizon}"
         for group in sorted(source)
         for horizon in reversed(benchmark.ROLLING_HORIZONS)
     ]
     missing = held_out.pop("polygon.lstm.K4")
-    with pytest.raises(ValueError, match="nine complete rolling groups"):
+    with pytest.raises(ValueError, match="three complete LSTM rolling groups"):
         benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
     held_out["polygon.lstm.K4"] = missing
     surplus_labels = []
     for index, horizon in enumerate(reversed(benchmark.ROLLING_HORIZONS), start=36):
-        request = _request(index, horizon)
+        selection = _selection(index, horizon)
         label = f"surplus.lstm.K{horizon}"
         surplus_labels.append(label)
-        k_study[label] = request.artifact_id
-        held_out[label] = request.evaluation_id
-    with pytest.raises(ValueError, match="nine complete rolling groups"):
+        k_study[label] = selection.artifact_id
+        held_out[label] = selection.support_evaluation_id
+    with pytest.raises(ValueError, match="three complete LSTM rolling groups"):
         benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
     for label in surplus_labels:
         del k_study[label], held_out[label]
     label = "ethereum.lstm.K5"
     k_study[label] = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
     with pytest.raises(ValueError, match="does not name"):
-        benchmark.run_cpu(tmp_path, _K_STUDY_ID, _HELD_OUT_ID, tmp_path / "output", 2, 1)
+        benchmark.run_policy_latency(
+            tmp_path, _K_STUDY_ID, _HELD_OUT_ID, tmp_path / "output", 2, 1, "cpu"
+        )
     assert not (tmp_path / "output").exists()
+
+
+def test_architecture_resolve_adds_two_matched_k5_comparators_per_chain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    policy = _resolved()
+    comparators = {
+        f"{chain}.{family}.K5": UUID(f"50000000-0000-4000-8000-{index:012d}")
+        for index, (chain, family) in enumerate(
+            (chain, family)
+            for chain in ("avalanche", "ethereum", "polygon")
+            for family in ("transformer", "transformer_lstm")
+        )
+    }
+    monkeypatch.setattr(benchmark, "_resolve", lambda *_args: policy)
+    monkeypatch.setattr(benchmark, "load_experiment_manifest", lambda *_args: comparators)
+
+    resolved = benchmark._resolve_architecture(
+        tmp_path, _K_STUDY_ID, _HELD_OUT_ID, _COMPARATOR_ID
+    )
+
+    assert len(resolved) == 9
+    assert all(set(group) == {5} for group in resolved.values())
+    for chain in ("avalanche", "ethereum", "polygon"):
+        template = policy[f"{chain}.lstm"][5]
+        assert resolved[f"{chain}.lstm"][5] == template
+        for family in ("transformer", "transformer_lstm"):
+            selection = resolved[f"{chain}.{family}"][5]
+            assert selection.artifact_id == comparators[f"{chain}.{family}.K5"]
+            assert selection.model_copy(update={"artifact_id": template.artifact_id}) == template
+
+    comparators.pop("polygon.transformer.K5")
+    with pytest.raises(ValueError, match="two K5 families"):
+        benchmark._resolve_architecture(
+            tmp_path, _K_STUDY_ID, _HELD_OUT_ID, _COMPARATOR_ID
+        )
 
 
 def test_batch_one_is_a_chronological_view() -> None:
@@ -235,7 +318,9 @@ def test_batch_one_is_a_chronological_view() -> None:
         BlockWindow(first_parent_block=102, last_parent_block=104),
         TargetState(mean=0.0, standard_deviation=1.0),
     )
-    origin, inputs = benchmark._batch(benchmark._Horizon(nn.Identity(), dataset), 1)
+    origin, inputs = benchmark._batch(
+        benchmark._Horizon(nn.Identity(), dataset), 1, torch.device("cpu")
+    )
     assert origin == 103
     assert inputs.shape == (1, 2, 2)
 
@@ -343,6 +428,21 @@ def test_orders_rotate_deterministically() -> None:
     assert benchmark._pass_order(2) == (*first[1:], first[0])
 
 
+def test_mps_requires_native_execution(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PYTORCH_ENABLE_MPS_FALLBACK", raising=False)
+    with pytest.raises(RuntimeError, match="MPS_FALLBACK=0"):
+        benchmark._require_device("mps")
+
+    monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0")
+    monkeypatch.setattr(torch.backends.mps, "is_built", lambda: True)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
+    with pytest.raises(RuntimeError, match="not available"):
+        benchmark._require_device("mps")
+
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert benchmark._require_device("mps") == "mps"
+
+
 def test_protocol_match_and_units_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     protocol = _protocol()
     output = tmp_path / "output"
@@ -372,6 +472,38 @@ def test_protocol_match_and_units_resume(tmp_path: Path, monkeypatch: pytest.Mon
     assert pl.read_parquet(
         unit_output / "latency" / "ethereum.lstm" / "sweep-001.parquet"
     ).columns == ["cell", "sweep", "pass_order", "workload", "origin_block", "elapsed_ns"]
+
+
+def test_architecture_footprint_is_canonical_and_resumable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "campaign"
+    protocol = _architecture_protocol()
+    resolved = _architecture_resolved()
+    benchmark._ensure_protocol(output, protocol)
+    checkpoint = tmp_path / "artifact.ckpt"
+    checkpoint.write_bytes(b"checkpoint")
+    loads = 0
+
+    def load(root: Path, artifact_id: UUID) -> tuple[ArtifactAssociation, nn.Module]:
+        nonlocal loads
+        del root
+        loads += 1
+        return _association(5, artifact_id), nn.Linear(2, 3)
+
+    monkeypatch.setattr(benchmark, "_resolve_protocol", lambda *_args: resolved)
+    monkeypatch.setattr(benchmark, "load_artifact", load)
+    monkeypatch.setattr(benchmark, "artifact_checkpoint_path", lambda *_args: checkpoint)
+
+    benchmark.run_footprint(tmp_path, output)
+    benchmark.run_footprint(tmp_path, output)
+
+    rows = pl.read_parquet(output / "footprint.parquet")
+    assert rows.height == 9
+    assert rows["checkpoint_bytes"].unique().to_list() == [len(b"checkpoint")]
+    assert rows["parameters"].unique().to_list() == [9]
+    assert rows["trainable_parameters"].unique().to_list() == [9]
+    assert loads == 9
 
 
 def test_powermetrics_parsing_and_conservative_phase_membership() -> None:
@@ -436,11 +568,11 @@ def test_pair_reduction_time_weights_power_and_retains_thermal_state() -> None:
     )
     idle = benchmark._Phase(1, "idle", 7_000_000_000, 12_000_000_000)
     active = benchmark._Phase(
-        1, "active", 18_000_000_000, 24_000_000_000, active_seconds=4.0, completed_cascades=2
+        1, "active", 18_000_000_000, 24_000_000_000, active_seconds=4.0, completed_workloads=2
     )
 
     row = benchmark._pair_row(samples, idle, active)
-    joules_per_cascade = row.pop("joules_per_cascade")
+    joules_per_workload = row.pop("joules_per_workload")
 
     assert row == {
         "pair": 1,
@@ -457,11 +589,11 @@ def test_pair_reduction_time_weights_power_and_retains_thermal_state() -> None:
         "active_ane_mw": 0.0,
         "active_combined_mw": 2500.0,
         "active_seconds": 4.0,
-        "completed_cascades": 2,
-        "cascades_per_second": 0.5,
+        "completed_workloads": 2,
+        "workloads_per_second": 0.5,
         "thermal_valid": False,
     }
-    assert joules_per_cascade == pytest.approx(5.0 / 3.0)
+    assert joules_per_workload == pytest.approx(5.0 / 3.0)
 
 
 def test_pair_reduction_preserves_negative_energy() -> None:
@@ -473,13 +605,13 @@ def test_pair_reduction_preserves_negative_energy() -> None:
     )
     idle = benchmark._Phase(1, "idle", 8_000_000_000, 10_000_000_000)
     active = benchmark._Phase(
-        1, "active", 20_000_000_000, 22_000_000_000, active_seconds=4.0, completed_cascades=2
+        1, "active", 20_000_000_000, 22_000_000_000, active_seconds=4.0, completed_workloads=2
     )
 
-    assert benchmark._pair_row(samples, idle, active)["joules_per_cascade"] == -4.0
+    assert benchmark._pair_row(samples, idle, active)["joules_per_workload"] == -4.0
 
 
-def test_active_phase_rotates_origins_and_counts_completed_cascades(
+def test_active_phase_rotates_origins_and_counts_completed_workloads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
@@ -491,7 +623,12 @@ def test_active_phase_rotates_origins_and_counts_completed_cascades(
     phase = benchmark._active_phase(_energy_cell(events), pair=2, duration_ns=10)
 
     assert phase == benchmark._Phase(
-        pair=2, phase="active", start_ns=100, end_ns=200, active_seconds=13e-9, completed_cascades=3
+        pair=2,
+        phase="active",
+        start_ns=100,
+        end_ns=200,
+        active_seconds=13e-9,
+        completed_workloads=3,
     )
     assert events[::4] == ["model5:2", "model5:4", "model5:0"]
 
@@ -579,7 +716,7 @@ def test_energy_cell_publishes_atomically_and_resumes(
     end = (sample.end_second + 1) * 1_000_000_000
     phases = [
         benchmark._Phase(1, "idle", start, end),
-        benchmark._Phase(1, "active", start, end, active_seconds=2.0, completed_cascades=1),
+        benchmark._Phase(1, "active", start, end, active_seconds=2.0, completed_workloads=1),
     ]
     loads = 0
     captures = 0
@@ -617,6 +754,7 @@ def test_energy_cell_publishes_atomically_and_resumes(
             output,
             "ethereum.lstm",
             _resolved()["ethereum.lstm"],
+            "cpu",
             warmup_iterations=1,
             settings=settings,
         )
@@ -639,6 +777,7 @@ def test_energy_cell_publishes_atomically_and_resumes(
             output,
             "ethereum.lstm",
             _resolved()["ethereum.lstm"],
+            "cpu",
             warmup_iterations=1,
             settings={**settings, "phase_seconds": 2},
         )
@@ -659,10 +798,12 @@ def test_energy_command_reuses_the_existing_protocol(
         target: Path,
         cell: str,
         requests: object,
+        device: str,
         warmup_iterations: int,
         settings: dict[str, int],
     ) -> None:
         del storage_root, target, requests
+        assert device == "cpu"
         units.append((cell, warmup_iterations, settings))
 
     monkeypatch.setattr(benchmark, "_run_energy_unit", run_unit)

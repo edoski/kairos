@@ -237,6 +237,13 @@ def test_experiment_kind_rejects_the_wrong_typed_request(tmp_path: Path) -> None
         author_experiment(
             tmp_path, ExperimentKind.K_STUDY, _EXPERIMENT_ID, [("wrong", _evaluate(1))]
         )
+    campaign = author_experiment(
+        tmp_path,
+        ExperimentKind.COMPARATOR_STUDY,
+        _EXPERIMENT_ID,
+        [("ethereum.transformer.K5", _train())],
+    )
+    assert execution_envelope(campaign.tasks[0]).request == _train()
 
 
 def test_tune_close_validates_objective_and_association(tmp_path: Path) -> None:

@@ -15,6 +15,7 @@ class ExperimentKind(StrEnum):
     C_STUDY = "c_study"
     HPO = "hpo"
     K_STUDY = "k_study"
+    COMPARATOR_STUDY = "comparator_study"
     HELD_OUT = "held_out"
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import plistlib
 import signal
 import subprocess
@@ -11,7 +12,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, TypeVar, cast
+from typing import Annotated, Literal, TypeVar, cast
 from uuid import UUID
 
 import polars as pl
@@ -21,8 +22,8 @@ from pydantic import UUID4, Field
 from servatus import publish, publish_file
 from torch import nn
 
-from kairos.addresses import evaluation_json_path
-from kairos.config import EvaluateRequest
+from kairos.addresses import artifact_checkpoint_path, evaluation_json_path
+from kairos.config import BlockWindow, EvaluateRequest
 from kairos.corpus import load_corpus_blocks
 from kairos.evaluation import ROLLING_HORIZONS
 from kairos.experiments import ExperimentKind, load_experiment_manifest
@@ -34,6 +35,8 @@ from kairos.temporal import HistoricalDataset, prepare_historical_window
 _T = TypeVar("_T")
 
 _POWER_SAMPLE_RATE_MS = 1000
+_CHAINS = ("ethereum", "polygon", "avalanche")
+_LSTM_CELLS = tuple(f"{chain}.lstm" for chain in _CHAINS)
 _POWERMETRICS = (
     "sudo",
     "-n",
@@ -51,16 +54,21 @@ _POWERMETRICS = (
 
 class Selection(StrictFrozenRecord):
     artifact_id: UUID4
-    evaluation_id: UUID4
+    support_evaluation_id: UUID4
+    corpus_id: UUID4
+    testing_window: BlockWindow
 
 
 class Protocol(StrictFrozenRecord):
+    panel: Literal["policy", "architecture"]
     k_study_experiment_id: UUID4
     held_out_experiment_id: UUID4
+    comparator_study_experiment_id: UUID4 | None
     rolling_horizons: tuple[int, ...]
     roster: dict[str, Selection]
     warmup_iterations: Annotated[int, Field(ge=1)]
     sweeps: Annotated[int, Field(ge=1)]
+    device: Literal["cpu", "mps"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +81,7 @@ class _Horizon:
 class _Cell:
     name: str
     horizons: Mapping[int, _Horizon]
+    device: torch.device
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +108,7 @@ class _Phase:
     start_ns: int
     end_ns: int
     active_seconds: float = 0.0
-    completed_cascades: int = 0
+    completed_workloads: int = 0
 
 
 def _power_samples(raw: bytes) -> tuple[_PowerSample, ...]:
@@ -159,7 +168,7 @@ def _pair_row(
 ) -> dict[str, float | int | bool]:
     idle = _phase_power(samples, idle_phase)
     active = _phase_power(samples, active_phase)
-    throughput = active_phase.completed_cascades / active_phase.active_seconds
+    throughput = active_phase.completed_workloads / active_phase.active_seconds
     row: dict[str, float | int | bool] = {
         "pair": idle_phase.pair,
         "idle_samples": idle["samples"],
@@ -173,10 +182,10 @@ def _pair_row(
     row.update(
         {
             "active_seconds": active_phase.active_seconds,
-            "completed_cascades": active_phase.completed_cascades,
-            "cascades_per_second": throughput,
+            "completed_workloads": active_phase.completed_workloads,
+            "workloads_per_second": throughput,
             "thermal_valid": bool(idle["thermal_valid"] and active["thermal_valid"]),
-            "joules_per_cascade": (
+            "joules_per_workload": (
                 (cast(float, active["combined_mw"]) - cast(float, idle["combined_mw"]))
                 / 1000
                 / throughput
@@ -235,7 +244,7 @@ def _phase_record(phase: _Phase) -> dict[str, float | int | str]:
     }
     if phase.phase == "active":
         record["active_seconds"] = phase.active_seconds
-        record["completed_cascades"] = phase.completed_cascades
+        record["completed_workloads"] = phase.completed_workloads
     return record
 
 
@@ -260,7 +269,7 @@ def _write_energy(path: Path, cell: _Cell, settings: dict[str, int]) -> None:
 
 def _resolve(
     storage_root: Path, k_study_experiment_id: UUID, held_out_experiment_id: UUID
-) -> dict[str, dict[int, EvaluateRequest]]:
+) -> dict[str, dict[int, Selection]]:
     k_study = load_experiment_manifest(storage_root, ExperimentKind.K_STUDY, k_study_experiment_id)
     held_out = load_experiment_manifest(
         storage_root, ExperimentKind.HELD_OUT, held_out_experiment_id
@@ -278,19 +287,20 @@ def _resolve(
             horizons = roster.setdefault(group, {})
             horizons[horizon] = object_id
         if (
-            labels != 9 * len(ROLLING_HORIZONS)
-            or len(roster) != 9
+            labels != 3 * len(ROLLING_HORIZONS)
+            or len(roster) != 3
+            or set(roster) != set(_LSTM_CELLS)
             or any(set(horizons) != set(ROLLING_HORIZONS) for horizons in roster.values())
         ):
-            raise ValueError("manifests must contain exactly nine complete rolling groups")
+            raise ValueError("manifests must contain exactly three complete LSTM rolling groups")
         return roster
 
     artifacts = rolling_roster(k_study)
     evaluations = rolling_roster(held_out)
     if artifacts.keys() != evaluations.keys():
-        raise ValueError("manifests must contain exactly nine complete rolling groups")
+        raise ValueError("manifests must contain the same three LSTM rolling groups")
 
-    resolved: dict[str, dict[int, EvaluateRequest]] = {}
+    resolved: dict[str, dict[int, Selection]] = {}
     for group, group_evaluations in evaluations.items():
         for horizon, evaluation_id in group_evaluations.items():
             label = f"{group}.K{horizon}"
@@ -299,30 +309,89 @@ def _resolve(
             )
             if request.artifact_id != artifacts[group][horizon]:
                 raise ValueError(f"{label} evaluation does not name its K-study artifact")
-            resolved.setdefault(group, {})[horizon] = request
+            resolved.setdefault(group, {})[horizon] = Selection(
+                artifact_id=request.artifact_id,
+                support_evaluation_id=request.evaluation_id,
+                corpus_id=request.corpus_id,
+                testing_window=request.testing_window,
+            )
+    return resolved
+
+
+def _resolve_architecture(
+    storage_root: Path,
+    k_study_experiment_id: UUID,
+    held_out_experiment_id: UUID,
+    comparator_study_experiment_id: UUID,
+) -> dict[str, dict[int, Selection]]:
+    policy = _resolve(storage_root, k_study_experiment_id, held_out_experiment_id)
+    comparators = load_experiment_manifest(
+        storage_root, ExperimentKind.COMPARATOR_STUDY, comparator_study_experiment_id
+    )
+    expected = {
+        f"{chain}.{family}.K5"
+        for chain in _CHAINS
+        for family in ("transformer", "transformer_lstm")
+    }
+    if set(comparators) != expected:
+        raise ValueError("comparator manifest must contain two K5 families for every chain")
+
+    resolved: dict[str, dict[int, Selection]] = {}
+    for chain in _CHAINS:
+        template = policy[f"{chain}.lstm"][5]
+        resolved[f"{chain}.lstm"] = {5: template}
+        for family in ("transformer", "transformer_lstm"):
+            label = f"{chain}.{family}.K5"
+            resolved[f"{chain}.{family}"] = {
+                5: template.model_copy(update={"artifact_id": comparators[label]})
+            }
     return resolved
 
 
 def _protocol(
     k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
-    resolved: Mapping[str, Mapping[int, EvaluateRequest]],
+    resolved: Mapping[str, Mapping[int, Selection]],
     warmup_iterations: int,
     sweeps: int,
+    device: Literal["cpu", "mps"] = "cpu",
 ) -> Protocol:
     return Protocol(
+        panel="policy",
         k_study_experiment_id=k_study_experiment_id,
         held_out_experiment_id=held_out_experiment_id,
+        comparator_study_experiment_id=None,
         rolling_horizons=ROLLING_HORIZONS,
         roster={
-            f"{cell}.K{horizon}": Selection(
-                artifact_id=request.artifact_id, evaluation_id=request.evaluation_id
-            )
+            f"{cell}.K{horizon}": request
             for cell, group in resolved.items()
             for horizon, request in group.items()
         },
         warmup_iterations=warmup_iterations,
         sweeps=sweeps,
+        device=device,
+    )
+
+
+def _architecture_protocol(
+    k_study_experiment_id: UUID,
+    held_out_experiment_id: UUID,
+    comparator_study_experiment_id: UUID,
+    resolved: Mapping[str, Mapping[int, Selection]],
+    warmup_iterations: int,
+    sweeps: int,
+    device: Literal["cpu", "mps"] = "cpu",
+) -> Protocol:
+    return Protocol(
+        panel="architecture",
+        k_study_experiment_id=k_study_experiment_id,
+        held_out_experiment_id=held_out_experiment_id,
+        comparator_study_experiment_id=comparator_study_experiment_id,
+        rolling_horizons=(5,),
+        roster={f"{cell}.K5": group[5] for cell, group in resolved.items()},
+        warmup_iterations=warmup_iterations,
+        sweeps=sweeps,
+        device=device,
     )
 
 
@@ -342,15 +411,26 @@ def _ensure_protocol(output: Path, protocol: Protocol) -> None:
     publish_file(path, write_protocol)
 
 
-def _load_cell(storage_root: Path, cell: str, resolved: Mapping[int, EvaluateRequest]) -> _Cell:
+def _load_cell(
+    storage_root: Path,
+    cell: str,
+    resolved: Mapping[int, Selection],
+    device: Literal["cpu", "mps"] = "cpu",
+) -> _Cell:
     corpus = load_corpus_blocks(storage_root, resolved[ROLLING_HORIZONS[0]].corpus_id)
     horizons = {}
     for horizon in reversed(ROLLING_HORIZONS):
+        if horizon not in resolved:
+            continue
         request = resolved[horizon]
         association, model = load_artifact(storage_root, request.artifact_id)
+        if association.request.source.corpus_id != request.corpus_id:
+            raise ValueError(f"{cell}.K{horizon} artifact names a different Corpus")
         experiment = association.training_definition.experiment
+        if experiment.horizon_blocks != horizon:
+            raise ValueError(f"{cell}.K{horizon} artifact has the wrong horizon")
         horizons[horizon] = _Horizon(
-            model=model,
+            model=model.eval().to(device),
             dataset=prepare_historical_window(
                 corpus,
                 experiment,
@@ -359,12 +439,12 @@ def _load_cell(storage_root: Path, cell: str, resolved: Mapping[int, EvaluateReq
                 target_state=association.target_state,
             ),
         )
-    return _Cell(name=cell, horizons=horizons)
+    return _Cell(name=cell, horizons=horizons, device=torch.device(device))
 
 
-def _batch(item: _Horizon, index: int) -> tuple[int, torch.Tensor]:
+def _batch(item: _Horizon, index: int, device: torch.device) -> tuple[int, torch.Tensor]:
     sample = item.dataset[index]
-    return int(sample["origin_block"]), sample["inputs"].unsqueeze(0)
+    return int(sample["origin_block"]), sample["inputs"].unsqueeze(0).to(device)
 
 
 def _infer(model: nn.Module, inputs: torch.Tensor) -> None:
@@ -375,7 +455,7 @@ def _infer(model: nn.Module, inputs: torch.Tensor) -> None:
 def _workload_inputs(
     cell: _Cell, horizons: Sequence[int], index: int
 ) -> tuple[int, tuple[torch.Tensor, ...]]:
-    batches = tuple(_batch(cell.horizons[horizon], index) for horizon in horizons)
+    batches = tuple(_batch(cell.horizons[horizon], index, cell.device) for horizon in horizons)
     origin = batches[0][0]
     if any(batch_origin != origin for batch_origin, _ in batches):
         raise ValueError("cascade horizons do not contain the required same origin")
@@ -387,12 +467,18 @@ def _run_workload(cell: _Cell, horizons: Sequence[int], inputs: Sequence[torch.T
         _infer(cell.horizons[horizon].model, inputs[index])
 
 
+def _synchronize(device: torch.device) -> None:
+    if device.type == "mps":
+        torch.mps.synchronize()
+
+
 def _warm(cell: _Cell, iterations: int) -> None:
-    for horizon in reversed(ROLLING_HORIZONS):
+    for horizon in cell.horizons:
         item = cell.horizons[horizon]
-        _, inputs = _batch(item, 0)
+        _, inputs = _batch(item, 0, cell.device)
         for _ in range(iterations):
             _infer(item.model, inputs)
+    _synchronize(cell.device)
 
 
 def _rotate(values: Sequence[_T], offset: int) -> tuple[_T, ...]:
@@ -407,9 +493,15 @@ def _pass_order(sweep: int) -> tuple[_Workload, ...]:
     return _rotate((*standalone, _Workload("cascade", ROLLING_HORIZONS)), sweep - 1)
 
 
-def _time_cell(cell: _Cell, sweep: int) -> pl.DataFrame:
+def _architecture_pass_order() -> tuple[_Workload, ...]:
+    return (_Workload("k5", (5,)),)
+
+
+def _time_cell(
+    cell: _Cell, sweep: int, workloads: Sequence[_Workload] | None = None
+) -> pl.DataFrame:
     rows = []
-    for pass_order, workload in enumerate(_pass_order(sweep)):
+    for pass_order, workload in enumerate(workloads or _pass_order(sweep)):
         source = cell.horizons[workload.horizons[0]]
         if any(
             len(cell.horizons[horizon].dataset) < len(source.dataset)
@@ -418,8 +510,10 @@ def _time_cell(cell: _Cell, sweep: int) -> pl.DataFrame:
             raise ValueError(f"{workload.name} horizons do not contain all required origins")
         for index in range(len(source.dataset)):
             origin, inputs = _workload_inputs(cell, workload.horizons, index)
+            _synchronize(cell.device)
             start = time.perf_counter_ns()
             _run_workload(cell, workload.horizons, inputs)
+            _synchronize(cell.device)
             elapsed = time.perf_counter_ns() - start
             rows.append(
                 {
@@ -435,15 +529,17 @@ def _time_cell(cell: _Cell, sweep: int) -> pl.DataFrame:
 
 
 def _active_phase(cell: _Cell, pair: int, duration_ns: int) -> _Phase:
-    origin_count = len(cell.horizons[ROLLING_HORIZONS[0]].dataset)
+    horizons = tuple(horizon for horizon in ROLLING_HORIZONS if horizon in cell.horizons)
+    origin_count = len(cell.horizons[horizons[0]].dataset)
     start_ns = time.time_ns()
     start = time.perf_counter_ns()
     deadline = start + duration_ns
     completed = 0
     while time.perf_counter_ns() < deadline:
         index = (pair - 1 + completed) % origin_count
-        _, inputs = _workload_inputs(cell, ROLLING_HORIZONS, index)
-        _run_workload(cell, ROLLING_HORIZONS, inputs)
+        _, inputs = _workload_inputs(cell, horizons, index)
+        _run_workload(cell, horizons, inputs)
+        _synchronize(cell.device)
         completed += 1
     elapsed = time.perf_counter_ns() - start
     return _Phase(
@@ -452,7 +548,7 @@ def _active_phase(cell: _Cell, pair: int, duration_ns: int) -> _Phase:
         start_ns=start_ns,
         end_ns=time.time_ns(),
         active_seconds=elapsed / 1_000_000_000,
-        completed_cascades=completed,
+        completed_workloads=completed,
     )
 
 
@@ -462,15 +558,19 @@ def _run_unit(
     protocol: Protocol,
     cell_name: str,
     sweep: int,
-    resolved: Mapping[int, EvaluateRequest],
+    resolved: Mapping[int, Selection],
 ) -> None:
     path = output / "latency" / cell_name / f"sweep-{sweep:03d}.parquet"
     if path.exists():
         return
-    cell = _load_cell(storage_root, cell_name, resolved)
+    cell = _load_cell(storage_root, cell_name, resolved, protocol.device)
     with torch.inference_mode():
         _warm(cell, protocol.warmup_iterations)
-        rows = _time_cell(cell, sweep)
+        rows = _time_cell(
+            cell,
+            sweep,
+            _architecture_pass_order() if protocol.panel == "architecture" else None,
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     publish_file(path, rows.write_parquet)
 
@@ -479,7 +579,8 @@ def _run_energy_unit(
     storage_root: Path,
     output: Path,
     cell_name: str,
-    resolved: Mapping[int, EvaluateRequest],
+    resolved: Mapping[int, Selection],
+    device: Literal["cpu", "mps"],
     warmup_iterations: int,
     settings: dict[str, int],
 ) -> None:
@@ -489,7 +590,7 @@ def _run_energy_unit(
         if existing["settings"] != settings:
             raise ValueError(f"existing energy settings do not match: {cell_name}")
         return
-    cell = _load_cell(storage_root, cell_name, resolved)
+    cell = _load_cell(storage_root, cell_name, resolved, device)
     with torch.inference_mode():
         _warm(cell, warmup_iterations)
         subprocess.run(("/usr/bin/sudo", "-v"), check=True)
@@ -497,25 +598,127 @@ def _run_energy_unit(
         publish(path, lambda draft: _write_energy(draft.path, cell, settings))
 
 
-def run_cpu(
+def _require_device(device: Literal["cpu", "mps"]) -> Literal["cpu", "mps"]:
+    if device == "mps":
+        if os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK") != "0":
+            raise RuntimeError("MPS benchmarks require PYTORCH_ENABLE_MPS_FALLBACK=0")
+        if not torch.backends.mps.is_built() or not torch.backends.mps.is_available():
+            raise RuntimeError("MPS is not available")
+    return device
+
+
+def _run_latency(
+    storage_root: Path,
+    output: Path,
+    protocol: Protocol,
+    resolved: Mapping[str, Mapping[int, Selection]],
+) -> None:
+    _ensure_protocol(output, protocol)
+    cells = tuple(resolved)
+    for sweep in range(1, protocol.sweeps + 1):
+        for cell in _rotate(cells, sweep - 1):
+            _run_unit(storage_root, output, protocol, cell, sweep, resolved[cell])
+
+
+def run_policy_latency(
     storage_root: Path,
     k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
     output: Path,
     warmup_iterations: int,
     sweeps: int,
+    device: Literal["cpu", "mps"],
 ) -> None:
-    """Validate, resume, and complete one CPU latency campaign."""
+    """Validate, resume, and complete the LSTM policy latency panel."""
 
+    device = _require_device(device)
     resolved = _resolve(storage_root, k_study_experiment_id, held_out_experiment_id)
     protocol = _protocol(
-        k_study_experiment_id, held_out_experiment_id, resolved, warmup_iterations, sweeps
+        k_study_experiment_id,
+        held_out_experiment_id,
+        resolved,
+        warmup_iterations,
+        sweeps,
+        device,
     )
-    _ensure_protocol(output, protocol)
-    cells = tuple(resolved)
-    for sweep in range(1, sweeps + 1):
-        for cell in _rotate(cells, sweep - 1):
-            _run_unit(storage_root, output, protocol, cell, sweep, resolved[cell])
+    _run_latency(storage_root, output, protocol, resolved)
+
+
+def run_architecture_latency(
+    storage_root: Path,
+    k_study_experiment_id: UUID,
+    held_out_experiment_id: UUID,
+    comparator_study_experiment_id: UUID,
+    output: Path,
+    warmup_iterations: int,
+    sweeps: int,
+    device: Literal["cpu", "mps"],
+) -> None:
+    """Validate, resume, and complete the matched K5 architecture latency panel."""
+
+    device = _require_device(device)
+    resolved = _resolve_architecture(
+        storage_root,
+        k_study_experiment_id,
+        held_out_experiment_id,
+        comparator_study_experiment_id,
+    )
+    protocol = _architecture_protocol(
+        k_study_experiment_id,
+        held_out_experiment_id,
+        comparator_study_experiment_id,
+        resolved,
+        warmup_iterations,
+        sweeps,
+        device,
+    )
+    _run_latency(storage_root, output, protocol, resolved)
+
+
+def _resolve_protocol(
+    storage_root: Path, protocol: Protocol
+) -> dict[str, dict[int, Selection]]:
+    if protocol.panel == "policy":
+        if protocol.comparator_study_experiment_id is not None:
+            raise ValueError("policy protocol cannot name a comparator experiment")
+        return _resolve(
+            storage_root, protocol.k_study_experiment_id, protocol.held_out_experiment_id
+        )
+    comparator_id = protocol.comparator_study_experiment_id
+    if comparator_id is None:
+        raise ValueError("architecture protocol must name a comparator experiment")
+    return _resolve_architecture(
+        storage_root,
+        protocol.k_study_experiment_id,
+        protocol.held_out_experiment_id,
+        comparator_id,
+    )
+
+
+def _expected_protocol(
+    protocol: Protocol, resolved: Mapping[str, Mapping[int, Selection]]
+) -> Protocol:
+    if protocol.panel == "policy":
+        return _protocol(
+            protocol.k_study_experiment_id,
+            protocol.held_out_experiment_id,
+            resolved,
+            protocol.warmup_iterations,
+            protocol.sweeps,
+            protocol.device,
+        )
+    comparator_id = protocol.comparator_study_experiment_id
+    if comparator_id is None:
+        raise ValueError("architecture protocol must name a comparator experiment")
+    return _architecture_protocol(
+        protocol.k_study_experiment_id,
+        protocol.held_out_experiment_id,
+        comparator_id,
+        resolved,
+        protocol.warmup_iterations,
+        protocol.sweeps,
+        protocol.device,
+    )
 
 
 def run_energy(
@@ -524,19 +727,9 @@ def run_energy(
     """Resume and complete one powermetrics energy campaign."""
 
     protocol = Protocol.model_validate_json((output / "protocol.json").read_bytes())
-    resolved = _resolve(
-        storage_root, protocol.k_study_experiment_id, protocol.held_out_experiment_id
-    )
-    _ensure_protocol(
-        output,
-        _protocol(
-            protocol.k_study_experiment_id,
-            protocol.held_out_experiment_id,
-            resolved,
-            protocol.warmup_iterations,
-            protocol.sweeps,
-        ),
-    )
+    _require_device(protocol.device)
+    resolved = _resolve_protocol(storage_root, protocol)
+    _ensure_protocol(output, _expected_protocol(protocol, resolved))
     settings = {
         "pairs": pairs,
         "phase_seconds": phase_seconds,
@@ -544,28 +737,98 @@ def run_energy(
         "sample_rate_ms": _POWER_SAMPLE_RATE_MS,
     }
     for cell, requests in resolved.items():
-        _run_energy_unit(storage_root, output, cell, requests, protocol.warmup_iterations, settings)
+        _run_energy_unit(
+            storage_root,
+            output,
+            cell,
+            requests,
+            protocol.device,
+            protocol.warmup_iterations,
+            settings,
+        )
+
+
+def run_footprint(storage_root: Path, output: Path) -> None:
+    """Measure the matched architecture checkpoints and parameter counts."""
+
+    protocol = Protocol.model_validate_json((output / "protocol.json").read_bytes())
+    if protocol.panel != "architecture":
+        raise ValueError("footprint requires an architecture protocol")
+    resolved = _resolve_protocol(storage_root, protocol)
+    _ensure_protocol(output, _expected_protocol(protocol, resolved))
+    path = output / "footprint.parquet"
+    if path.exists():
+        return
+
+    rows = []
+    for label, selection in sorted(protocol.roster.items()):
+        association, model = load_artifact(storage_root, selection.artifact_id)
+        if association.request.source.corpus_id != selection.corpus_id:
+            raise ValueError(f"{label} artifact names a different Corpus")
+        if association.training_definition.experiment.horizon_blocks != 5:
+            raise ValueError(f"{label} artifact has the wrong horizon")
+        rows.append(
+            {
+                "cell": label.removesuffix(".K5"),
+                "artifact_id": str(selection.artifact_id),
+                "checkpoint_bytes": artifact_checkpoint_path(
+                    storage_root, selection.artifact_id
+                ).stat().st_size,
+                "parameters": sum(parameter.numel() for parameter in model.parameters()),
+                "trainable_parameters": sum(
+                    parameter.numel() for parameter in model.parameters() if parameter.requires_grad
+                ),
+            }
+        )
+    publish_file(path, pl.DataFrame(rows).write_parquet)
 
 
 StorageRoot = Annotated[Path, typer.Argument(resolve_path=True, exists=True, file_okay=False)]
 Output = Annotated[Path, typer.Argument(resolve_path=True, file_okay=False)]
 
 
-def cpu(
+Device = Annotated[Literal["cpu", "mps"], typer.Option()]
+
+
+def policy_latency(
     storage_root: StorageRoot,
     k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
     output: Output,
     warmup_iterations: Annotated[int, typer.Option(min=1)],
     sweeps: Annotated[int, typer.Option(min=1)] = 10,
+    device: Device = "cpu",
 ) -> None:
-    run_cpu(
+    run_policy_latency(
         storage_root,
         k_study_experiment_id,
         held_out_experiment_id,
         output,
         warmup_iterations,
         sweeps,
+        device,
+    )
+
+
+def architecture_latency(
+    storage_root: StorageRoot,
+    k_study_experiment_id: UUID,
+    held_out_experiment_id: UUID,
+    comparator_study_experiment_id: UUID,
+    output: Output,
+    warmup_iterations: Annotated[int, typer.Option(min=1)],
+    sweeps: Annotated[int, typer.Option(min=1)] = 10,
+    device: Device = "cpu",
+) -> None:
+    run_architecture_latency(
+        storage_root,
+        k_study_experiment_id,
+        held_out_experiment_id,
+        comparator_study_experiment_id,
+        output,
+        warmup_iterations,
+        sweeps,
+        device,
     )
 
 
@@ -579,9 +842,15 @@ def energy(
     run_energy(storage_root, output, pairs, phase_seconds, recovery_seconds)
 
 
+def footprint(storage_root: StorageRoot, output: Output) -> None:
+    run_footprint(storage_root, output)
+
+
 app = typer.Typer(add_completion=False)
-app.command()(cpu)
+app.command()(policy_latency)
+app.command()(architecture_latency)
 app.command()(energy)
+app.command()(footprint)
 
 
 if __name__ == "__main__":

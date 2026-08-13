@@ -52,8 +52,9 @@ conflict with them. ADR 0007 is superseded.
 - Proposed implementation branch: `codex/app-ownership-simplification`; name was free at planning
 - Proposed implementation worktree: `/Users/edo/dev/python/kairos-app-ownership-simplification`;
   path was free at planning
-- Implementation baseline, planning commit, worker identities, and review refs: record immediately
-  before dispatch; none exists yet
+- Planning/first-slice baseline commit:
+  `5c2fec6d481b565597086c41718bbedc65d29880`
+- Slice 1 product head: `fca527c699622a350d401e32bc162aa0cc77203d`
 - Main checkout after isolation: clean at `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`
 - Concurrent task `019fea73-abd5-7a51-9681-f0443f647884` was notified before implementation.
   It expects no `app/` product overlap, but may later change KAIROS execution code and shared docs.
@@ -241,17 +242,31 @@ interfaces, and guarantees may not drift without updating this ledger and obtain
 
 ## Slice 1 - One inference runtime and local native lifecycle
 
-Status: authorized; isolated baseline preparation
+Status: independently green
 
 ### Execution record
 
-- Immutable slice baseline: record immediately before dispatch; must include this ledger
-- Checkout and status: record immediately before dispatch
+- Immutable slice baseline: `5c2fec6d481b565597086c41718bbedc65d29880`
+- Checkout: `/Users/edo/dev/python/kairos-app-ownership-simplification` on
+  `codex/app-ownership-simplification`; clean at dispatch
 - Allowed writer scope: inference/model/RPC ownership, the narrow App lifecycle wiring it exposes,
   focused tests, and directly affected current mobile documentation
-- Implementer: unassigned; must be fresh and read/use the `implement` skill
-- Reviewer: unassigned; must be distinct and read/use the `code-review` skill
-- Implementation head, review range, result, and correction rounds: pending
+- Implementer: `/root/slice1_implement`; read/used the `implement` skill
+- Implementation head: `fca527c699622a350d401e32bc162aa0cc77203d`
+- Reviewer: `/root/slice1_review`; distinct and read/used the `code-review` skill with separate
+  `/root/slice1_review/standards_axis` and `/root/slice1_review/spec_axis` workers
+- Fixed review range:
+  `5c2fec6d481b565597086c41718bbedc65d29880...fca527c699622a350d401e32bc162aa0cc77203d`
+- Review result: `GREEN LIGHT`; Standards 0 findings, Spec 0 findings
+- Correction rounds: none
+- Implementer checks: focused inference/model 17 passed; focused App/history 12 passed; full app
+  suite 44 passed; normal and strict-unused TypeScript passed; Expo Doctor 19/19 passed;
+  `git diff --check` and residue audit passed
+- Orchestrator integration check: App/inference/model 26 passed; branch and main statuses clean;
+  fixed commit list and changed-path scope verified. An initial Jest-only `--runInBand` flag was
+  rejected by Vitest before test execution; the corrected Vitest command passed.
+- Explicitly unrun: generated model assets, native simulator/device, real ExecuTorch, real RPC,
+  exporter parity, and visual acceptance
 
 ### Scope
 

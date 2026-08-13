@@ -11,8 +11,7 @@ from servatus import Task
 
 from kairos.config import EvaluateRequest, TuneRequest
 from kairos.study import RetainedResult, Study
-from kairos.workers import CandidateProcessInput, candidate_task, workflow_task
-from tests.experiments.helpers import publish_generated_studies
+from kairos.workers import execution_task
 from tests.helpers import (
     dispatch,
     fake_campaign,
@@ -70,18 +69,17 @@ def _write_workflow_bundle(root: Path, count: int) -> tuple[Path, list[EvaluateR
     return bundle, values
 
 
-def _launch_args(bundle: Path, target: Path, resources: Path) -> tuple[str, ...]:
-    return (str(bundle), "--target", str(target), "--resources", str(resources))
+def _launch_args(bundle: Path) -> tuple[str, ...]:
+    return (str(bundle),)
 
 
 def _candidate_tasks(bundle: Path) -> tuple[list[dict[str, str]], tuple[Task, ...]]:
     rows = read_tsv_rows(bundle / "cells.tsv")
     return rows, tuple(
-        candidate_task(
-            CandidateProcessInput(
-                request=TuneRequest.model_validate_json(Path(row["request"]).read_bytes()),
-                method_index=int(row["method_index"]),
-            )
+        execution_task(
+            TuneRequest.model_validate_json(Path(row["request"]).read_bytes()),
+            method_index=int(row["method_index"]),
+            cell=row["cell"],
         )
         for row in rows
     )
@@ -117,17 +115,18 @@ def test_hpo_extend_reopens_campaign_with_exact_authored_suffix(
     hpo.prepare(tmp_path, context_id, ["ethereum"])
     hpo_id = UUID(capsys.readouterr().out.strip())
     bundle = tmp_path / "experiments" / "hpo" / f".{hpo_id}"
-    target, resources = write_servatus_config(tmp_path)
+    write_servatus_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
     launcher = _load_launcher(monkeypatch)
     open_campaign, campaign = fake_campaign(monkeypatch, launcher)
 
     _, initial_tasks = _candidate_tasks(bundle)
-    first = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
+    first = dispatch(launcher.app, "candidates", *_launch_args(bundle))
 
     hpo.extend(tmp_path, context_id, hpo_id, ["avalanche"])
     capsys.readouterr()
     _, full_tasks = _candidate_tasks(bundle)
-    second = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
+    second = dispatch(launcher.app, "candidates", *_launch_args(bundle))
 
     assert first.exit_code == 0
     assert second.exit_code == 0
@@ -135,66 +134,88 @@ def test_hpo_extend_reopens_campaign_with_exact_authored_suffix(
     assert full_tasks[:27] == initial_tasks
     assert len(full_tasks) == 54
     assert [call.args for call in open_campaign.call_args_list] == [
-        (bundle / ".servatus", initial_tasks),
-        (bundle / ".servatus", full_tasks),
+        (tmp_path / "experiments" / ".servatus" / "hpo" / str(hpo_id), initial_tasks),
+        (tmp_path / "experiments" / ".servatus" / "hpo" / str(hpo_id), full_tasks),
     ]
     assert [call.kwargs for call in campaign.plan.call_args_list] == [
-        {"completed": set(), "retry": (), "tasks_per_allocation": None},
-        {"completed": set(), "retry": (), "tasks_per_allocation": None},
+        {"view": campaign.inspect.return_value, "retry": (), "tasks_per_allocation": None},
+        {"view": campaign.inspect.return_value, "retry": (), "tasks_per_allocation": None},
     ]
     assert campaign.submit.call_count == 2
 
 
-def test_candidates_skip_exact_canonical_studies(
+def test_candidates_plan_from_campaign_result_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     experiment_id = UUID(run_script(_FEATURE_SCRIPT, "prepare", tmp_path).stdout.strip())
     bundle = tmp_path / "experiments" / "feature_ablation" / f".{experiment_id}"
-    rows = read_tsv_rows(bundle / "cells.tsv")
-    publish_generated_studies(tmp_path, rows[:9], default_objective=1.0)
-    target, resources = write_servatus_config(tmp_path)
+    write_servatus_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
     launcher = _load_launcher(monkeypatch)
     _, campaign = fake_campaign(monkeypatch, launcher)
 
-    result = dispatch(launcher.app, "candidates", *_launch_args(bundle, target, resources))
+    result = dispatch(launcher.app, "candidates", *_launch_args(bundle))
 
     assert result.exit_code == 0
-    expected_completed = {
-        candidate_task(
-            CandidateProcessInput(
-                request=TuneRequest.model_validate_json(Path(row["request"]).read_bytes()),
-                method_index=int(row["method_index"]),
-            )
-        ).key
-        for row in rows[:9]
-    }
+    campaign.inspect.assert_called_once()
     assert campaign.plan.call_args.kwargs == {
-        "completed": expected_completed,
+        "view": campaign.inspect.return_value,
         "retry": (),
         "tasks_per_allocation": None,
     }
+
+
+def test_candidates_require_one_request_per_study(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = TuneRequest.model_validate_json(
+        Path(
+            read_tsv_rows(
+                tmp_path
+                / "experiments"
+                / "feature_ablation"
+                / f".{UUID(run_script(_FEATURE_SCRIPT, 'prepare', tmp_path).stdout.strip())}"
+                / "cells.tsv"
+            )[0]["request"]
+        ).read_bytes()
+    )
+    second = first.model_copy(update={"corpus_id": UUID("90000000-0000-4000-8000-000000000001")})
+    bundle = tmp_path / "experiments" / "hpo" / ".bundle"
+    (bundle / "requests").mkdir(parents=True)
+    paths = (bundle / "requests" / "0.json", bundle / "requests" / "1.json")
+    paths[0].write_text(first.model_dump_json(), encoding="utf-8")
+    paths[1].write_text(second.model_dump_json(), encoding="utf-8")
+    with (bundle / "cells.tsv").open("x", newline="", encoding="utf-8") as destination:
+        writer = csv.writer(destination, delimiter="\t", lineterminator="\n")
+        writer.writerow(("cell", "request", "method_index", "study_id"))
+        writer.writerow(("first", paths[0], 0, first.study_id))
+        writer.writerow(("second", paths[1], 0, first.study_id))
+    write_servatus_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    launcher = _load_launcher(monkeypatch)
+
+    result = dispatch(launcher.app, "candidates", str(bundle))
+
+    assert result.exit_code == 1
+    assert str(result.exception) == "experiment candidates disagree on one Study request"
 
 
 def test_workflows_submit_ordered_tasks_with_completion_retry_and_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     bundle, requests = _write_workflow_bundle(tmp_path, 9)
-    canonical = tmp_path / "evaluations" / str(requests[0].evaluation_id)
-    canonical.mkdir(parents=True)
-    (canonical / "evaluation.json").write_text(requests[0].model_dump_json(), encoding="utf-8")
-    observations = canonical / "observations.parquet"
-    observations.touch()
-    target, resources = write_servatus_config(tmp_path)
+    write_servatus_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
     launcher = _load_launcher(monkeypatch)
-    validated: list[Path] = []
-    monkeypatch.setattr(launcher, "validate_observations", validated.append)
     open_campaign, campaign = fake_campaign(monkeypatch, launcher)
-    retry_key = workflow_task(requests[-1]).key
+    retry_key = execution_task(requests[-1], cell="cell-8").key
 
     result = dispatch(
         launcher.app,
         "workflows",
-        *_launch_args(bundle, target, resources),
+        *_launch_args(bundle),
+        "--profile",
+        "OTHER",
         "--tasks-per-job",
         "4",
         "--retry",
@@ -203,33 +224,17 @@ def test_workflows_submit_ordered_tasks_with_completion_retry_and_receipt(
 
     assert result.exit_code == 0
     assert result.output == "1001;research\n"
-    assert validated == [observations]
-    tasks = tuple(workflow_task(request) for request in requests)
-    assert open_campaign.call_args.args == (bundle / ".servatus", tasks)
-    loaded_target, loaded_resources = campaign.plan.call_args.args
-    assert loaded_target.host == "research-alias"
-    assert loaded_resources.gpus_per_task == 1
+    tasks = tuple(
+        execution_task(request, cell=f"cell-{index}") for index, request in enumerate(requests)
+    )
+    assert open_campaign.call_args.args == (
+        tmp_path / "experiments" / ".servatus" / "held_out" / "bundle",
+        tasks,
+    )
+    profile = campaign.plan.call_args.args[0]
+    assert profile.label == "OTHER"
     assert campaign.plan.call_args.kwargs == {
-        "completed": {tasks[0].key},
+        "view": campaign.inspect.return_value,
         "retry": [retry_key],
         "tasks_per_allocation": 4,
     }
-
-
-@pytest.mark.parametrize("gpus_per_task", [0, 2])
-def test_kairos_requires_one_explicit_gpu_per_task(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gpus_per_task: int
-) -> None:
-    bundle, _ = _write_workflow_bundle(tmp_path, 2)
-    target, resources = write_servatus_config(tmp_path)
-    resources.write_text(
-        resources.read_text().replace("gpus_per_task = 1", f"gpus_per_task = {gpus_per_task}"),
-        encoding="utf-8",
-    )
-    launcher = _load_launcher(monkeypatch)
-
-    result = dispatch(launcher.app, "workflows", *_launch_args(bundle, target, resources))
-
-    assert result.exit_code == 1
-    assert isinstance(result.exception, ValueError)
-    assert str(result.exception) == "KAIROS experiment tasks require exactly one GPU"

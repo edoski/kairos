@@ -57,8 +57,8 @@ def test_close_preserves_bundle_after_verifier_failure_then_retries(
     bundle = open_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID)
     assert stat.S_IMODE(bundle.stat().st_mode) == 0o700
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
-    campaign = bundle / ".servatus"
-    campaign.mkdir()
+    campaign = tmp_path / "experiments" / ".servatus" / "feature_ablation" / str(_EXPERIMENT_ID)
+    campaign.mkdir(parents=True)
     (campaign / "sentinel").write_bytes(b"opaque campaign state")
     inputs = {
         path.relative_to(bundle): path.read_bytes() for path in bundle.rglob("*") if path.is_file()
@@ -98,6 +98,7 @@ def test_close_preserves_bundle_after_verifier_failure_then_retries(
     }
     assert {path.name for path in canonical.iterdir()} == {"manifest.json"}
     assert not bundle.exists()
+    assert (campaign / "sentinel").read_bytes() == b"opaque campaign state"
 
 
 def test_publication_failure_preserves_authored_bundle(
@@ -105,8 +106,8 @@ def test_publication_failure_preserves_authored_bundle(
 ) -> None:
     bundle = open_bundle(tmp_path, ExperimentKind.FEATURE_ABLATION, _EXPERIMENT_ID)
     write_tune_cells(bundle, [("ethereum.lstm.full", _request())])
-    campaign = bundle / ".servatus"
-    campaign.mkdir()
+    campaign = tmp_path / "experiments" / ".servatus" / "feature_ablation" / str(_EXPERIMENT_ID)
+    campaign.mkdir(parents=True)
     sentinel = campaign / "sentinel"
     sentinel.write_bytes(b"opaque campaign state")
 

@@ -119,11 +119,41 @@ def load_study(storage_root: Path, study_id: UUID) -> Study:
     return study
 
 
+def candidate_result_directory(storage_root: Path, request: TuneRequest, method_index: int) -> Path:
+    request.method_at(method_index)
+    parent = Workspace(
+        study_directory(storage_root, request.study_id), identity=request.study_id.bytes
+    )
+    return parent.child(f"trial-{method_index}", identity=request.model_dump_json().encode()).path
+
+
+def load_candidate_result(
+    storage_root: Path, request: TuneRequest, method_index: int
+) -> RetainedResult:
+    path = candidate_result_directory(storage_root, request, method_index)
+    candidate = _load_candidate_result_path(path)
+    if candidate.request != request:
+        raise ValueError("candidate request does not match execution task")
+    _validate_trial(path, request, method_index, candidate.result)
+    return candidate.result
+
+
 def reduce_study(storage_root: Path, study_id: UUID) -> pl.DataFrame:
+    return _reduce_study(storage_root, load_study(storage_root, study_id))
+
+
+def load_validated_study(storage_root: Path, study_id: UUID) -> Study:
     study = load_study(storage_root, study_id)
+    _reduce_study(storage_root, study)
+    return study
+
+
+def _reduce_study(storage_root: Path, study: Study) -> pl.DataFrame:
     reductions = []
     for method_index, result in enumerate(study.trials):
-        observations_path = study_trial_observations_path(storage_root, study_id, method_index)
+        observations_path = study_trial_observations_path(
+            storage_root, study.request.study_id, method_index
+        )
         metrics = reduce_observations(observations_path)
         if result.objective != metrics["base_fee_optimality_gap"][0]:
             raise ValueError("Study objective must equal validation observations")

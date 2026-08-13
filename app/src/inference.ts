@@ -2,6 +2,7 @@ import { buildModelInput } from "./features";
 import type { Chain, Horizon } from "./domain";
 import { createDefaultModelCatalog, createModelRuntime } from "./model";
 import type {
+  ModelCatalog,
   ModelOutput,
   ModelRuntime,
   ModelSelection,
@@ -25,29 +26,31 @@ export type InferenceOutcome = {
   selected_base_fee_per_gas: number;
 };
 
-export type InferenceEngine = {
-  currentHead(): Promise<number>;
-  run(K: Horizon): Promise<InferenceResult>;
+export type InferenceRuntime = {
+  currentHead(chain: Chain): Promise<number>;
+  run(chain: Chain, K: Horizon): Promise<InferenceResult>;
   resolveOutcome(
+    chain: Chain,
     immediateBlock: number,
     selectedBlock: number,
   ): Promise<InferenceOutcome>;
   dispose(): Promise<void>;
 };
 
-export type InferenceEngineDependencies = {
+export type InferenceRuntimeDependencies = {
+  catalog: ModelCatalog;
   model: ModelRuntime;
-  selectModel(K: Horizon): ModelSelection;
-  session: ChainSession;
+  sessions: Readonly<Record<Chain, ChainSession>>;
 };
 
-export function createInferenceEngine(
-  chain: Chain,
-  dependencies: InferenceEngineDependencies = defaultDependencies(chain),
-): InferenceEngine {
-  const { model, selectModel, session } = dependencies;
-  async function run(K: Horizon): Promise<InferenceResult> {
-    const selection = selectModel(K);
+export function createInferenceRuntime(
+  dependencies: InferenceRuntimeDependencies = defaultDependencies(),
+): InferenceRuntime {
+  const { catalog, model, sessions } = dependencies;
+
+  async function run(chain: Chain, K: Horizon): Promise<InferenceResult> {
+    const selection = catalog.select(chain, K);
+    const session = sessions[chain];
     const context = await attempt("Could not read the selected chain.", () =>
       session.sync(),
     );
@@ -87,16 +90,19 @@ export function createInferenceEngine(
     });
   }
 
-  async function currentHead(): Promise<number> {
+  async function currentHead(chain: Chain): Promise<number> {
+    const session = sessions[chain];
     return attempt("Could not read the selected chain.", async () =>
       safeBigInt(await session.readHead(), "head block"),
     );
   }
 
   async function resolveOutcome(
+    chain: Chain,
     immediateBlock: number,
     selectedBlock: number,
   ): Promise<InferenceOutcome> {
+    const session = sessions[chain];
     const immediate = BigInt(immediateBlock);
     const selected = BigInt(selectedBlock);
     const outcome = await session.readOutcome(immediate, selected);
@@ -122,13 +128,25 @@ export function createInferenceEngine(
   };
 }
 
-function defaultDependencies(chain: Chain): InferenceEngineDependencies {
+function defaultDependencies(): InferenceRuntimeDependencies {
   const catalog = createDefaultModelCatalog();
-  const manifest = catalog.chainManifest(chain);
   return {
+    catalog,
     model: createModelRuntime(),
-    selectModel: (K) => catalog.select(chain, K),
-    session: createChainSession(chain, manifest),
+    sessions: Object.freeze({
+      ethereum: createChainSession(
+        "ethereum",
+        catalog.chainManifest("ethereum"),
+      ),
+      polygon: createChainSession(
+        "polygon",
+        catalog.chainManifest("polygon"),
+      ),
+      avalanche: createChainSession(
+        "avalanche",
+        catalog.chainManifest("avalanche"),
+      ),
+    }),
   };
 }
 

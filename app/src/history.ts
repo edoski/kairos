@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import type { Chain } from "./domain";
 import type {
-  InferenceEngine,
   InferenceOutcome,
   InferenceResult,
 } from "./inference";
@@ -37,7 +36,10 @@ export async function resolvePendingRuns(
   runs: readonly InferenceRun[],
   chain: Chain,
   headBlock: number,
-  resolveOutcome: InferenceEngine["resolveOutcome"],
+  resolveOutcome: (
+    immediateBlock: number,
+    selectedBlock: number,
+  ) => Promise<InferenceOutcome>,
 ): Promise<InferenceRun[]> {
   return Promise.all(
     runs.map(async (run) => {

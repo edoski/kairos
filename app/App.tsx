@@ -12,8 +12,8 @@ import {
   type InferenceRun,
 } from "./src/history";
 import {
-  createInferenceEngine,
-  type InferenceEngine,
+  createInferenceRuntime,
+  type InferenceRuntime,
 } from "./src/inference";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
 import {
@@ -22,11 +22,6 @@ import {
 } from "./src/screens/InferenceScreen";
 import { createSerialQueue } from "./src/serialQueue";
 import { colors } from "./src/theme";
-
-type ActiveEngine = {
-  chain: Chain;
-  engine: InferenceEngine;
-};
 
 type Selection = {
   chain: Chain;
@@ -46,7 +41,7 @@ export default function App() {
   });
   const [runs, setRuns] = useState<InferenceRun[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const activeEngine = useRef<ActiveEngine | null>(null);
+  const activeRuntime = useRef<InferenceRuntime | null>(null);
   const selectionState = useRef({
     applied: INITIAL_SELECTION,
     intended: INITIAL_SELECTION,
@@ -97,20 +92,16 @@ export default function App() {
   }, [enqueueOrderedUpdate]);
 
   useEffect(() => {
-    const engine = createInferenceEngine(selection.chain);
-    const current: ActiveEngine = {
-      chain: selection.chain,
-      engine,
-    };
-    activeEngine.current = current;
+    const runtime = createInferenceRuntime();
+    activeRuntime.current = runtime;
 
     return () => {
-      if (activeEngine.current === current) {
-        activeEngine.current = null;
+      if (activeRuntime.current === runtime) {
+        activeRuntime.current = null;
       }
-      void engine.dispose().catch(() => {});
+      void runtime.dispose().catch(() => {});
     };
-  }, [selection.chain]);
+  }, []);
 
   function select(next: Selection): void {
     const owner = selectionState.current;
@@ -124,15 +115,15 @@ export default function App() {
     void enqueueOrderedUpdate(async () => {
       const current = owner.applied;
       const intended = owner.intended;
-      const chainChanged = intended.chain !== current.chain;
-      const horizonChanged = intended.horizon !== current.horizon;
-      if (!chainChanged && !horizonChanged) return;
+      if (
+        intended.chain === current.chain &&
+        intended.horizon === current.horizon
+      ) {
+        return;
+      }
 
       owner.applied = intended;
       setInference({ status: "idle" });
-      if (chainChanged) {
-        activeEngine.current = null;
-      }
       setSelection(intended);
     });
   }
@@ -143,22 +134,25 @@ export default function App() {
 
   async function refreshOutcomes(): Promise<void> {
     const selected = selectionState.current.applied;
-    const current = activeEngine.current;
-    if (current === null || current.chain !== selected.chain) {
+    const runtime = activeRuntime.current;
+    if (runtime === null) {
       throw new Error("Could not connect to the selected chain.");
     }
-    const isCurrent = () =>
-      activeEngine.current === current &&
-      selectionState.current.applied === selected;
-    const headBlock = await current.engine.currentHead();
+    const isCurrent = () => selectionState.current.applied === selected;
+    const headBlock = await runtime.currentHead(selected.chain);
     if (!isCurrent()) return;
     await commitRuns(
       (storedRuns) =>
         resolvePendingRuns(
           storedRuns,
-          current.chain,
+          selected.chain,
           headBlock,
-          current.engine.resolveOutcome,
+          (immediateBlock, selectedBlock) =>
+            runtime.resolveOutcome(
+              selected.chain,
+              immediateBlock,
+              selectedBlock,
+            ),
         ),
       isCurrent,
     );
@@ -166,19 +160,17 @@ export default function App() {
 
   async function runInference() {
     const selected = selectionState.current.applied;
-    const current = activeEngine.current;
-    if (current === null || current.chain !== selected.chain) {
+    const runtime = activeRuntime.current;
+    if (runtime === null) {
       fail("Could not connect to the selected chain.");
       return;
     }
-    const isCurrent = () =>
-      activeEngine.current === current &&
-      selectionState.current.applied === selected;
+    const isCurrent = () => selectionState.current.applied === selected;
 
     setInference({ status: "loading" });
     let result;
     try {
-      result = await current.engine.run(selected.horizon);
+      result = await runtime.run(selected.chain, selected.horizon);
     } catch (error) {
       if (isCurrent()) {
         fail(error instanceof Error ? error.message : String(error));

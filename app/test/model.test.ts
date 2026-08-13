@@ -85,52 +85,7 @@ describe("model runtime", () => {
     expect(module.delete).toHaveBeenCalledOnce();
   });
 
-  it("serializes native work across runtime replacement", async () => {
-    const forward = deferred<NativeTensor[]>();
-    const events: string[] = [];
-    const oldModule = native(async () => {
-      events.push("old forward");
-      return forward.promise;
-    });
-    oldModule.delete.mockImplementation(() => events.push("old delete"));
-    const newModule = native(async () => {
-      events.push("new forward");
-      return [output([0, 1], [1, 2]), output([0.25], [1])];
-    });
-    newModule.load.mockImplementation(async () => {
-      events.push("new load");
-    });
-    const oldRuntime = createModelRuntime(() => oldModule);
-    const newRuntime = createModelRuntime(() => newModule);
-
-    const oldRun = oldRuntime.execute(
-      modelSelection(2),
-      new Float32Array([1, 2]),
-    );
-    await vi.waitFor(() => expect(oldModule.forward).toHaveBeenCalledOnce());
-    const oldDisposal = oldRuntime.dispose();
-    const newRun = newRuntime.execute(
-      modelSelection(2),
-      new Float32Array([1, 2]),
-    );
-    await flushMicrotasks();
-    expect(events).toEqual(["old forward"]);
-
-    forward.resolve([
-      output([0, 1], [1, 2]),
-      output([0.25], [1]),
-    ]);
-    await Promise.all([oldRun, oldDisposal, newRun]);
-    expect(events).toEqual([
-      "old forward",
-      "old delete",
-      "new load",
-      "new forward",
-    ]);
-    await newRuntime.dispose();
-  });
-
-  it("serializes replacement and disposal while preserving copied outputs", async () => {
+  it("serializes concurrent execution, replacement, copied outputs, and disposal", async () => {
     const forward = deferred<NativeTensor[]>();
     const events: string[] = [];
     const firstOutputs = [
@@ -199,6 +154,36 @@ describe("model runtime", () => {
       "forward second",
       "delete second",
     ]);
+    expect(() =>
+      runtime.execute(firstSelection, new Float32Array([1, 2])),
+    ).toThrow("Model runtime is disposed");
+    await expect(runtime.dispose()).resolves.toBeUndefined();
+  });
+
+  it("deletes a module whose load fails and can load a fresh module", async () => {
+    const failed = native();
+    failed.load.mockRejectedValueOnce(new Error("load failed"));
+    const loaded = native();
+    const factory = vi
+      .fn()
+      .mockImplementationOnce(() => failed)
+      .mockImplementationOnce(() => loaded);
+    const runtime = createModelRuntime(factory);
+    const selected = modelSelection(2);
+    const input = new Float32Array([1, 2]);
+
+    await expect(runtime.execute(selected, input)).rejects.toThrow(
+      "load failed",
+    );
+    expect(failed.delete).toHaveBeenCalledOnce();
+
+    await expect(runtime.execute(selected, input)).resolves.toEqual({
+      actionLogits: new Float32Array([0, 1]),
+      minimumFeeZ: 0.25,
+    });
+    expect(loaded.load).toHaveBeenCalledOnce();
+    await runtime.dispose();
+    expect(loaded.delete).toHaveBeenCalledOnce();
   });
 
   it.each([

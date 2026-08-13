@@ -11,11 +11,12 @@ vi.mock("react-native-executorch-expo-resource-fetcher", () => ({
 }));
 
 import {
-  createInferenceEngine,
-  type InferenceEngineDependencies,
+  createInferenceRuntime,
+  type InferenceRuntimeDependencies,
 } from "../src/inference";
-import type { BlockRow } from "../src/domain";
+import type { BlockRow, Chain } from "../src/domain";
 import type {
+  ModelCatalog,
   ModelOutput,
   ModelRuntime,
 } from "../src/model";
@@ -89,33 +90,59 @@ function runtime(
   };
 }
 
-function createTestEngine(
-  overrides: Partial<InferenceEngineDependencies> = {},
-) {
-  const dependencies: InferenceEngineDependencies = {
-    model: runtime(),
-    selectModel: vi.fn(modelSelection),
-    session: session(),
+function sessions(
+  overrides: Partial<Record<Chain, ChainSession>> = {},
+): Readonly<Record<Chain, ChainSession>> {
+  return {
+    ethereum: session(),
+    polygon: session(),
+    avalanche: session(),
     ...overrides,
   };
-  return createInferenceEngine("ethereum", dependencies);
 }
 
-describe("InferenceEngine", () => {
-  it("synchronizes, builds input, and executes the selected model on Run", async () => {
-    const chainSession = session(async () => context(11n, 40n));
+function catalog(): ModelCatalog {
+  return {
+    chainManifest: vi.fn(() => chainManifest),
+    select: vi.fn((_chain, K) => modelSelection(K)),
+  };
+}
+
+function createTestRuntime(
+  overrides: Partial<InferenceRuntimeDependencies> = {},
+) {
+  const dependencies: InferenceRuntimeDependencies = {
+    catalog: catalog(),
+    model: runtime(),
+    sessions: sessions(),
+    ...overrides,
+  };
+  return {
+    dependencies,
+    inference: createInferenceRuntime(dependencies),
+  };
+}
+
+describe("InferenceRuntime", () => {
+  it("uses the selected chain session and model for Run", async () => {
+    const polygon = session(async () => context(11n, 40n));
     const model = runtime({
       actionLogits: new Float32Array([-1, 4, 1, 0]),
       minimumFeeZ: 2,
     });
-    const engine = createTestEngine({
-      session: chainSession,
+    const { dependencies, inference } = createTestRuntime({
       model,
+      sessions: sessions({ polygon }),
     });
 
-    const result = await engine.run(4);
+    const result = await inference.run("polygon", 4);
 
-    expect(chainSession.sync).toHaveBeenCalledOnce();
+    expect(polygon.sync).toHaveBeenCalledOnce();
+    expect(dependencies.sessions.ethereum.sync).not.toHaveBeenCalled();
+    expect(dependencies.catalog.select).toHaveBeenCalledWith(
+      "polygon",
+      4,
+    );
     expect(model.execute).toHaveBeenCalledWith(
       modelSelection(4),
       new Float32Array([
@@ -124,7 +151,7 @@ describe("InferenceEngine", () => {
       ]),
     );
     expect(result).toEqual({
-      chain: "ethereum",
+      chain: "polygon",
       K: 4,
       artifact_id: chainManifest.models[4].artifact_id,
       head_block: 11,
@@ -135,15 +162,17 @@ describe("InferenceEngine", () => {
         Math.exp(Math.log(100) + 1),
       ),
     });
-    await engine.dispose();
+    await inference.dispose();
   });
 
   it("returns short chain and model failures with their causes", async () => {
     const unavailable = session(async () => {
       throw new Error("HTTP transport details");
     });
-    const chainFailure = createTestEngine({ session: unavailable });
-    await expect(chainFailure.run(2)).rejects.toMatchObject({
+    const chainFailure = createTestRuntime({
+      sessions: sessions({ avalanche: unavailable }),
+    }).inference;
+    await expect(chainFailure.run("avalanche", 2)).rejects.toMatchObject({
       message: "Could not read the selected chain.",
       cause: expect.objectContaining({ message: "HTTP transport details" }),
     });
@@ -153,8 +182,8 @@ describe("InferenceEngine", () => {
     vi.mocked(model.execute).mockRejectedValue(
       new Error("native load details"),
     );
-    const modelFailure = createTestEngine({ model });
-    await expect(modelFailure.run(2)).rejects.toMatchObject({
+    const modelFailure = createTestRuntime({ model }).inference;
+    await expect(modelFailure.run("ethereum", 2)).rejects.toMatchObject({
       message: "Could not run the selected model.",
       cause: expect.objectContaining({ message: "native load details" }),
     });
@@ -162,94 +191,106 @@ describe("InferenceEngine", () => {
   });
 
   it("rejects a nonfinite decoded fee", async () => {
-    const engine = createTestEngine({
+    const inference = createTestRuntime({
       model: runtime({
         actionLogits: new Float32Array([0, 1]),
         minimumFeeZ: 2_000,
       }),
-    });
-    await expect(engine.run(2)).rejects.toMatchObject({
+    }).inference;
+    await expect(inference.run("ethereum", 2)).rejects.toMatchObject({
       message: "Could not run the selected model.",
       cause: expect.objectContaining({
         message: "Predicted fee must be positive and finite",
       }),
     });
-    await engine.dispose();
+    await inference.dispose();
   });
 
   it("selects the first action when maximum logits tie", async () => {
-    const engine = createTestEngine({
+    const inference = createTestRuntime({
       model: runtime({
         actionLogits: new Float32Array([1, 4, 4, 0]),
         minimumFeeZ: 0,
       }),
-    });
+    }).inference;
 
-    await expect(engine.run(4)).resolves.toMatchObject({
+    await expect(inference.run("ethereum", 4)).resolves.toMatchObject({
       selected_action_k: 1,
       target_block: 12,
     });
-    await engine.dispose();
+    await inference.dispose();
   });
 
   it("rejects an unsafe external head block without losing raw precision", async () => {
     const unsafe = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
     const unsafeHead = session(async () => context(unsafe, 20n));
-    const engine = createTestEngine({ session: unsafeHead });
+    const inference = createTestRuntime({
+      sessions: sessions({ ethereum: unsafeHead }),
+    }).inference;
 
-    await expect(engine.run(2)).rejects.toMatchObject({
+    await expect(inference.run("ethereum", 2)).rejects.toMatchObject({
       message: "Chain data is incomplete or invalid.",
       cause: expect.objectContaining({
         message: "head block exceeds the safe integer range",
       }),
     });
-    await engine.dispose();
+    await inference.dispose();
   });
 
-  it("reads the current head once and converts it through a safe integer", async () => {
-    const chainSession = session();
-    const engine = createTestEngine({ session: chainSession });
+  it("reads the selected chain head once through a safe integer", async () => {
+    const avalanche = session();
+    const { dependencies, inference } = createTestRuntime({
+      sessions: sessions({ avalanche }),
+    });
 
-    await expect(engine.currentHead()).resolves.toBe(10);
-    expect(chainSession.readHead).toHaveBeenCalledOnce();
+    await expect(inference.currentHead("avalanche")).resolves.toBe(10);
+    expect(avalanche.readHead).toHaveBeenCalledOnce();
+    expect(dependencies.sessions.ethereum.readHead).not.toHaveBeenCalled();
 
-    vi.mocked(chainSession.readHead).mockResolvedValueOnce(
+    vi.mocked(avalanche.readHead).mockResolvedValueOnce(
       BigInt(Number.MAX_SAFE_INTEGER) + 1n,
     );
-    await expect(engine.currentHead()).rejects.toMatchObject({
+    await expect(
+      inference.currentHead("avalanche"),
+    ).rejects.toMatchObject({
       message: "Could not read the selected chain.",
       cause: expect.objectContaining({
         message: "head block exceeds the safe integer range",
       }),
     });
-    await engine.dispose();
+    await inference.dispose();
   });
 
-  it("passes exact outcome blocks and converts RPC fees through safe integers", async () => {
-    const chainSession = session();
-    const engine = createTestEngine({ session: chainSession });
+  it("reads exact outcome blocks from the selected chain session", async () => {
+    const polygon = session();
+    const { dependencies, inference } = createTestRuntime({
+      sessions: sessions({ polygon }),
+    });
 
-    await expect(engine.resolveOutcome(11, 12)).resolves.toEqual({
+    await expect(
+      inference.resolveOutcome("polygon", 11, 12),
+    ).resolves.toEqual({
       immediate_base_fee_per_gas: 20,
       selected_base_fee_per_gas: 18,
     });
-    expect(chainSession.readOutcome).toHaveBeenCalledWith(11n, 12n);
+    expect(polygon.readOutcome).toHaveBeenCalledWith(11n, 12n);
+    expect(dependencies.sessions.ethereum.readOutcome).not.toHaveBeenCalled();
 
-    vi.mocked(chainSession.readOutcome).mockResolvedValueOnce({
+    vi.mocked(polygon.readOutcome).mockResolvedValueOnce({
       immediateBaseFeePerGas: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
       selectedBaseFeePerGas: 18n,
     });
-    await expect(engine.resolveOutcome(11, 12)).rejects.toThrow(
-      "immediate base fee exceeds the safe integer range",
-    );
-    await engine.dispose();
+    await expect(
+      inference.resolveOutcome("polygon", 11, 12),
+    ).rejects.toThrow("immediate base fee exceeds the safe integer range");
+    await inference.dispose();
   });
 
-  it("disposes the model runtime", async () => {
+  it("disposes its one model runtime", async () => {
     const model = runtime();
-    const engine = createTestEngine({ model });
+    const inference = createTestRuntime({ model }).inference;
 
-    await engine.dispose();
+    await inference.dispose();
     expect(model.dispose).toHaveBeenCalledOnce();
   });
 });

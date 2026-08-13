@@ -364,29 +364,29 @@ function RunDetails({
 export function AnalyticsScreen({
   runs,
   chain,
-  initialHorizon,
-  loadError,
+  horizon,
   onChainChange,
+  onHorizonChange,
   onRefresh,
+  storageError,
 }: {
   runs: readonly InferenceRun[];
   chain: Chain;
-  initialHorizon: Horizon;
-  loadError: string | null;
+  horizon: Horizon;
   onChainChange: (chain: Chain) => void;
+  onHorizonChange: (horizon: Horizon) => void;
   onRefresh: () => Promise<void>;
+  storageError: string | null;
 }) {
-  const [analyticsHorizon, setAnalyticsHorizon] =
-    useState<Horizon>(initialHorizon);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<
     { status: "idle" | "loading" } | { status: "error"; message: string }
   >({ status: "idle" });
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? null;
   const graphRuns = runs.filter(
-    (run) => run.chain === chain && run.K === analyticsHorizon,
+    (run) => run.chain === chain && run.K === horizon,
   );
-  const buckets = waitBuckets(graphRuns, analyticsHorizon);
+  const buckets = waitBuckets(graphRuns, horizon);
   const summary = summarizeRuns(graphRuns);
 
   async function refreshOutcomes(): Promise<void> {
@@ -418,9 +418,9 @@ export function AnalyticsScreen({
           />
         </View>
 
-        {loadError && (
+        {storageError && (
           <View style={styles.storageError}>
-            <Text style={styles.storageErrorText}>{loadError}</Text>
+            <Text style={styles.storageErrorText}>{storageError}</Text>
           </View>
         )}
 
@@ -477,11 +477,11 @@ export function AnalyticsScreen({
         <View style={styles.graphSection}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              Horizon (K = {analyticsHorizon})
+              Horizon (K = {horizon})
             </Text>
             <HorizonChoices
-              onChange={setAnalyticsHorizon}
-              value={analyticsHorizon}
+              onChange={onHorizonChange}
+              value={horizon}
             />
           </View>
           <View style={styles.chartCards}>

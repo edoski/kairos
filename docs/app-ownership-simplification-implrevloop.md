@@ -58,6 +58,9 @@ conflict with them. ADR 0007 is superseded.
 - Slice 1 green ledger head and Slice 2 baseline:
   `341cd651ae863674a3d05134f4ecb4ecb3e9c999`
 - Slice 2 final product head: `259110f21f954d62d78a25fd9068866a2487dcf4`
+- Slice 2 green ledger head and Slice 3 baseline:
+  `b1d83a923ee644541fb3322c8960e3f1bd68f628`
+- Slice 3 product head: `f881208fd6905f091fe1b5a906aeb3a5a8bddc17`
 - Main checkout after isolation: clean at `ff2a9e26ba67a7b4b58cc9e389a4eb4e81ff7b95`
 - Concurrent task `019fea73-abd5-7a51-9681-f0443f647884` was notified before implementation.
   It expects no `app/` product overlap, but may later change KAIROS execution code and shared docs.
@@ -454,17 +457,37 @@ longer coordinates storage transactions, engine identity, or applied-versus-inte
 
 ## Slice 3 - Direct errors and retained boundary validation
 
-Status: pending Slice 2 independent `GREEN LIGHT`
+Status: independently green
 
 ### Execution record
 
-- Immutable slice baseline: final integrated ledger head after Slice 2 is green
-- Checkout and status: record immediately before dispatch
+- Immutable slice baseline: `b1d83a923ee644541fb3322c8960e3f1bd68f628`
+- Checkout: `/Users/edo/dev/python/kairos-app-ownership-simplification` on
+  `codex/app-ownership-simplification`; clean at dispatch
 - Allowed writer scope: inference error propagation, shared presentation mapping, the one verified
   redundant RPC type check, focused tests, and directly affected current mobile docs
-- Implementer: unassigned; must be fresh for this slice and read/use the `implement` skill
-- Reviewer: unassigned; must be distinct and read/use the `code-review` skill
-- Implementation head, review range, result, and correction rounds: pending
+- Implementer: `/root/slice3_implement`; fresh for this slice and read/used the `implement` skill
+- Implementation head: `f881208fd6905f091fe1b5a906aeb3a5a8bddc17`
+- Reviewer: `/root/slice3_review`; distinct and read/used the `code-review` skill with separate
+  `/root/slice3_review/standards_axis` and `/root/slice3_review/spec_axis` workers
+- Fixed review range:
+  `b1d83a923ee644541fb3322c8960e3f1bd68f628...f881208fd6905f091fe1b5a906aeb3a5a8bddc17`
+- Review result: `GREEN LIGHT`; Standards 0 findings, Spec 0 findings
+- Correction rounds: none
+- Viem proof: pinned Viem 2.55.8 types return bigint fee-history quantities, and its formatter
+  applies `BigInt` to every reward scalar. Only the post-decoder p50/p90 bigint checks were removed;
+  tuple width and nonnegative checks remain.
+- Protected-guard audit: fee-history origin/presence/rows/width/sign, positive base fees, parent
+  continuity, finite Float32 features, positive finite predictions, safe bigint conversion, native
+  tensor count/dtype/shape/storage/finiteness/copying, model serialization/lifecycle, and normalized
+  native causes all remain reachable
+- Implementer checks: focused errors/inference/RPC/model 33 passed; supporting
+  App/history/features 22 passed; full app suite 58 passed; normal and strict-unused TypeScript
+  passed; Expo Doctor 19/19 passed; diff, scope, status, and residue checks passed
+- Orchestrator integration check: focused errors/inference/RPC/model 33 passed; final diff check,
+  commit list, branch status, and clean main status passed
+- Explicitly unrun: live transport failures, generated model assets, native simulator/device, real
+  ExecuTorch, real RPC, exporter parity, and visual acceptance
 
 ### Scope
 

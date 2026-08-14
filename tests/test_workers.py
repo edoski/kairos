@@ -232,7 +232,7 @@ def test_production_profiles_preserve_kairos_resource_contract() -> None:
 
     assert profile.label == "KAIROS"
     assert target.host == "research"
-    assert str(target.image) == "/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-598986b.sif"
+    assert str(target.image) == "/scratch.hpc/edoardo.galli3/deployments/kairos-cuda-d2adb70.sif"
     assert str(target.work_root) == "/scratch.hpc/edoardo.galli3/kairos"
     assert str(target.log_root) == "/scratch.hpc/edoardo.galli3/logs/kairos"
     assert target.partitions == ("h100sxm5", "h100pcie", "a100", "l40s", "l40")

@@ -287,7 +287,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.5" },
     { name = "pydantic", specifier = ">=2.12" },
-    { name = "servatus", specifier = "==0.7.0" },
+    { name = "servatus", specifier = "==0.7.1" },
     { name = "torch", marker = "platform_machine != 'x86_64' or sys_platform != 'linux'", specifier = "==2.7.1" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", specifier = "==2.7.1", index = "https://download.pytorch.org/whl/cu118" },
     { name = "typer", specifier = ">=0.16" },
@@ -896,11 +896,11 @@ wheels = [
 
 [[package]]
 name = "servatus"
-version = "0.7.0"
+version = "0.7.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0e/71/b245302282c7eecfa6e2ebb2cd51e733828b65dcf6f346d7bf8255d5cb53/servatus-0.7.0.tar.gz", hash = "sha256:48b920cc0670d1d7bbaf043a1e33453d0b75e8985dd2b6e2b7e0d4ff5d22577a", size = 138615, upload-time = "2026-08-13T14:28:00.736Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/08/1b/c0ac86035528f318c6610698e223d9576ca903765d391a60ce827a2c978e/servatus-0.7.1.tar.gz", hash = "sha256:b43a6f513b0b6d5608cc8793bab128a51b1f96e51a383c16c0f47e16ac3bc98b", size = 139916, upload-time = "2026-08-14T04:56:52.318Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/87/69/9163bf4caa0d0dcdcea78a7d5210a7265065f1c738d593aedd151b04f97c/servatus-0.7.0-py3-none-any.whl", hash = "sha256:18a48551956ab76294902ea13f47fcc0a5dede71dd61ddc70f7551114bdfa8c2", size = 52217, upload-time = "2026-08-13T14:27:59.584Z" },
+    { url = "https://files.pythonhosted.org/packages/57/64/4204c07f1ee4cb89104659ec79b3809419cef263dbc7ba79be439e1ad931/servatus-0.7.1-py3-none-any.whl", hash = "sha256:5bbf2ec658c0ad50f7035140efc2bb14e98131324d388eaffd7a70ebd90b6d7e", size = 52196, upload-time = "2026-08-14T04:56:50.735Z" },
 ]
 
 [[package]]

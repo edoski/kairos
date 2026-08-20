@@ -18,8 +18,8 @@ it does not redefine this benchmark roster.
 
 ## Verdict
 
-All four slices are implementable from the current repository. The CPU study should remain the
-required thesis experiment; energy and optional MPS also belong on the reference Mac. The
+All three slices are implementable from the current repository. The CPU latency and energy study
+belongs on the reference Mac. The
 configured Slurm CUDA host should continue to produce the canonical artifacts and held-out
 evaluations, but a separate CUDA benchmark would answer a different hardware question and adds no
 necessary evidence to the approved consumer-hardware claim.
@@ -465,58 +465,6 @@ preflight `n`, each latency quantile, positive/tied/negative block intervals, mi
 joule-to-kWh cost, linearly transformed energy bounds, and million-cascade cost.
 Recompute-and-compare tests should prove every table is derived from the raw records.
 
-## Slice 4: optional MPS
-
-The current host is built with MPS and reports MPS available. A synthetic batch-one smoke test on
-the current LSTM, Transformer, and Transformer-LSTM implementations completed on `mps:0` with exact
-actions and close CPU outputs. This validates the present operator seam, not the final artifacts or
-scientific campaign.
-
-Run the authorization preflight in a fresh subprocess. Set environment variables before importing
-PyTorch:
-
-```text
-PYTORCH_ENABLE_MPS_FALLBACK=0
-PYTORCH_MPS_LOG_PROFILE_INFO=4
-```
-
-PyTorch documents `PYTORCH_ENABLE_MPS_FALLBACK=1` as enabling CPU fallback
-([PyTorch 2.7 MPS environment variables](https://docs.pytorch.org/docs/2.7/mps_environment_variables.html)).
-Setting it to zero is necessary but insufficient: pinned PyTorch 2.7.1 registers some unconditional
-CPU fallback operations
-([MPS fallback registrations](https://github.com/pytorch/pytorch/blob/v2.7.1/aten/src/ATen/mps/MPSFallback.mm#L70-L88)).
-Profile bit 4 is the backend's CPU-fallback logging flag
-([MPS profiler flags](https://github.com/pytorch/pytorch/blob/v2.7.1/aten/src/ATen/mps/MPSProfiler.h#L234-L260)).
-Run every final architecture/horizon path over the parity set, capture stderr, and reject any
-CPU-fallback record. Disable profiler logging before reported timing because it changes the measured
-runtime.
-
-Also require `torch.backends.mps.is_built()` and `is_available()`, models and input tensors resident
-on `mps`, exact decoded actions, the frozen numeric parity tolerance, and no unsupported-operation
-exception. PyTorch's MPS guide defines the availability checks and device transfer
-([PyTorch 2.7 MPS backend](https://docs.pytorch.org/docs/2.7/notes/mps.html)).
-
-MPS execution is asynchronous. The timing boundary is:
-
-```python
-torch.mps.synchronize()
-start_ns = time.perf_counter_ns()
-output = workload()
-torch.mps.synchronize()
-elapsed_ns = time.perf_counter_ns() - start_ns
-```
-
-PyTorch defines `torch.mps.synchronize()` as waiting for queued MPS kernels
-([PyTorch 2.7 MPS API](https://docs.pytorch.org/docs/2.7/mps.html)). Pinned
-`torch.utils.benchmark.Timer` synchronizes CUDA, XPU, and private-use backends, but not MPS
-([PyTorch 2.7.1 timer source](https://github.com/pytorch/pytorch/blob/v2.7.1/torch/utils/benchmark/utils/timer.py#L16-L33)).
-Required finite checks and decodes during the stress cascade can also synchronize the host and must
-remain inside the workload.
-
-If the preflight passes, repeat Slice 1 as a separately named MPS configuration with the same roots,
-statistics, and provenance. For optional MPS energy, repeat Slice 2 using combined CPU+GPU+ANE as
-the primary quantity and retain individual rails diagnostically. Never pool CPU and MPS samples.
-
 ## Verified execution location
 
 All benchmark slices belong on the local M2 Max:
@@ -526,7 +474,6 @@ All benchmark slices belong on the local M2 Max:
 | 1 CPU latency | local Mac | It is the declared consumer reference hardware and owns the ordinary CPU runtime being claimed. |
 | 2 energy | local Mac | `/usr/bin/powermetrics`, Apple power state, and the measured CPU+GPU+ANE rails are Mac-specific. |
 | 3 reduction | local Mac | It is deterministic CPU reduction over transferred canonical objects and local raw measurements. |
-| 4 MPS | local Mac | MPS and its synchronization/fallback checks are Apple-GPU-specific. |
 
 The configured remote is a heterogeneous CUDA Slurm target. Its current allocation route and
 resource values are execution details rather than a benchmark deployment contract
@@ -555,8 +502,7 @@ for:
 - one full-coverage/runtime and variance preflight, followed by frozen warmup, origin, and repetition
   settings;
 - a supervised `powermetrics` text/plist schema and signal preflight;
-- the frozen `0.2966 EUR/kWh` electricity input; and
-- separate authorization for Slice 4 after final-artifact MPS parity and no-fallback validation.
+- the frozen `0.2966 EUR/kWh` electricity input.
 
 The preflights are setup checks. Their raw values do not need manuscript tables. The final
 methodology must state the setup they froze, and any departure from full coverage or 60-second

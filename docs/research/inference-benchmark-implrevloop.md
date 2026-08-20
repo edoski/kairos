@@ -18,8 +18,8 @@ and [inference-economic-assumptions.md](inference-economic-assumptions.md).
   immutable baseline when implementation starts.
 - Alignment verification at that head: 37 targeted experiment, execution, artifact, temporal, and
   rolling tests passed; scoped Ruff and repository Pyright passed. The host still reports Apple M2
-  Max, PyTorch 2.7.1, 8 intra-op and 12 inter-op threads, MPS built/available, and the required
-  `powermetrics` samplers. Final campaign metadata must be read again at execution time.
+  Max, PyTorch 2.7.1, 8 intra-op and 12 inter-op threads, and the required `powermetrics` samplers.
+  Final campaign metadata must be read again at execution time.
 - Worktrees: one pre-existing main worktree; no run-owned branch or worktree
 - Protected pre-existing changes:
   - untracked `docs/experiments/`, including `feature_ablation.md`
@@ -38,8 +38,8 @@ and [inference-economic-assumptions.md](inference-economic-assumptions.md).
 
 ### Execution location
 
-- All benchmark code, preflights, CPU measurements, energy measurements, deterministic reduction,
-  and optional MPS measurements run on the reference MacBook Pro M2 Max.
+- All benchmark code, preflights, CPU measurements, energy measurements, and deterministic reduction
+  run on the reference MacBook Pro M2 Max.
 - The remote CUDA Slurm cluster remains responsible only for canonical training and held-out
   evaluation. Completed K-study and held-out manifests, artifacts, evaluations, and corpora cross
   the existing file-transfer boundary before local measurement.
@@ -271,7 +271,7 @@ string.
 
 ### Non-goals
 
-No energy collection, economics, MPS, CUDA, RPC, mobile artifacts, DataLoader batch timing,
+No energy collection, economics, CUDA, RPC, mobile artifacts, DataLoader batch timing,
 model-load timing, dynamic rolling-route timing, observation parity pass/file, artifact hashing,
 host probing, per-stage clocks inside a cascade, or generic evaluator behavior change beyond
 centralizing its existing fixed horizon sequence as one shared constant.
@@ -438,42 +438,6 @@ Implementation can use deterministic fixtures now that Slices 1 and 2 are green 
 input is frozen. Scientific reduction waits for the complete final latency and energy campaigns;
 setup output never enters the reducer.
 
-## Slice 4: optional MPS comparison
-
-Status: deferred; separately authorized only after CPU completion
-
-### Scope and algorithm
-
-Run a fresh-process validation before any MPS measurement with
-`PYTORCH_ENABLE_MPS_FALLBACK=0` and `PYTORCH_MPS_LOG_PROFILE_INFO=4` set before importing PyTorch.
-Require MPS built and available, all final family/horizon paths successful, models and inputs on
-MPS, exact action parity, frozen numeric parity, and no CPU-fallback log. PyTorch 2.7.1 contains
-unconditional fallback registrations, so a successful output tensor alone is insufficient.
-
-Disable fallback logging for measurement. Repeat Slice 1 as a distinct MPS configuration. Surround
-every measured workload with `torch.mps.synchronize()` before the start clock and after the final
-decode because MPS execution is asynchronous. Never pool CPU and MPS rows. If separately
-authorized, repeat Slice 2 for MPS using the same combined CPU+GPU+ANE primary estimate and
-individual rails as diagnostics.
-
-### Non-goals
-
-No CUDA cluster comparison, Core ML, ExecuTorch, backend rewrite, GPU cycles, silent CPU fallback,
-mixed CPU/MPS statistics, or weakening of CPU completion.
-
-### Expected outcome
-
-If all final artifacts execute natively and reproducibly on MPS, the thesis gains a separately
-labelled CPU-versus-MPS model-compute comparison. Any fallback, unsupported operation, or material
-parity failure closes the optional slice without affecting the required CPU study.
-
-### Checks and gates
-
-- Fresh-process environment ordering, availability, device residency, stderr fallback detection,
-  action/numeric parity, and explicit synchronization boundaries.
-- Same raw/provenance/statistical checks as CPU, in a separate configuration.
-- Separate authorization after CPU results; MPS energy requires another explicit authorization.
-
 ## Execution protocol
 
 - Work directly on `main`. Create no branch or worktree, preserve the dirty checkout, never touch
@@ -485,8 +449,7 @@ parity failure closes the optional slice without affecting the required CPU stud
   the fixed three-dot diff. Standards and Spec must both have zero actionable findings.
 - Rejected findings return to the same implementer; focused correction commits return to the same
   reviewer. Advance only after green.
-- Do not push, open a pull request, run scientific measurements from fixtures, bypass a gate, or
-  start optional MPS without authorization.
+- Do not push, open a pull request, run scientific measurements from fixtures, or bypass a gate.
 
 ## Run records
 
@@ -495,7 +458,6 @@ parity failure closes the optional slice without affecting the required CPU stud
 | 1 | `64f8d7cf` | `495160da` | `slice1_cpu_latency` | `slice1_cpu_latency_review` | 2 | GREEN LIGHT |
 | 2 | `d1631d8e` | `f313b398` | `slice2_powermetrics` | `slice2_powermetrics_review` | 1 | GREEN LIGHT |
 | 3 | pending | pending | pending | pending | 0 | ready |
-| 4 | pending | pending | pending | pending | 0 | deferred |
 
 ## Run-owned branches and worktrees
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import plistlib
 import signal
 import subprocess
@@ -68,7 +67,6 @@ class Protocol(StrictFrozenRecord):
     roster: dict[str, Selection]
     warmup_iterations: Annotated[int, Field(ge=1)]
     sweeps: Annotated[int, Field(ge=1)]
-    device: Literal["cpu", "mps"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +79,6 @@ class _Horizon:
 class _Cell:
     name: str
     horizons: Mapping[int, _Horizon]
-    device: torch.device
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,7 +351,6 @@ def _protocol(
     resolved: Mapping[str, Mapping[int, Selection]],
     warmup_iterations: int,
     sweeps: int,
-    device: Literal["cpu", "mps"] = "cpu",
 ) -> Protocol:
     return Protocol(
         panel="policy",
@@ -369,7 +365,6 @@ def _protocol(
         },
         warmup_iterations=warmup_iterations,
         sweeps=sweeps,
-        device=device,
     )
 
 
@@ -380,7 +375,6 @@ def _architecture_protocol(
     resolved: Mapping[str, Mapping[int, Selection]],
     warmup_iterations: int,
     sweeps: int,
-    device: Literal["cpu", "mps"] = "cpu",
 ) -> Protocol:
     return Protocol(
         panel="architecture",
@@ -391,7 +385,6 @@ def _architecture_protocol(
         roster={f"{cell}.K5": group[5] for cell, group in resolved.items()},
         warmup_iterations=warmup_iterations,
         sweeps=sweeps,
-        device=device,
     )
 
 
@@ -411,12 +404,7 @@ def _ensure_protocol(output: Path, protocol: Protocol) -> None:
     publish_file(path, write_protocol)
 
 
-def _load_cell(
-    storage_root: Path,
-    cell: str,
-    resolved: Mapping[int, Selection],
-    device: Literal["cpu", "mps"] = "cpu",
-) -> _Cell:
+def _load_cell(storage_root: Path, cell: str, resolved: Mapping[int, Selection]) -> _Cell:
     corpus = load_corpus_blocks(storage_root, resolved[ROLLING_HORIZONS[0]].corpus_id)
     horizons = {}
     for horizon in reversed(ROLLING_HORIZONS):
@@ -430,7 +418,7 @@ def _load_cell(
         if experiment.horizon_blocks != horizon:
             raise ValueError(f"{cell}.K{horizon} artifact has the wrong horizon")
         horizons[horizon] = _Horizon(
-            model=model.eval().to(device),
+            model=model.eval(),
             dataset=prepare_historical_window(
                 corpus,
                 experiment,
@@ -439,12 +427,12 @@ def _load_cell(
                 target_state=association.target_state,
             ),
         )
-    return _Cell(name=cell, horizons=horizons, device=torch.device(device))
+    return _Cell(name=cell, horizons=horizons)
 
 
-def _batch(item: _Horizon, index: int, device: torch.device) -> tuple[int, torch.Tensor]:
+def _batch(item: _Horizon, index: int) -> tuple[int, torch.Tensor]:
     sample = item.dataset[index]
-    return int(sample["origin_block"]), sample["inputs"].unsqueeze(0).to(device)
+    return int(sample["origin_block"]), sample["inputs"].unsqueeze(0)
 
 
 def _infer(model: nn.Module, inputs: torch.Tensor) -> None:
@@ -455,7 +443,7 @@ def _infer(model: nn.Module, inputs: torch.Tensor) -> None:
 def _workload_inputs(
     cell: _Cell, horizons: Sequence[int], index: int
 ) -> tuple[int, tuple[torch.Tensor, ...]]:
-    batches = tuple(_batch(cell.horizons[horizon], index, cell.device) for horizon in horizons)
+    batches = tuple(_batch(cell.horizons[horizon], index) for horizon in horizons)
     origin = batches[0][0]
     if any(batch_origin != origin for batch_origin, _ in batches):
         raise ValueError("cascade horizons do not contain the required same origin")
@@ -467,18 +455,12 @@ def _run_workload(cell: _Cell, horizons: Sequence[int], inputs: Sequence[torch.T
         _infer(cell.horizons[horizon].model, inputs[index])
 
 
-def _synchronize(device: torch.device) -> None:
-    if device.type == "mps":
-        torch.mps.synchronize()
-
-
 def _warm(cell: _Cell, iterations: int) -> None:
     for horizon in cell.horizons:
         item = cell.horizons[horizon]
-        _, inputs = _batch(item, 0, cell.device)
+        _, inputs = _batch(item, 0)
         for _ in range(iterations):
             _infer(item.model, inputs)
-    _synchronize(cell.device)
 
 
 def _rotate(values: Sequence[_T], offset: int) -> tuple[_T, ...]:
@@ -510,10 +492,8 @@ def _time_cell(
             raise ValueError(f"{workload.name} horizons do not contain all required origins")
         for index in range(len(source.dataset)):
             origin, inputs = _workload_inputs(cell, workload.horizons, index)
-            _synchronize(cell.device)
             start = time.perf_counter_ns()
             _run_workload(cell, workload.horizons, inputs)
-            _synchronize(cell.device)
             elapsed = time.perf_counter_ns() - start
             rows.append(
                 {
@@ -539,7 +519,6 @@ def _active_phase(cell: _Cell, pair: int, duration_ns: int) -> _Phase:
         index = (pair - 1 + completed) % origin_count
         _, inputs = _workload_inputs(cell, horizons, index)
         _run_workload(cell, horizons, inputs)
-        _synchronize(cell.device)
         completed += 1
     elapsed = time.perf_counter_ns() - start
     return _Phase(
@@ -563,13 +542,11 @@ def _run_unit(
     path = output / "latency" / cell_name / f"sweep-{sweep:03d}.parquet"
     if path.exists():
         return
-    cell = _load_cell(storage_root, cell_name, resolved, protocol.device)
+    cell = _load_cell(storage_root, cell_name, resolved)
     with torch.inference_mode():
         _warm(cell, protocol.warmup_iterations)
         rows = _time_cell(
-            cell,
-            sweep,
-            _architecture_pass_order() if protocol.panel == "architecture" else None,
+            cell, sweep, _architecture_pass_order() if protocol.panel == "architecture" else None
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     publish_file(path, rows.write_parquet)
@@ -580,7 +557,6 @@ def _run_energy_unit(
     output: Path,
     cell_name: str,
     resolved: Mapping[int, Selection],
-    device: Literal["cpu", "mps"],
     warmup_iterations: int,
     settings: dict[str, int],
 ) -> None:
@@ -590,21 +566,12 @@ def _run_energy_unit(
         if existing["settings"] != settings:
             raise ValueError(f"existing energy settings do not match: {cell_name}")
         return
-    cell = _load_cell(storage_root, cell_name, resolved, device)
+    cell = _load_cell(storage_root, cell_name, resolved)
     with torch.inference_mode():
         _warm(cell, warmup_iterations)
         subprocess.run(("/usr/bin/sudo", "-v"), check=True)
         path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
         publish(path, lambda draft: _write_energy(draft.path, cell, settings))
-
-
-def _require_device(device: Literal["cpu", "mps"]) -> Literal["cpu", "mps"]:
-    if device == "mps":
-        if os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK") != "0":
-            raise RuntimeError("MPS benchmarks require PYTORCH_ENABLE_MPS_FALLBACK=0")
-        if not torch.backends.mps.is_built() or not torch.backends.mps.is_available():
-            raise RuntimeError("MPS is not available")
-    return device
 
 
 def _run_latency(
@@ -627,19 +594,12 @@ def run_policy_latency(
     output: Path,
     warmup_iterations: int,
     sweeps: int,
-    device: Literal["cpu", "mps"],
 ) -> None:
     """Validate, resume, and complete the LSTM policy latency panel."""
 
-    device = _require_device(device)
     resolved = _resolve(storage_root, k_study_experiment_id, held_out_experiment_id)
     protocol = _protocol(
-        k_study_experiment_id,
-        held_out_experiment_id,
-        resolved,
-        warmup_iterations,
-        sweeps,
-        device,
+        k_study_experiment_id, held_out_experiment_id, resolved, warmup_iterations, sweeps
     )
     _run_latency(storage_root, output, protocol, resolved)
 
@@ -652,16 +612,11 @@ def run_architecture_latency(
     output: Path,
     warmup_iterations: int,
     sweeps: int,
-    device: Literal["cpu", "mps"],
 ) -> None:
     """Validate, resume, and complete the matched K5 architecture latency panel."""
 
-    device = _require_device(device)
     resolved = _resolve_architecture(
-        storage_root,
-        k_study_experiment_id,
-        held_out_experiment_id,
-        comparator_study_experiment_id,
+        storage_root, k_study_experiment_id, held_out_experiment_id, comparator_study_experiment_id
     )
     protocol = _architecture_protocol(
         k_study_experiment_id,
@@ -670,14 +625,11 @@ def run_architecture_latency(
         resolved,
         warmup_iterations,
         sweeps,
-        device,
     )
     _run_latency(storage_root, output, protocol, resolved)
 
 
-def _resolve_protocol(
-    storage_root: Path, protocol: Protocol
-) -> dict[str, dict[int, Selection]]:
+def _resolve_protocol(storage_root: Path, protocol: Protocol) -> dict[str, dict[int, Selection]]:
     if protocol.panel == "policy":
         if protocol.comparator_study_experiment_id is not None:
             raise ValueError("policy protocol cannot name a comparator experiment")
@@ -688,10 +640,7 @@ def _resolve_protocol(
     if comparator_id is None:
         raise ValueError("architecture protocol must name a comparator experiment")
     return _resolve_architecture(
-        storage_root,
-        protocol.k_study_experiment_id,
-        protocol.held_out_experiment_id,
-        comparator_id,
+        storage_root, protocol.k_study_experiment_id, protocol.held_out_experiment_id, comparator_id
     )
 
 
@@ -705,7 +654,6 @@ def _expected_protocol(
             resolved,
             protocol.warmup_iterations,
             protocol.sweeps,
-            protocol.device,
         )
     comparator_id = protocol.comparator_study_experiment_id
     if comparator_id is None:
@@ -717,7 +665,6 @@ def _expected_protocol(
         resolved,
         protocol.warmup_iterations,
         protocol.sweeps,
-        protocol.device,
     )
 
 
@@ -727,7 +674,6 @@ def run_energy(
     """Resume and complete one powermetrics energy campaign."""
 
     protocol = Protocol.model_validate_json((output / "protocol.json").read_bytes())
-    _require_device(protocol.device)
     resolved = _resolve_protocol(storage_root, protocol)
     _ensure_protocol(output, _expected_protocol(protocol, resolved))
     settings = {
@@ -737,15 +683,7 @@ def run_energy(
         "sample_rate_ms": _POWER_SAMPLE_RATE_MS,
     }
     for cell, requests in resolved.items():
-        _run_energy_unit(
-            storage_root,
-            output,
-            cell,
-            requests,
-            protocol.device,
-            protocol.warmup_iterations,
-            settings,
-        )
+        _run_energy_unit(storage_root, output, cell, requests, protocol.warmup_iterations, settings)
 
 
 def run_footprint(storage_root: Path, output: Path) -> None:
@@ -771,9 +709,9 @@ def run_footprint(storage_root: Path, output: Path) -> None:
             {
                 "cell": label.removesuffix(".K5"),
                 "artifact_id": str(selection.artifact_id),
-                "checkpoint_bytes": artifact_checkpoint_path(
-                    storage_root, selection.artifact_id
-                ).stat().st_size,
+                "checkpoint_bytes": artifact_checkpoint_path(storage_root, selection.artifact_id)
+                .stat()
+                .st_size,
                 "parameters": sum(parameter.numel() for parameter in model.parameters()),
                 "trainable_parameters": sum(
                     parameter.numel() for parameter in model.parameters() if parameter.requires_grad
@@ -787,9 +725,6 @@ StorageRoot = Annotated[Path, typer.Argument(resolve_path=True, exists=True, fil
 Output = Annotated[Path, typer.Argument(resolve_path=True, file_okay=False)]
 
 
-Device = Annotated[Literal["cpu", "mps"], typer.Option()]
-
-
 def policy_latency(
     storage_root: StorageRoot,
     k_study_experiment_id: UUID,
@@ -797,7 +732,6 @@ def policy_latency(
     output: Output,
     warmup_iterations: Annotated[int, typer.Option(min=1)],
     sweeps: Annotated[int, typer.Option(min=1)] = 10,
-    device: Device = "cpu",
 ) -> None:
     run_policy_latency(
         storage_root,
@@ -806,7 +740,6 @@ def policy_latency(
         output,
         warmup_iterations,
         sweeps,
-        device,
     )
 
 
@@ -818,7 +751,6 @@ def architecture_latency(
     output: Output,
     warmup_iterations: Annotated[int, typer.Option(min=1)],
     sweeps: Annotated[int, typer.Option(min=1)] = 10,
-    device: Device = "cpu",
 ) -> None:
     run_architecture_latency(
         storage_root,
@@ -828,7 +760,6 @@ def architecture_latency(
         output,
         warmup_iterations,
         sweeps,
-        device,
     )
 
 

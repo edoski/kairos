@@ -139,7 +139,6 @@ def _cell(events: list[str]) -> benchmark._Cell:
             )
             for horizon in reversed(benchmark.ROLLING_HORIZONS)
         },
-        device=torch.device("cpu"),
     )
 
 
@@ -153,7 +152,6 @@ def _energy_cell(events: list[str]) -> benchmark._Cell:
             )
             for horizon in reversed(benchmark.ROLLING_HORIZONS)
         },
-        device=torch.device("cpu"),
     )
 
 
@@ -214,10 +212,7 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
                 testing_window=selection.testing_window,
             )
             path = (
-                tmp_path
-                / "evaluations"
-                / str(selection.support_evaluation_id)
-                / "evaluation.json"
+                tmp_path / "evaluations" / str(selection.support_evaluation_id) / "evaluation.json"
             )
             path.parent.mkdir(parents=True)
             path.write_text(request.model_dump_json())
@@ -264,9 +259,7 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
     label = "ethereum.lstm.K5"
     k_study[label] = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
     with pytest.raises(ValueError, match="does not name"):
-        benchmark.run_policy_latency(
-            tmp_path, _K_STUDY_ID, _HELD_OUT_ID, tmp_path / "output", 2, 1, "cpu"
-        )
+        benchmark.run_policy_latency(tmp_path, _K_STUDY_ID, _HELD_OUT_ID, tmp_path / "output", 2, 1)
     assert not (tmp_path / "output").exists()
 
 
@@ -285,9 +278,7 @@ def test_architecture_resolve_adds_two_matched_k5_comparators_per_chain(
     monkeypatch.setattr(benchmark, "_resolve", lambda *_args: policy)
     monkeypatch.setattr(benchmark, "load_experiment_manifest", lambda *_args: comparators)
 
-    resolved = benchmark._resolve_architecture(
-        tmp_path, _K_STUDY_ID, _HELD_OUT_ID, _COMPARATOR_ID
-    )
+    resolved = benchmark._resolve_architecture(tmp_path, _K_STUDY_ID, _HELD_OUT_ID, _COMPARATOR_ID)
 
     assert len(resolved) == 9
     assert all(set(group) == {5} for group in resolved.values())
@@ -301,9 +292,7 @@ def test_architecture_resolve_adds_two_matched_k5_comparators_per_chain(
 
     comparators.pop("polygon.transformer.K5")
     with pytest.raises(ValueError, match="two K5 families"):
-        benchmark._resolve_architecture(
-            tmp_path, _K_STUDY_ID, _HELD_OUT_ID, _COMPARATOR_ID
-        )
+        benchmark._resolve_architecture(tmp_path, _K_STUDY_ID, _HELD_OUT_ID, _COMPARATOR_ID)
 
 
 def test_batch_one_is_a_chronological_view() -> None:
@@ -318,9 +307,7 @@ def test_batch_one_is_a_chronological_view() -> None:
         BlockWindow(first_parent_block=102, last_parent_block=104),
         TargetState(mean=0.0, standard_deviation=1.0),
     )
-    origin, inputs = benchmark._batch(
-        benchmark._Horizon(nn.Identity(), dataset), 1, torch.device("cpu")
-    )
+    origin, inputs = benchmark._batch(benchmark._Horizon(nn.Identity(), dataset), 1)
     assert origin == 103
     assert inputs.shape == (1, 2, 2)
 
@@ -426,21 +413,6 @@ def test_orders_rotate_deterministically() -> None:
         (horizon,) for horizon in reversed(benchmark.ROLLING_HORIZONS)
     ) + (benchmark.ROLLING_HORIZONS,)
     assert benchmark._pass_order(2) == (*first[1:], first[0])
-
-
-def test_mps_requires_native_execution(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("PYTORCH_ENABLE_MPS_FALLBACK", raising=False)
-    with pytest.raises(RuntimeError, match="MPS_FALLBACK=0"):
-        benchmark._require_device("mps")
-
-    monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0")
-    monkeypatch.setattr(torch.backends.mps, "is_built", lambda: True)
-    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
-    with pytest.raises(RuntimeError, match="not available"):
-        benchmark._require_device("mps")
-
-    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
-    assert benchmark._require_device("mps") == "mps"
 
 
 def test_protocol_match_and_units_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -754,7 +726,6 @@ def test_energy_cell_publishes_atomically_and_resumes(
             output,
             "ethereum.lstm",
             _resolved()["ethereum.lstm"],
-            "cpu",
             warmup_iterations=1,
             settings=settings,
         )
@@ -777,7 +748,6 @@ def test_energy_cell_publishes_atomically_and_resumes(
             output,
             "ethereum.lstm",
             _resolved()["ethereum.lstm"],
-            "cpu",
             warmup_iterations=1,
             settings={**settings, "phase_seconds": 2},
         )
@@ -798,12 +768,10 @@ def test_energy_command_reuses_the_existing_protocol(
         target: Path,
         cell: str,
         requests: object,
-        device: str,
         warmup_iterations: int,
         settings: dict[str, int],
     ) -> None:
         del storage_root, target, requests
-        assert device == "cpu"
         units.append((cell, warmup_iterations, settings))
 
     monkeypatch.setattr(benchmark, "_run_energy_unit", run_unit)

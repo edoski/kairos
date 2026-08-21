@@ -889,25 +889,38 @@ three, two, or one blocks so the fixed-deadline comparison has every reachable d
 report commands print, but do not persist, the ordinary and rolling reductions. Closure publishes
 the exact 27 evaluation references and retains only private Campaign history.
 
-Research figures remain outside `src/kairos` and outside the experiment command flow. The five
-self-contained scripts load completed manifests and canonical Studies, Artifacts, or Evaluations
-through their owning KAIROS loaders, derive presentation-only values in memory, and write vector
-PDFs under `outputs/figures/`:
+Research figures remain outside `src/kairos` and outside the experiment command flow. The seven
+manuscript generators load completed manifests and canonical Studies, Artifacts, or
+Evaluations through their owning KAIROS loaders, derive presentation-only values in memory, and
+write vector PDFs under `outputs/figures/`:
 
 ```text
 uv run python experiments/figure_feature_ablation.py STORAGE_ROOT EXPERIMENT_ID
 uv run python experiments/figure_context_study.py STORAGE_ROOT EXPERIMENT_ID
 uv run python experiments/figure_hpo.py STORAGE_ROOT EXPERIMENT_ID
 uv run python experiments/figure_k_study.py STORAGE_ROOT EXPERIMENT_ID
-uv run python experiments/figure_held_out.py STORAGE_ROOT EXPERIMENT_ID
+uv run python experiments/figure_polygon_temporal_alignment.py STORAGE_ROOT EXPERIMENT_ID
+uv run python experiments/figure_horizon_held_out.py STORAGE_ROOT EXPERIMENT_ID REFINEMENT_EXPERIMENT_ID
+uv run python experiments/figure_rolling_held_out.py STORAGE_ROOT EXPERIMENT_ID
 ```
 
 `figure_style.py` owns their shared typography, architecture colors, dimensions, and deterministic
-PDF metadata. The K-study script owns the predictive, full-range economic, and $K\leq25$ economic
-detail validation plots from canonical Artifact observations. The held-out script owns both
-horizon economics and rolling-minus-one-shot deltas. The scripts never persist derived metrics or
-parse experiment work state. A manuscript may copy a selected final PDF and owns only its caption,
-label, placement, and discussion.
+PDF metadata. Their manuscript-ready outputs are:
+
+| Generator | Output PDFs |
+| --- | --- |
+| `figure_feature_ablation.py` | `feature-ablation.pdf` |
+| `figure_context_study.py` | `context-study.pdf` |
+| `figure_hpo.py` | `hpo.pdf` |
+| `figure_k_study.py` | `horizon-validation-predictive.pdf`, `horizon-validation-predictive-k25.pdf`, `horizon-validation-economic.pdf`, `horizon-validation-economic-k25.pdf` |
+| `figure_polygon_temporal_alignment.py` | `polygon-temporal-alignment-economic.pdf` |
+| `figure_horizon_held_out.py` | `horizon-held-out-economic.pdf`, `horizon-held-out-economic-k25.pdf`, `horizon-held-out-classification.pdf`, `horizon-held-out-classification-k25.pdf`, `horizon-held-out-regression.pdf`, `horizon-held-out-regression-k25.pdf` |
+| `figure_rolling_held_out.py` | `rolling-held-out-comparison.pdf` |
+
+The K-study script owns validation plots from canonical Artifact observations. The three held-out
+generators own temporal-alignment, horizon, and rolling-policy plots from canonical Evaluations.
+The scripts never persist derived metrics or parse experiment work state. A manuscript may copy a
+selected final PDF and owns only its caption, label, placement, and discussion.
 
 #### Study object
 

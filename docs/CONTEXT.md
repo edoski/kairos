@@ -16,7 +16,7 @@ manifest publication.
 
 **Rolling comparison.** One transient held-out reduction that runs completed `K=5`, `K=4`, `K=3`, and `K=2` Evaluation predictions once in descending order under an immutable five-block deadline; each smaller model replaces the preceding prediction and moves one origin forward only after a terminal action.
 
-**P50 fee-inclusive savings.** The arithmetic mean of per-origin savings between the next block and the base-fee-selected block after adding each outcome block's included-transaction effective-priority-fee P50. It is a retrospective representative-cost proxy, not an inclusion guarantee.
+**P50 fee-inclusive savings.** Per-origin savings between the next block and the base-fee-selected block after adding each outcome block's included-transaction effective-priority-fee P50. The median is the typical-origin headline; the arithmetic mean is a tail-sensitive diagnostic. This is a retrospective representative-cost proxy, not an inclusion guarantee.
 
 **Decision origin.** The decision point immediately after closed parent block `h`.
 

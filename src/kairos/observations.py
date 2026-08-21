@@ -14,6 +14,7 @@ from . import _runtime
 from .config import BlockWindow
 from .corpus import BlockFrame
 from .min_block_fee import TargetState, decode_action
+from .statistics import symmetric_trimmed_mean
 from .temporal import HistoricalDataset
 
 OBSERVATION_SCHEMA = pl.Schema(
@@ -33,6 +34,7 @@ OBSERVATION_SCHEMA = pl.Schema(
 )
 
 _WEI_PER_GWEI = 1_000_000_000.0
+_P50_TRIM_PROPORTION_PER_TAIL = 0.025
 
 
 def collect_observations(
@@ -179,16 +181,23 @@ def economic_metrics(
     immediate_base_fees = columns["immediate_base_fee_per_gas"]
     minimum_base_fees = columns["minimum_base_fee_per_gas"]
     selected_base_fees = selected[f"{policy}_base_fee_per_gas"]
+    per_origin_p50_fee_inclusive_savings = 1.0 - (
+        selected_base_fees + selected[f"{policy}_effective_priority_fee_per_gas_p50"]
+    ) / (immediate_base_fees + columns["immediate_effective_priority_fee_per_gas_p50"])
     return {
         "base_fee_savings": float(
             np.mean((immediate_base_fees - selected_base_fees) / immediate_base_fees)
         ),
-        "p50_fee_inclusive_savings": float(
-            np.mean(
-                1.0
-                - (selected_base_fees + selected[f"{policy}_effective_priority_fee_per_gas_p50"])
-                / (immediate_base_fees + columns["immediate_effective_priority_fee_per_gas_p50"])
-            )
+        "mean_p50_fee_inclusive_savings": float(np.mean(per_origin_p50_fee_inclusive_savings)),
+        "trimmed_mean_p50_fee_inclusive_savings": symmetric_trimmed_mean(
+            per_origin_p50_fee_inclusive_savings, _P50_TRIM_PROPORTION_PER_TAIL
+        ),
+        "p25_p50_fee_inclusive_savings": float(
+            np.quantile(per_origin_p50_fee_inclusive_savings, 0.25)
+        ),
+        "median_p50_fee_inclusive_savings": float(np.median(per_origin_p50_fee_inclusive_savings)),
+        "p75_p50_fee_inclusive_savings": float(
+            np.quantile(per_origin_p50_fee_inclusive_savings, 0.75)
         ),
         "base_fee_optimality_gap": float(
             np.mean((selected_base_fees - minimum_base_fees) / minimum_base_fees)

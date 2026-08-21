@@ -8,7 +8,13 @@ from campaign import StorageRoot, author_experiment, close_experiment, print_met
 
 from kairos.config import BlockWindow, EvaluateRequest
 from kairos.corpus import open_corpus_dataset
-from kairos.evaluation import ROLLING_HORIZONS, reduce_baselines, reduce_evaluation, reduce_rolling
+from kairos.evaluation import (
+    ROLLING_HORIZONS,
+    reduce_baselines,
+    reduce_evaluation,
+    reduce_rolling,
+    reduce_rolling_traces,
+)
 from kairos.experiments import ExperimentKind, load_experiment_manifest
 from kairos.study import load_study
 
@@ -63,6 +69,16 @@ def baselines(storage_root: StorageRoot, experiment_id: UUID) -> None:
 
 
 def rolling(storage_root: StorageRoot, experiment_id: UUID) -> None:
+    roster = _rolling_roster(storage_root, experiment_id)
+    print(reduce_rolling(storage_root, roster).write_csv(None, separator="\t"), end="")
+
+
+def rolling_traces(storage_root: StorageRoot, experiment_id: UUID) -> None:
+    roster = _rolling_roster(storage_root, experiment_id)
+    print(reduce_rolling_traces(storage_root, roster).write_csv(None, separator="\t"), end="")
+
+
+def _rolling_roster(storage_root: StorageRoot, experiment_id: UUID) -> dict[str, dict[int, UUID]]:
     manifest = load_experiment_manifest(storage_root, _KIND, experiment_id)
     roster: dict[str, dict[int, UUID]] = {}
     for experiment_cell, evaluation_id in manifest.items():
@@ -70,8 +86,8 @@ def rolling(storage_root: StorageRoot, experiment_id: UUID) -> None:
         horizon = int(horizon_label.removeprefix("K"))
         if horizon in ROLLING_HORIZONS:
             roster.setdefault(cell, {})[horizon] = evaluation_id
-    print(reduce_rolling(storage_root, roster).write_csv(None, separator="\t"), end="")
+    return roster
 
 
 if __name__ == "__main__":
-    run(prepare, close, report, baselines, rolling)
+    run(prepare, close, report, baselines, rolling, rolling_traces)

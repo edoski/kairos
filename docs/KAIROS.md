@@ -487,7 +487,7 @@ hat{ell}_i      predicted dimensionless log minimum
 Evaluation de-standardizes `hat{z}_i` to `hat{ell}_i` before publication. Reduction reads the
 stored facts directly; `ell_i=ln(m_i/u)` is the true dimensionless log coordinate.
 
-Validation and testing use one observation reducer. It returns seven scientific metrics plus four
+Validation and testing use one observation reducer. It returns eleven scientific metrics plus four
 presentation-time Gwei summaries:
 
 ```text
@@ -496,9 +496,18 @@ f1_macro                = mean_c 2 TP_c / (2 TP_c + FP_c + FN_c)
 log_fee_mae             = mean_i |hat{ell}_i - ell_i|
 log_fee_mse             = mean_i (hat{ell}_i - ell_i)^2
 base_fee_savings        = mean_i ((B_i(0) - B_i(hat{k}_i)) / B_i(0))
-p50_fee_inclusive_savings
+mean_p50_fee_inclusive_savings
                         = mean_i (1 - (B_i(hat{k}_i) + P_i(hat{k}_i))
                                           / (B_i(0) + P_i(0)))
+trimmed_mean_p50_fee_inclusive_savings
+                        = the same mean after rank-removing the lowest and highest 2.5%
+p25_p50_fee_inclusive_savings
+                        = lower quartile of the same per-origin ratios
+median_p50_fee_inclusive_savings
+                        = median_i (1 - (B_i(hat{k}_i) + P_i(hat{k}_i))
+                                            / (B_i(0) + P_i(0)))
+p75_p50_fee_inclusive_savings
+                        = upper quartile of the same per-origin ratios
 base_fee_optimality_gap = mean_i ((B_i(hat{k}_i) - m_i) / m_i)
 mean_immediate_base_fee_gwei
 mean_selected_base_fee_gwei
@@ -508,7 +517,7 @@ mean_selected_minus_minimum_base_fee_gwei
 
 `f1_macro` is standard unweighted macro-F1 over the union of action classes present in truth or predictions. Classes absent from both do not enter the mean.
 
-All three economic metrics are mean per-origin fractions, not ratios of fee sums. Positive base fees make their denominators defined. Both savings metrics are higher-is-better; `base_fee_savings` remains base-fee-only, while `p50_fee_inclusive_savings` is a retrospective representative-cost proxy using each outcome block's included-transaction P50, not an inclusion guarantee. `base_fee_optimality_gap` is nonnegative and lower is better. Natural-log errors compare dimensionless coordinates relative to `u=1 wei/gas` and lower is better. Accuracy and macro-F1 are unitless and higher is better. Economic values remain fractions for later percentage formatting.
+Base-fee savings and Cost over optimum remain mean per-origin fractions, not ratios of fee sums. P50 fee-inclusive savings reports the P25, median, P75, and tail-sensitive arithmetic mean across per-origin ratios. Positive base fees make their denominators defined. The P50 fields are retrospective representative-cost proxies using each outcome block's included-transaction P50, not inclusion guarantees. Natural-log errors compare dimensionless coordinates relative to `u=1 wei/gas` and lower is better. Accuracy and macro-F1 are unitless and higher is better. Economic values remain fractions for later percentage formatting.
 
 The four Gwei summaries are descriptive within one chain. Native-token value and transaction gas
 use differ, so they are not pooled monetary comparisons across chains.
@@ -523,7 +532,7 @@ The rolling comparison fixes each `K=5` origin `h` and deadline `D=h+5`. Startin
 
 Every selected observation uses only context closed by its own decision origin. The comparison reconstructs the policy from precomputed predictions and performs no model inference or Corpus hydration.
 
-For every architecture-chain cell, the rolling reduction uses every `K=5` testing origin at stride one and returns one-shot and rolling values for base-fee savings, P50 fee-inclusive savings, and base-fee optimality gap. Savings use the immediate action as their baseline; optimality gap uses the earliest minimum within the original five-block window. These are exact descriptive means for the sealed held-out period. There is no bootstrap, confidence interval, significance test, resampling, stride thinning, or persisted pairwise delta.
+For every architecture-chain cell, the rolling reduction uses every `K=5` testing origin at stride one and returns one-shot and rolling values for base-fee savings, P50 fee-inclusive savings, and base-fee optimality gap. Savings use the immediate action as their baseline; optimality gap uses the earliest minimum within the original five-block window. Point estimates are exact descriptive summaries for the sealed held-out period. `reduce_rolling_intervals()` resamples complete UTC-hour clusters 5,000 times with a fixed seed and returns 95% percentile intervals for one-shot, rolling, and their paired difference in the two mean economic metrics. It performs no reevaluation or model inference.
 
 ### HPO interpretation
 
@@ -1024,11 +1033,13 @@ The manifest owns shared context and feature state plus each model's artifact UU
 
 Expo SDK 55, React Native 0.83, and React Native ExecuTorch 0.9 require a custom native build; Expo Go is unsupported. The app reads public EVM RPC for chains `1`, `137`, and `43114`, prepares one fresh exact closed-head context per Run, runs the selected `(chain,K)` model, stores unbounded local `kairos.runs` history, and derives analytics from the selected `(chain,K)` subset. Analytics resolves eligible pending outcomes only when the user presses **Refresh outcomes**: one current-head read establishes eligibility, then exact outcome blocks are read in parallel. The refresh owns its captured chain, so later network or horizon changes do not discard valid outcomes. Failed and future outcomes remain persisted and retryable on the next refresh. Viem owns HTTP batching, the ten-second timeout, and zero retries; the raw adapter requires every block to contain a positive base fee. App owns one immediate global `(chain,K)` selection for both screens. Each Run advances and captures one inference generation; every real selection change advances it again and resets presentation. Every completed valid run still enters durable history, while only the current generation may publish loading, success, or error state. One concrete run-history owner serializes initial load and complete read-transform-save mutations through one rejection-safe FIFO. It requires a successful load, saves before publication, retains committed runs after failed saves, and reports load and save failures through one storage error. One mounted inference runtime owns one model catalog, one model runtime, and one immutable RPC session per chain. Chain changes alter only operation arguments. Each React effect setup creates a fresh runtime, and its matching cleanup disposes that instance. The model runtime's local queue serializes native load, forward, copied-output completion, model replacement, and disposal. RPC, feature, native, prediction, and numeric errors propagate from their owners; inference and outcome-refresh presentation uses compact Viem `shortMessage` text and otherwise preserves direct error messages. Run-history persistence keeps its explicit workflow failure message. When the selected feature route contains priority fees, one context-wide `eth_feeHistory(...,[50,90])` call must begin at the first context block and return exactly `C` rows containing nonnegative P50 and P90 values. Avalanche uses this direct RPC path because the model context is at most 400 blocks; BigQuery is historical Corpus acquisition only.
 
-The code and non-asset tests implement this contract, but the twelve final artifact UUIDs, real
-`MOBILE.yaml`, generated assets, and device-acceptance evidence do not yet exist. The
+The repository contains the final twelve-cell `MOBILE.yaml` roster, generated manifest, and twelve
+`.pte` assets. Every asset passed the exporter's eager-versus-ExecuTorch parity checks on zero and
+deterministic nonzero inputs. A custom native iOS Simulator Release build exercised real public-RPC
+inference for Ethereum `K=5` and Polygon `K=5`, including durable run history and resolved outcomes.
+This is not evidence for all twelve native cells or physical-device performance and memory. The
 [README](../README.md#mobile-demo) owns build commands; the
-[on-device decision](research/on-device-inference.md) owns rationale and the deferred
-real-artifact acceptance boundary.
+[on-device decision](research/on-device-inference.md) owns the exact acceptance boundary.
 
 ### Execution runtime
 
@@ -1110,21 +1121,26 @@ transient, noncanonical, nonnull row. Validation and testing call the same reduc
 | 3 | `log_fee_mae` | Float64 | dimensionless natural-log error relative to `u`; lower is better |
 | 4 | `log_fee_mse` | Float64 | squared dimensionless natural-log error; lower is better |
 | 5 | `base_fee_savings` | Float64 | mean per-origin fraction versus immediate; higher is better |
-| 6 | `p50_fee_inclusive_savings` | Float64 | mean per-origin representative-cost fraction versus immediate; higher is better |
-| 7 | `base_fee_optimality_gap` | Float64 | mean per-origin fraction above optimum; lower is better |
-| 8 | `mean_immediate_base_fee_gwei` | Float64 | mean immediate base fee, Gwei/gas |
-| 9 | `mean_selected_base_fee_gwei` | Float64 | mean selected base fee, Gwei/gas |
-| 10 | `mean_minimum_base_fee_gwei` | Float64 | mean horizon-minimum base fee, Gwei/gas |
-| 11 | `mean_selected_minus_minimum_base_fee_gwei` | Float64 | mean selected excess, Gwei/gas |
+| 6 | `mean_p50_fee_inclusive_savings` | Float64 | tail-sensitive mean per-origin representative-cost fraction; higher is better |
+| 7 | `trimmed_mean_p50_fee_inclusive_savings` | Float64 | mean after removing the lowest and highest 2.5% of per-origin ratios; higher is better |
+| 8 | `p25_p50_fee_inclusive_savings` | Float64 | lower-quartile representative-cost fraction; higher is better |
+| 9 | `median_p50_fee_inclusive_savings` | Float64 | typical-origin representative-cost fraction; higher is better |
+| 10 | `p75_p50_fee_inclusive_savings` | Float64 | upper-quartile representative-cost fraction; higher is better |
+| 11 | `base_fee_optimality_gap` | Float64 | mean per-origin fraction above optimum; lower is better |
+| 12 | `mean_immediate_base_fee_gwei` | Float64 | mean immediate base fee, Gwei/gas |
+| 13 | `mean_selected_base_fee_gwei` | Float64 | mean selected base fee, Gwei/gas |
+| 14 | `mean_minimum_base_fee_gwei` | Float64 | mean horizon-minimum base fee, Gwei/gas |
+| 15 | `mean_selected_minus_minimum_base_fee_gwei` | Float64 | mean selected excess, Gwei/gas |
 
 `accuracy` compares `predicted_action_k` (`hat{k}_i`) with `minimum_action_k` (`k_i*`). `f1_macro`
 averages over the union of classes appearing in truth or predictions.
 Regression compares `predicted_minimum_log_base_fee` (`hat{ell}_i`) with
 `ln(minimum_base_fee_per_gas / u)` (`ell_i`). Economic fields are fractions, not percentages or
-ratios of sums. `p50_fee_inclusive_savings` is retrospective and does not claim inclusion.
+ratios of sums. All P50 summaries are retrospective and do not claim inclusion.
 
 `reduce_baselines()` returns two rows, ordered `immediate` then `deadline`, with `policy`,
-`base_fee_savings`, `p50_fee_inclusive_savings`, and `base_fee_optimality_gap`.
+`base_fee_savings`, all five explicit P50 fee-inclusive summaries, and
+`base_fee_optimality_gap`.
 `experiments/held_out.py baselines` prefixes each row with its cell.
 
 #### Rolling comparison result
@@ -1138,10 +1154,22 @@ nonnull.
 | 1 | `cell` | String | operator-authored architecture-chain label |
 | 2 | `one_shot_base_fee_savings` | Float64 | mean per-origin fraction versus immediate; higher is better |
 | 3 | `rolling_base_fee_savings` | Float64 | mean per-origin fraction versus immediate; higher is better |
-| 4 | `one_shot_p50_fee_inclusive_savings` | Float64 | mean per-origin representative-cost fraction versus immediate; higher is better |
-| 5 | `rolling_p50_fee_inclusive_savings` | Float64 | mean per-origin representative-cost fraction versus immediate; higher is better |
-| 6 | `one_shot_base_fee_optimality_gap` | Float64 | mean per-origin fraction above the five-block optimum; lower is better |
-| 7 | `rolling_base_fee_optimality_gap` | Float64 | mean per-origin fraction above the five-block optimum; lower is better |
+| 4 | `one_shot_mean_p50_fee_inclusive_savings` | Float64 | tail-sensitive mean representative-cost fraction; higher is better |
+| 5 | `rolling_mean_p50_fee_inclusive_savings` | Float64 | tail-sensitive mean representative-cost fraction; higher is better |
+| 6 | `one_shot_trimmed_mean_p50_fee_inclusive_savings` | Float64 | 2.5%-per-tail trimmed representative-cost mean; higher is better |
+| 7 | `rolling_trimmed_mean_p50_fee_inclusive_savings` | Float64 | 2.5%-per-tail trimmed representative-cost mean; higher is better |
+| 8 | `one_shot_p25_p50_fee_inclusive_savings` | Float64 | lower-quartile representative-cost fraction; higher is better |
+| 9 | `rolling_p25_p50_fee_inclusive_savings` | Float64 | lower-quartile representative-cost fraction; higher is better |
+| 10 | `one_shot_median_p50_fee_inclusive_savings` | Float64 | typical-origin representative-cost fraction; higher is better |
+| 11 | `rolling_median_p50_fee_inclusive_savings` | Float64 | typical-origin representative-cost fraction; higher is better |
+| 12 | `one_shot_p75_p50_fee_inclusive_savings` | Float64 | upper-quartile representative-cost fraction; higher is better |
+| 13 | `rolling_p75_p50_fee_inclusive_savings` | Float64 | upper-quartile representative-cost fraction; higher is better |
+| 14 | `one_shot_base_fee_optimality_gap` | Float64 | mean per-origin fraction above the five-block optimum; lower is better |
+| 15 | `rolling_base_fee_optimality_gap` | Float64 | mean per-origin fraction above the five-block optimum; lower is better |
+
+`reduce_rolling_traces()` returns long-form `cell`, `trace`, `value`, `count`, and `proportion`
+rows. `k2_head_advance_blocks` has support `0..3`; `maximum_same_head_cascade_length` has
+support `1..4`. `experiments/held_out.py rolling-traces` prints this transient table.
 
 ## Limitations and sources
 
@@ -1149,7 +1177,7 @@ nonnull.
 
 Evaluation describes target block base fee per gas over every eligible origin in one declared historical window. Its claims are bounded as follows:
 
-- The target and `base_fee_savings` omit priority fee and transaction gas use; `p50_fee_inclusive_savings` adds an included-transaction P50 proxy, not an actual transaction quote.
+- The target and `base_fee_savings` omit priority fee and transaction gas use; the separate P50 summaries add an included-transaction proxy, not an actual transaction quote.
 - Target-block intent does not guarantee inclusion at that block.
 - The auxiliary head is not calibrated uncertainty or a quote.
 - One seed or one time range does not establish seed, regime, or future robustness.

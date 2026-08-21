@@ -32,6 +32,9 @@ _FIGURE_SCRIPTS = {
     ExperimentKind.K_STUDY: _ROOT / "experiments" / "figure_k_study.py",
     ExperimentKind.HELD_OUT: _ROOT / "experiments" / "figure_held_out.py",
 }
+_POLYGON_ALIGNMENT_FIGURE = _ROOT / "experiments" / "figure_polygon_temporal_alignment.py"
+_HORIZON_HELD_OUT_FIGURE = _ROOT / "experiments" / "figure_horizon_held_out.py"
+_ROLLING_HELD_OUT_FIGURE = _ROOT / "experiments" / "figure_rolling_held_out.py"
 _FIT = FitMethod(
     learning_rate=3e-4,
     weight_decay=1e-4,
@@ -211,11 +214,23 @@ def test_k_study_figures_use_canonical_artifact_observations(tmp_path: Path) -> 
     predictive = output / "horizon-validation-predictive.pdf"
     economic = output / "horizon-validation-economic.pdf"
     economic_detail = output / "horizon-validation-economic-k25.pdf"
+    predictive_detail = output / "horizon-validation-predictive-k25.pdf"
     _assert_pdf(predictive)
     _assert_pdf(economic)
     _assert_pdf(economic_detail)
-    assert result.stdout.splitlines() == [str(predictive), str(economic), str(economic_detail)]
-    expected = predictive.read_bytes(), economic.read_bytes(), economic_detail.read_bytes()
+    _assert_pdf(predictive_detail)
+    assert result.stdout.splitlines() == [
+        str(predictive),
+        str(economic),
+        str(economic_detail),
+        str(predictive_detail),
+    ]
+    expected = (
+        predictive.read_bytes(),
+        economic.read_bytes(),
+        economic_detail.read_bytes(),
+        predictive_detail.read_bytes(),
+    )
 
     run_script(
         _FIGURE_SCRIPTS[ExperimentKind.K_STUDY],
@@ -228,6 +243,7 @@ def test_k_study_figures_use_canonical_artifact_observations(tmp_path: Path) -> 
         predictive.read_bytes(),
         economic.read_bytes(),
         economic_detail.read_bytes(),
+        predictive_detail.read_bytes(),
     ) == expected
 
 
@@ -302,3 +318,84 @@ def test_held_out_figure_uses_canonical_reducers_for_horizon_and_rolling_plots(
         output,
     )
     assert (horizon.read_bytes(), rolling.read_bytes()) == expected
+
+
+def test_polygon_temporal_alignment_figure_uses_paired_canonical_evaluations(
+    tmp_path: Path,
+) -> None:
+    cells = {}
+    for horizon, stale_action, chicago_action in ((2, 0, 1), (5, 0, 4)):
+        for cohort, action in (
+            ("stale_history", stale_action),
+            ("chicago_training", chicago_action),
+        ):
+            evaluation_id = uuid4()
+            _publish_evaluation(tmp_path, evaluation_id, horizon, [action])
+            cells[f"polygon.{cohort}.chicago_tail.lstm.K{horizon}"] = evaluation_id
+    experiment_id = _publish_manifest(tmp_path, ExperimentKind.HELD_OUT, cells)
+    output = tmp_path / "figures"
+
+    result = run_script(
+        _POLYGON_ALIGNMENT_FIGURE, tmp_path, experiment_id, "--output-directory", output
+    )
+
+    economic = output / "polygon-temporal-alignment-economic.pdf"
+    _assert_pdf(economic)
+    assert result.stdout.splitlines() == [str(economic)]
+
+
+def test_final_held_out_figures_merge_original_and_refinement_cells(tmp_path: Path) -> None:
+    base_cells = {}
+    refinement_cells = {}
+    for chain in ("ethereum", "polygon", "avalanche"):
+        for horizon, target in ((2, base_cells), (5, refinement_cells)):
+            evaluation_id = uuid4()
+            _publish_evaluation(tmp_path, evaluation_id, horizon, [horizon - 1])
+            target[f"{chain}.lstm.K{horizon}"] = evaluation_id
+    base_id = _publish_manifest(tmp_path, ExperimentKind.HELD_OUT, base_cells)
+    refinement_id = _publish_manifest(tmp_path, ExperimentKind.HELD_OUT, refinement_cells)
+    output = tmp_path / "figures"
+
+    result = run_script(
+        _HORIZON_HELD_OUT_FIGURE,
+        tmp_path,
+        base_id,
+        refinement_id,
+        "--output-directory",
+        output,
+        "--without-confidence-intervals",
+    )
+
+    expected = [
+        output / f"horizon-held-out-{group}{suffix}.pdf"
+        for suffix in ("", "-k25")
+        for group in ("economic", "classification", "regression")
+    ]
+    for path in expected:
+        _assert_pdf(path)
+    assert result.stdout.splitlines() == [str(path) for path in expected]
+
+
+def test_final_rolling_figure_uses_one_complete_held_out_manifest(tmp_path: Path) -> None:
+    actions = {5: [4], 4: [0, 3], 3: [0, 0, 2], 2: [0, 0, 0, 1]}
+    cells = {}
+    for chain in ("ethereum", "polygon", "avalanche"):
+        for horizon, horizon_actions in actions.items():
+            evaluation_id = uuid4()
+            _publish_evaluation(tmp_path, evaluation_id, horizon, horizon_actions)
+            cells[f"{chain}.lstm.K{horizon}"] = evaluation_id
+    experiment_id = _publish_manifest(tmp_path, ExperimentKind.HELD_OUT, cells)
+    output = tmp_path / "figures"
+
+    result = run_script(
+        _ROLLING_HELD_OUT_FIGURE,
+        tmp_path,
+        experiment_id,
+        "--output-directory",
+        output,
+        "--without-confidence-intervals",
+    )
+
+    figure = output / "rolling-held-out-comparison.pdf"
+    _assert_pdf(figure)
+    assert result.stdout.splitlines() == [str(figure)]

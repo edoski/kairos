@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
@@ -23,6 +24,7 @@ from .observations import (
     reduce_observations,
     validate_observations,
 )
+from .statistics import clustered_mean_intervals
 from .temporal import prepare_historical_window
 
 _DEVICE = torch.device("cuda:0")
@@ -102,15 +104,107 @@ def reduce_rolling(storage_root: Path, roster: Mapping[str, Mapping[int, UUID]])
     return pl.DataFrame(rows)
 
 
+def reduce_rolling_intervals(
+    storage_root: Path, roster: Mapping[str, Mapping[int, UUID]]
+) -> pl.DataFrame:
+    """Return paired hourly-bootstrap intervals for rolling mean economics."""
+
+    rows = []
+    for cell, evaluation_ids in roster.items():
+        replay = _replay_rolling_cell(storage_root, cell, evaluation_ids)
+        immediate = replay.initial["immediate_base_fee_per_gas"]
+        minimum = replay.initial["minimum_base_fee_per_gas"]
+        one_shot_selected = replay.initial["selected_base_fee_per_gas"]
+        rolling_selected = replay.final["selected_base_fee_per_gas"]
+        one_shot_savings = (immediate - one_shot_selected) / immediate
+        rolling_savings = (immediate - rolling_selected) / immediate
+        one_shot_gap = (one_shot_selected - minimum) / minimum
+        rolling_gap = (rolling_selected - minimum) / minimum
+        clusters = _rolling_hour_clusters(
+            storage_root, evaluation_ids[ROLLING_HORIZONS[0]], replay.initial["origin_block"]
+        )
+        intervals = clustered_mean_intervals(
+            {
+                "one_shot_base_fee_savings": one_shot_savings,
+                "rolling_base_fee_savings": rolling_savings,
+                "delta_base_fee_savings": rolling_savings - one_shot_savings,
+                "one_shot_base_fee_optimality_gap": one_shot_gap,
+                "rolling_base_fee_optimality_gap": rolling_gap,
+                "delta_base_fee_optimality_gap": rolling_gap - one_shot_gap,
+            },
+            clusters,
+            seed=2026 ^ (evaluation_ids[ROLLING_HORIZONS[0]].int & 0xFFFF_FFFF),
+        )
+        row: dict[str, str | float] = {"cell": cell}
+        for metric, (lower, upper) in intervals.items():
+            row[f"{metric}_lower"] = lower
+            row[f"{metric}_upper"] = upper
+        rows.append(row)
+    return pl.DataFrame(rows)
+
+
 def _reduce_rolling_cell(
     storage_root: Path, cell: str, evaluation_ids: Mapping[int, UUID]
 ) -> dict[str, str | float]:
+    replay = _replay_rolling_cell(storage_root, cell, evaluation_ids)
+    one_shot = economic_metrics(replay.initial, "selected")
+    rolling = economic_metrics(replay.initial, "selected", selected=replay.final)
+    metrics = {}
+    for name in one_shot:
+        metrics[f"one_shot_{name}"] = one_shot[name]
+        metrics[f"rolling_{name}"] = rolling[name]
+    return {"cell": cell, **metrics}
+
+
+def reduce_rolling_traces(
+    storage_root: Path, roster: Mapping[str, Mapping[int, UUID]]
+) -> pl.DataFrame:
+    """Summarize rolling call placement without persisting replay state."""
+
+    rows = []
+    for cell, evaluation_ids in roster.items():
+        replay = _replay_rolling_cell(storage_root, cell, evaluation_ids)
+        for trace, values, support in (
+            ("k2_head_advance_blocks", replay.k2_head_advance_blocks, range(4)),
+            (
+                "maximum_same_head_cascade_length",
+                replay.maximum_same_head_cascade_length,
+                range(1, 5),
+            ),
+        ):
+            for value in support:
+                count = int(np.count_nonzero(values == value))
+                rows.append(
+                    {
+                        "cell": cell,
+                        "trace": trace,
+                        "value": value,
+                        "count": count,
+                        "proportion": count / values.size,
+                    }
+                )
+    return pl.DataFrame(rows)
+
+
+@dataclass(frozen=True)
+class _RollingReplay:
+    initial: dict[str, np.ndarray]
+    final: dict[str, np.ndarray]
+    k2_head_advance_blocks: np.ndarray
+    maximum_same_head_cascade_length: np.ndarray
+
+
+def _replay_rolling_cell(
+    storage_root: Path, cell: str, evaluation_ids: Mapping[int, UUID]
+) -> _RollingReplay:
     decision_origins: np.ndarray | None = None
+    call_origins = []
     selections = []
     for horizon in ROLLING_HORIZONS:
         columns = _load_rolling_observations(storage_root, evaluation_ids[horizon])
         if decision_origins is None:
             decision_origins = columns["origin_block"].copy()
+        call_origins.append(decision_origins.copy())
         selection = _rolling_arrays(
             columns, decision_origins=decision_origins, cell=cell, horizon=horizon
         )
@@ -120,13 +214,22 @@ def _reduce_rolling_cell(
 
     initial = selections[0]
     final = selections[-1]
-    one_shot = economic_metrics(initial, "selected")
-    rolling = economic_metrics(initial, "selected", selected=final)
-    metrics = {}
-    for name in one_shot:
-        metrics[f"one_shot_{name}"] = one_shot[name]
-        metrics[f"rolling_{name}"] = rolling[name]
-    return {"cell": cell, **metrics}
+    stacked_origins = np.stack(call_origins, axis=1)
+    current_run = np.ones(stacked_origins.shape[0], dtype=np.int8)
+    maximum_run = current_run.copy()
+    for index in range(1, stacked_origins.shape[1]):
+        current_run = np.where(
+            stacked_origins[:, index] == stacked_origins[:, index - 1],
+            current_run + 1,
+            1,
+        )
+        maximum_run = np.maximum(maximum_run, current_run)
+    return _RollingReplay(
+        initial=initial,
+        final=final,
+        k2_head_advance_blocks=call_origins[-1] - call_origins[0],
+        maximum_same_head_cascade_length=maximum_run,
+    )
 
 
 def _load_rolling_observations(storage_root: Path, evaluation_id: UUID) -> dict[str, np.ndarray]:
@@ -135,6 +238,19 @@ def _load_rolling_observations(storage_root: Path, evaluation_id: UUID) -> dict[
     if origins.size == 0 or np.any(np.diff(origins) != 1):
         raise ValueError("rolling observations must contain consecutive unique origins")
     return columns
+
+
+def _rolling_hour_clusters(
+    storage_root: Path, evaluation_id: UUID, origins: np.ndarray
+) -> np.ndarray:
+    request = load_evaluation(storage_root, evaluation_id)
+    blocks = load_corpus_blocks(storage_root, request.corpus_id).to_polars()
+    rows = origins - int(blocks[0, "block_number"])
+    if np.any((rows < 0) | (rows >= blocks.height)):
+        raise ValueError("rolling origins must lie within their Corpus")
+    if not np.array_equal(blocks["block_number"].to_numpy()[rows], origins):
+        raise ValueError("rolling origins must align with contiguous Corpus blocks")
+    return blocks["timestamp"].to_numpy()[rows] // 3_600
 
 
 def _rolling_arrays(

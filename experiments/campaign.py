@@ -101,6 +101,13 @@ def close_experiment(
         if not study_directory(storage_root, study_id).exists():
             publish_study(storage_root, study_id)
 
+    publish_experiment_manifest(storage_root, kind, experiment_id, cells)
+    return cells
+
+
+def publish_experiment_manifest(
+    storage_root: Path, kind: ExperimentKind, experiment_id: UUID, cells: dict[str, UUID]
+) -> None:
     destination = experiment_directory(storage_root, kind, experiment_id)
     destination.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     manifest = ExperimentManifest(root=cells)
@@ -109,7 +116,6 @@ def close_experiment(
         (draft.path / "manifest.json").write_text(manifest.model_dump_json(), encoding="utf-8")
 
     publish(destination, assemble)
-    return cells
 
 
 def print_metrics(

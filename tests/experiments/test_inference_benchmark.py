@@ -168,7 +168,7 @@ def _resolved() -> dict[str, dict[int, benchmark.Selection]]:
 
 def _protocol() -> benchmark.Protocol:
     return benchmark._protocol(
-        _K_STUDY_ID, _HELD_OUT_ID, _resolved(), warmup_iterations=2, sweeps=1
+        _K_STUDY_ID, _HELD_OUT_ID, _resolved(), warmup_iterations=2, origins_per_chain=1, sweeps=1
     )
 
 
@@ -190,6 +190,7 @@ def _architecture_protocol() -> benchmark.Protocol:
         _COMPARATOR_ID,
         _architecture_resolved(),
         warmup_iterations=2,
+        origins_per_chain=1,
         sweeps=1,
     )
 
@@ -234,7 +235,7 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
     resolved = benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
 
     assert resolved == source
-    protocol = benchmark._protocol(_K_STUDY_ID, _HELD_OUT_ID, resolved, 2, 10)
+    protocol = benchmark._protocol(_K_STUDY_ID, _HELD_OUT_ID, resolved, 2, 1, 10)
     assert len(protocol.roster) == 12
     assert sorted(protocol.roster) == [
         f"{group}.K{horizon}"
@@ -259,7 +260,9 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
     label = "ethereum.lstm.K5"
     k_study[label] = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
     with pytest.raises(ValueError, match="does not name"):
-        benchmark.run_policy_latency(tmp_path, _K_STUDY_ID, _HELD_OUT_ID, tmp_path / "output", 2, 1)
+        benchmark.run_policy_latency(
+            tmp_path, _K_STUDY_ID, _HELD_OUT_ID, tmp_path / "output", 2, 1, 1
+        )
     assert not (tmp_path / "output").exists()
 
 
@@ -381,14 +384,11 @@ def test_timing_uses_outer_clocks_same_origins_and_decode(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(benchmark.time, "perf_counter_ns", clock)
     monkeypatch.setattr(benchmark, "decode_action", decode)
-    rows = benchmark._time_cell(_cell(events), 1)
+    rows = benchmark._time_cell(_cell(events), 1, origins_per_chain=1)
 
     assert rows.columns == ["cell", "sweep", "pass_order", "workload", "origin_block", "elapsed_ns"]
     assert rows.dtypes == [pl.String, pl.Int64, pl.Int64, pl.String, pl.Int64, pl.Int64]
-    expected_calls = (
-        sum(1 + benchmark.ROLLING_HORIZONS[0] - horizon for horizon in benchmark.ROLLING_HORIZONS)
-        + 1
-    )
+    expected_calls = len(benchmark.ROLLING_HORIZONS) + 1
     assert rows["elapsed_ns"].to_list() == [10] * expected_calls
     assert rows.filter(pl.col("workload") == "cascade")["origin_block"].to_list() == [100]
     assert events[-10:] == [
@@ -413,6 +413,12 @@ def test_orders_rotate_deterministically() -> None:
         (horizon,) for horizon in reversed(benchmark.ROLLING_HORIZONS)
     ) + (benchmark.ROLLING_HORIZONS,)
     assert benchmark._pass_order(2) == (*first[1:], first[0])
+
+
+def test_stratified_origins_are_unique_midpoints() -> None:
+    assert benchmark._stratified_indices(10, 4) == (1, 3, 6, 8)
+    with pytest.raises(ValueError, match="exceed"):
+        benchmark._stratified_indices(3, 4)
 
 
 def test_protocol_match_and_units_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -56,8 +56,8 @@ local storage. Analytics resolves eligible pending outcomes only when the user p
 outcomes**; failed or future outcomes remain persisted and retryable. The app has no KAIROS
 inference server or fallback.
 
-The app requires a generated model bundle. Once the twelve final artifact UUIDs exist, create the
-strict three-chain by four-horizon `MOBILE.yaml` roster and export all assets atomically:
+The app uses the checked-in strict three-chain by four-horizon `MOBILE.yaml` roster and generated
+model bundle. Regenerate all assets atomically when that roster changes:
 
 ```bash
 STORAGE_ROOT=/absolute/storage \
@@ -82,10 +82,9 @@ iteration with:
 npm start
 ```
 
-The repository does not yet contain `MOBILE.yaml` or generated model assets because the twelve
-final artifacts do not exist. The app cannot be bundled or exercised in the simulator until that
-prerequisite is satisfied. The [acceptance plan](docs/research/on-device-inference.md) separates
-the implemented code from the deferred real-artifact checks.
+The repository contains `MOBILE.yaml`, one manifest, and twelve generated `.pte` assets. The
+[acceptance record](docs/research/on-device-inference.md) separates exporter parity and the exercised
+iOS Simulator path from native cells and physical-device behavior that have not been tested.
 
 ## Where do I look?
 

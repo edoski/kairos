@@ -62,15 +62,28 @@ def _render_group(
     results: dict[tuple[str, int], dict[str, float]],
     metrics: tuple[tuple[str, str, float], ...],
     output: Path,
+    *,
+    max_horizon: int | None = None,
 ) -> Path:
     columns = 2
     rows = (len(metrics) + columns - 1) // columns
     figure, axes = subplots(rows, columns, height=2.35 * rows)
-    ticks = sorted({horizon for chain in chains for horizon in horizons[chain]})
+    ticks = sorted(
+        {
+            horizon
+            for chain in chains
+            for horizon in horizons[chain]
+            if max_horizon is None or horizon <= max_horizon
+        }
+    )
     for index, (metric, label, scale) in enumerate(metrics):
         axis = axes[index // columns, index % columns]
         for chain in chains:
-            values = horizons[chain]
+            values = tuple(
+                horizon
+                for horizon in horizons[chain]
+                if max_horizon is None or horizon <= max_horizon
+            )
             color, marker = _CHAIN_STYLES[chain]
             axis.plot(
                 values,
@@ -136,7 +149,7 @@ def _render_economic_detail(
 
 def render(
     storage_root: Path, experiment_id: UUID, output_directory: Path
-) -> tuple[Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path]:
     chains, horizons, results = _load_results(storage_root, experiment_id)
     predictive = _render_group(
         chains,
@@ -155,10 +168,19 @@ def render(
     economic_detail = _render_economic_detail(
         chains, horizons, results, output_directory / "horizon-validation-economic-k25.pdf"
     )
+    predictive_detail = _render_group(
+        chains,
+        horizons,
+        results,
+        _PREDICTIVE_METRICS,
+        output_directory / "horizon-validation-predictive-k25.pdf",
+        max_horizon=_DETAIL_MAX_HORIZON,
+    )
     print(predictive)
     print(economic)
     print(economic_detail)
-    return predictive, economic, economic_detail
+    print(predictive_detail)
+    return predictive, economic, economic_detail, predictive_detail
 
 
 def main() -> None:

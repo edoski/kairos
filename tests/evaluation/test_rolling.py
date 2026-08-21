@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 
 from kairos.addresses import evaluation_directory
-from kairos.evaluation import reduce_rolling
+from kairos.evaluation import reduce_rolling, reduce_rolling_traces
 from kairos.observations import OBSERVATION_SCHEMA
 
 _EVALUATION_IDS = {
@@ -20,8 +20,16 @@ _RESULT_SCHEMA = pl.Schema(
         "cell": pl.String,
         "one_shot_base_fee_savings": pl.Float64,
         "rolling_base_fee_savings": pl.Float64,
-        "one_shot_p50_fee_inclusive_savings": pl.Float64,
-        "rolling_p50_fee_inclusive_savings": pl.Float64,
+        "one_shot_mean_p50_fee_inclusive_savings": pl.Float64,
+        "rolling_mean_p50_fee_inclusive_savings": pl.Float64,
+        "one_shot_trimmed_mean_p50_fee_inclusive_savings": pl.Float64,
+        "rolling_trimmed_mean_p50_fee_inclusive_savings": pl.Float64,
+        "one_shot_p25_p50_fee_inclusive_savings": pl.Float64,
+        "rolling_p25_p50_fee_inclusive_savings": pl.Float64,
+        "one_shot_median_p50_fee_inclusive_savings": pl.Float64,
+        "rolling_median_p50_fee_inclusive_savings": pl.Float64,
+        "one_shot_p75_p50_fee_inclusive_savings": pl.Float64,
+        "rolling_p75_p50_fee_inclusive_savings": pl.Float64,
         "one_shot_base_fee_optimality_gap": pl.Float64,
         "rolling_base_fee_optimality_gap": pl.Float64,
     }
@@ -97,7 +105,14 @@ def test_reduce_rolling_all_terminal_actions_end_at_original_deadline(tmp_path: 
 
     assert result.schema == _RESULT_SCHEMA
     assert result["cell"].to_list() == ["lstm.ethereum"]
-    assert result.select(pl.exclude("cell")).row(0) == pytest.approx((0.8, 0.8, 0.8, 0.8, 0.0, 0.0))
+    assert result.select(pl.exclude("cell")).row(0) == pytest.approx(
+        (0.8,) * 12 + (0.0, 0.0)
+    )
+    traces = reduce_rolling_traces(tmp_path, _roster())
+    assert traces.filter(pl.col("count") > 0).select("trace", "value", "count").rows() == [
+        ("k2_head_advance_blocks", 3, 1),
+        ("maximum_same_head_cascade_length", 1, 1),
+    ]
 
 
 def test_reduce_rolling_all_nonterminal_actions_keep_origin_and_k2_is_final(tmp_path: Path) -> None:
@@ -115,7 +130,14 @@ def test_reduce_rolling_all_nonterminal_actions_keep_origin_and_k2_is_final(tmp_
 
     result = reduce_rolling(tmp_path, _roster())
 
-    assert result.select(pl.exclude("cell")).row(0) == pytest.approx((0.2, 0.0, 0.2, 0.0, 3.0, 4.0))
+    assert result.select(pl.exclude("cell")).row(0) == pytest.approx(
+        (0.2, 0.0) * 6 + (3.0, 4.0)
+    )
+    traces = reduce_rolling_traces(tmp_path, _roster())
+    assert traces.filter(pl.col("count") > 0).select("trace", "value", "count").rows() == [
+        ("k2_head_advance_blocks", 0, 1),
+        ("maximum_same_head_cascade_length", 4, 1),
+    ]
 
 
 @pytest.mark.parametrize(

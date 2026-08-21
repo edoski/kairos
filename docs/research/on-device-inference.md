@@ -27,40 +27,37 @@ This keeps the existing cross-platform React Native interface while removing the
 service. A native Swift/Core ML rewrite would replace working application code and introduce a
 second model interface without reducing the thesis scope.
 
-## Implemented repository contract
+## Repository contract
 
-The canonical implemented exporter and app runtime contract is owned by
-[Mobile deployment](../KAIROS.md#mobile-deployment). This research note records the decision
-rationale and the real-artifact evidence still required.
+The canonical exporter and app runtime contract is owned by
+[Mobile deployment](../KAIROS.md#mobile-deployment). This note records the decision rationale,
+verified evidence, and remaining acceptance boundary.
 
-## Current boundary
+## Verified boundary
 
-The code and non-asset tests implement the target architecture. Real-artifact acceptance has not
-run.
+The repository contains the final `MOBILE.yaml`, generated manifest, and all twelve `.pte` assets.
+The exporter accepted every `(chain,K)` cell only after XNNPACK delegation and
+eager-versus-ExecuTorch parity on a zero tensor and deterministic nonzero tensor. Those checks cover
+both ExecuTorch outputs, the selected action, and decoded fee within the exporter's tolerance.
 
-The twelve final artifact UUIDs do not exist, so the repository intentionally has:
+On 2026-08-20, a custom native iOS Simulator Release build launched the app and completed real
+public-RPC recommendations for Ethereum `K=5` and Polygon `K=5`. AsyncStorage contained both
+successful runs and resolved outcomes. This verifies the exercised end-to-end Simulator path, not
+every bundled model.
 
-- no real `MOBILE.yaml`;
-- no generated `manifest.json`;
-- no placeholder `.pte` files.
-
-Therefore no claim is made that a final KAIROS model exports, bundles, loads, or matches the Python
-model in the simulator.
+No confidence or probability output exists. The model returns action logits and one standardized
+minimum-fee prediction; the app decodes an action offset and predicted horizon-minimum base fee.
 
 ## Developer flow
 
 The current asset-generation and custom native build instructions are owned by the
 [README mobile demo](../../README.md#mobile-demo).
 
-## Deferred real-artifact acceptance
+## Remaining acceptance
 
-Once the exporter produces the trusted manifest and all twelve real `.pte` files, execute every
-`(chain,K)` cell against fixed parity inputs in a custom native iOS simulator build. Compare both
-outputs, the selected action, and decoded fee with the Python oracle within the exporter's existing
-tolerances.
-
-Until these steps pass, documentation must describe the mobile path as implemented code under an
-unfulfilled generated-asset prerequisite, not as a validated runtime result.
+The native app has not exercised all twelve `(chain,K)` cells. A physical iPhone run has not tested
+device-only latency, peak memory, or thermal behavior. Do not infer either result from exporter
+parity or the two exercised Simulator cells.
 
 ## Primary references
 

@@ -20,7 +20,11 @@ _RESULT_SCHEMA = pl.Schema(
         "log_fee_mae": pl.Float64,
         "log_fee_mse": pl.Float64,
         "base_fee_savings": pl.Float64,
-        "p50_fee_inclusive_savings": pl.Float64,
+        "mean_p50_fee_inclusive_savings": pl.Float64,
+        "trimmed_mean_p50_fee_inclusive_savings": pl.Float64,
+        "p25_p50_fee_inclusive_savings": pl.Float64,
+        "median_p50_fee_inclusive_savings": pl.Float64,
+        "p75_p50_fee_inclusive_savings": pl.Float64,
         "base_fee_optimality_gap": pl.Float64,
         "mean_immediate_base_fee_gwei": pl.Float64,
         "mean_selected_base_fee_gwei": pl.Float64,
@@ -32,7 +36,11 @@ _BASELINE_RESULT_SCHEMA = pl.Schema(
     {
         "policy": pl.String,
         "base_fee_savings": pl.Float64,
-        "p50_fee_inclusive_savings": pl.Float64,
+        "mean_p50_fee_inclusive_savings": pl.Float64,
+        "trimmed_mean_p50_fee_inclusive_savings": pl.Float64,
+        "p25_p50_fee_inclusive_savings": pl.Float64,
+        "median_p50_fee_inclusive_savings": pl.Float64,
+        "p75_p50_fee_inclusive_savings": pl.Float64,
         "base_fee_optimality_gap": pl.Float64,
     }
 )
@@ -103,8 +111,12 @@ def test_reduce_evaluation_derives_exact_metrics_from_self_contained_observation
             0.375,
             1.0,
             1.5,
-            199.0 / 980.0,
-            1.0 / 14.0,
+                199.0 / 980.0,
+                1.0 / 14.0,
+                1.0 / 14.0,
+                0.0,
+            0.0,
+            0.0,
             69.0 / 98.0,
             32.0e-9,
             162.0 / 7.0e9,
@@ -122,7 +134,18 @@ def test_reduce_baselines_derives_immediate_and_deadline_metrics(tmp_path: Path)
     assert result.schema == _BASELINE_RESULT_SCHEMA
     assert result["policy"].to_list() == ["immediate", "deadline"]
     assert result.select(pl.exclude("policy")).rows() == pytest.approx(
-        [(0.0, 0.0, 19.0 / 14.0), (-33.0 / 140.0, -151.0 / 490.0, 8.0 / 7.0)]
+            [
+                (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 19.0 / 14.0),
+                (
+                    -33.0 / 140.0,
+                    -151.0 / 490.0,
+                    -151.0 / 490.0,
+                    -0.75,
+                    0.0,
+                    0.5,
+                    8.0 / 7.0,
+                ),
+            ]
     )
 
 

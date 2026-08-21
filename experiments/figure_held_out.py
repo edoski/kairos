@@ -23,7 +23,7 @@ from kairos.experiments import ExperimentKind, load_experiment_manifest
 
 _METRICS = (
     ("base_fee_savings", "Base-fee\nsavings (%)"),
-    ("p50_fee_inclusive_savings", "P50 fee-inclusive\nsavings (%)"),
+    ("median_p50_fee_inclusive_savings", "Median P50 fee-inclusive\nsavings (%)"),
     ("base_fee_optimality_gap", "Cost over\noptimum (%)"),
 )
 

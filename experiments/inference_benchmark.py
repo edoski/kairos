@@ -66,6 +66,7 @@ class Protocol(StrictFrozenRecord):
     rolling_horizons: tuple[int, ...]
     roster: dict[str, Selection]
     warmup_iterations: Annotated[int, Field(ge=1)]
+    origins_per_chain: Annotated[int, Field(ge=1)]
     sweeps: Annotated[int, Field(ge=1)]
 
 
@@ -350,6 +351,7 @@ def _protocol(
     held_out_experiment_id: UUID,
     resolved: Mapping[str, Mapping[int, Selection]],
     warmup_iterations: int,
+    origins_per_chain: int,
     sweeps: int,
 ) -> Protocol:
     return Protocol(
@@ -364,6 +366,7 @@ def _protocol(
             for horizon, request in group.items()
         },
         warmup_iterations=warmup_iterations,
+        origins_per_chain=origins_per_chain,
         sweeps=sweeps,
     )
 
@@ -374,6 +377,7 @@ def _architecture_protocol(
     comparator_study_experiment_id: UUID,
     resolved: Mapping[str, Mapping[int, Selection]],
     warmup_iterations: int,
+    origins_per_chain: int,
     sweeps: int,
 ) -> Protocol:
     return Protocol(
@@ -384,6 +388,7 @@ def _architecture_protocol(
         rolling_horizons=(5,),
         roster={f"{cell}.K5": group[5] for cell, group in resolved.items()},
         warmup_iterations=warmup_iterations,
+        origins_per_chain=origins_per_chain,
         sweeps=sweeps,
     )
 
@@ -479,18 +484,25 @@ def _architecture_pass_order() -> tuple[_Workload, ...]:
     return (_Workload("k5", (5,)),)
 
 
+def _stratified_indices(length: int, count: int) -> tuple[int, ...]:
+    if count > length:
+        raise ValueError("origins per chain exceed the available K=5 origins")
+    return tuple(((2 * index + 1) * length) // (2 * count) for index in range(count))
+
+
 def _time_cell(
-    cell: _Cell, sweep: int, workloads: Sequence[_Workload] | None = None
+    cell: _Cell, sweep: int, origins_per_chain: int, workloads: Sequence[_Workload] | None = None
 ) -> pl.DataFrame:
     rows = []
+    reference = cell.horizons[ROLLING_HORIZONS[0]]
+    indices = _stratified_indices(len(reference.dataset), origins_per_chain)
     for pass_order, workload in enumerate(workloads or _pass_order(sweep)):
-        source = cell.horizons[workload.horizons[0]]
         if any(
-            len(cell.horizons[horizon].dataset) < len(source.dataset)
+            len(cell.horizons[horizon].dataset) < len(reference.dataset)
             for horizon in workload.horizons
         ):
             raise ValueError(f"{workload.name} horizons do not contain all required origins")
-        for index in range(len(source.dataset)):
+        for index in indices:
             origin, inputs = _workload_inputs(cell, workload.horizons, index)
             start = time.perf_counter_ns()
             _run_workload(cell, workload.horizons, inputs)
@@ -546,7 +558,10 @@ def _run_unit(
     with torch.inference_mode():
         _warm(cell, protocol.warmup_iterations)
         rows = _time_cell(
-            cell, sweep, _architecture_pass_order() if protocol.panel == "architecture" else None
+            cell,
+            sweep,
+            protocol.origins_per_chain,
+            _architecture_pass_order() if protocol.panel == "architecture" else None,
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     publish_file(path, rows.write_parquet)
@@ -593,13 +608,19 @@ def run_policy_latency(
     held_out_experiment_id: UUID,
     output: Path,
     warmup_iterations: int,
+    origins_per_chain: int,
     sweeps: int,
 ) -> None:
     """Validate, resume, and complete the LSTM policy latency panel."""
 
     resolved = _resolve(storage_root, k_study_experiment_id, held_out_experiment_id)
     protocol = _protocol(
-        k_study_experiment_id, held_out_experiment_id, resolved, warmup_iterations, sweeps
+        k_study_experiment_id,
+        held_out_experiment_id,
+        resolved,
+        warmup_iterations,
+        origins_per_chain,
+        sweeps,
     )
     _run_latency(storage_root, output, protocol, resolved)
 
@@ -611,6 +632,7 @@ def run_architecture_latency(
     comparator_study_experiment_id: UUID,
     output: Path,
     warmup_iterations: int,
+    origins_per_chain: int,
     sweeps: int,
 ) -> None:
     """Validate, resume, and complete the matched K5 architecture latency panel."""
@@ -624,6 +646,7 @@ def run_architecture_latency(
         comparator_study_experiment_id,
         resolved,
         warmup_iterations,
+        origins_per_chain,
         sweeps,
     )
     _run_latency(storage_root, output, protocol, resolved)
@@ -653,6 +676,7 @@ def _expected_protocol(
             protocol.held_out_experiment_id,
             resolved,
             protocol.warmup_iterations,
+            protocol.origins_per_chain,
             protocol.sweeps,
         )
     comparator_id = protocol.comparator_study_experiment_id
@@ -664,6 +688,7 @@ def _expected_protocol(
         comparator_id,
         resolved,
         protocol.warmup_iterations,
+        protocol.origins_per_chain,
         protocol.sweeps,
     )
 
@@ -731,6 +756,7 @@ def policy_latency(
     held_out_experiment_id: UUID,
     output: Output,
     warmup_iterations: Annotated[int, typer.Option(min=1)],
+    origins_per_chain: Annotated[int, typer.Option(min=1)],
     sweeps: Annotated[int, typer.Option(min=1)] = 10,
 ) -> None:
     run_policy_latency(
@@ -739,6 +765,7 @@ def policy_latency(
         held_out_experiment_id,
         output,
         warmup_iterations,
+        origins_per_chain,
         sweeps,
     )
 
@@ -750,6 +777,7 @@ def architecture_latency(
     comparator_study_experiment_id: UUID,
     output: Output,
     warmup_iterations: Annotated[int, typer.Option(min=1)],
+    origins_per_chain: Annotated[int, typer.Option(min=1)],
     sweeps: Annotated[int, typer.Option(min=1)] = 10,
 ) -> None:
     run_architecture_latency(
@@ -759,6 +787,7 @@ def architecture_latency(
         comparator_study_experiment_id,
         output,
         warmup_iterations,
+        origins_per_chain,
         sweeps,
     )
 

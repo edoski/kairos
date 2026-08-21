@@ -170,8 +170,6 @@ export const styles = StyleSheet.create({
   setupButton: { marginTop: "auto" },
   recommendation: {
     alignItems: "center",
-    borderLeftColor: colors.teal,
-    borderLeftWidth: 5,
     borderRadius: radii.large,
     flexDirection: "row",
     gap: 16,

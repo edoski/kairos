@@ -1,0 +1,264 @@
+{
+  "chains": {
+    "ethereum": {
+      "context_blocks": 20,
+      "features": [
+        {
+          "name": "log_base_fee_per_gas",
+          "mean": 18.453447803704126,
+          "standard_deviation": 1.1310066599328803
+        },
+        {
+          "name": "gas_utilization",
+          "mean": 0.5067217314773501,
+          "standard_deviation": 0.23371539019103613
+        },
+        {
+          "name": "log_exact_forming_base_fee_per_gas",
+          "mean": 18.453449029410464,
+          "standard_deviation": 1.1310060950539502
+        },
+        {
+          "name": "log_gas_limit",
+          "mean": 17.90970464268907,
+          "standard_deviation": 0.00042305674015106863
+        },
+        {
+          "name": "log1p_tx_count",
+          "mean": 5.537748108807376,
+          "standard_deviation": 0.6324753346018551
+        },
+        {
+          "name": "block_interval_seconds",
+          "mean": 12.060472859796766,
+          "standard_deviation": 0.8647791201333686
+        },
+        {
+          "name": "dow_sin",
+          "mean": -0.013100345735282315,
+          "standard_deviation": 0.7059654894995212
+        },
+        {
+          "name": "dow_cos",
+          "mean": 0.003121999400689902,
+          "standard_deviation": 0.7081181834260336
+        },
+        {
+          "name": "log1p_effective_priority_fee_per_gas_p50",
+          "mean": 15.810369193097971,
+          "standard_deviation": 3.5720172338923217
+        },
+        {
+          "name": "log1p_effective_priority_fee_per_gas_p90",
+          "mean": 20.666880674396925,
+          "standard_deviation": 1.539288538540718
+        }
+      ],
+      "models": {
+        "2": {
+          "artifact_id": "9528c05f-b07a-4617-8f3e-b5d4472244fa",
+          "target": {
+            "mean": 18.43043167450849,
+            "standard_deviation": 1.1331426240023978
+          }
+        },
+        "3": {
+          "artifact_id": "11e4c6d8-3f2a-434e-ac83-d9d86efcd328",
+          "target": {
+            "mean": 18.41508732517397,
+            "standard_deviation": 1.1342033453360143
+          }
+        },
+        "4": {
+          "artifact_id": "0b89e8ca-673d-40c7-bf2e-c877a5f6decb",
+          "target": {
+            "mean": 18.40335954658765,
+            "standard_deviation": 1.1346926691750658
+          }
+        },
+        "5": {
+          "artifact_id": "dfa36a71-b119-4c84-8cc1-d36592204e16",
+          "target": {
+            "mean": 18.39369039492593,
+            "standard_deviation": 1.134845449170439
+          }
+        }
+      }
+    },
+    "polygon": {
+      "context_blocks": 4,
+      "features": [
+        {
+          "name": "log_base_fee_per_gas",
+          "mean": 26.250967301864502,
+          "standard_deviation": 0.019170786730266023
+        },
+        {
+          "name": "gas_utilization",
+          "mean": 0.334973243643796,
+          "standard_deviation": 0.13918247910869036
+        },
+        {
+          "name": "log_gas_limit",
+          "mean": 18.761604157244566,
+          "standard_deviation": 0.02396432265516333
+        },
+        {
+          "name": "log1p_tx_count",
+          "mean": 4.870058138706485,
+          "standard_deviation": 0.2723964349197208
+        },
+        {
+          "name": "hour_sin",
+          "mean": 0.00010361168849942724,
+          "standard_deviation": 0.7071436463873987
+        },
+        {
+          "name": "hour_cos",
+          "mean": 0.0001737497727072879,
+          "standard_deviation": 0.7070698851205564
+        },
+        {
+          "name": "dow_sin",
+          "mean": -0.000388340737555123,
+          "standard_deviation": 0.7059449650951722
+        },
+        {
+          "name": "dow_cos",
+          "mean": -0.004736132025628092,
+          "standard_deviation": 0.7082507497442588
+        },
+        {
+          "name": "log1p_effective_priority_fee_per_gas_p50",
+          "mean": 25.776233678327415,
+          "standard_deviation": 0.23200718499665168
+        },
+        {
+          "name": "log1p_effective_priority_fee_per_gas_p90",
+          "mean": 26.422803333896432,
+          "standard_deviation": 0.3817253867794248
+        }
+      ],
+      "models": {
+        "2": {
+          "artifact_id": "112c1648-39dc-4600-b27c-fa63c38c8955",
+          "target": {
+            "mean": 26.24580931352015,
+            "standard_deviation": 0.018341748777831714
+          }
+        },
+        "3": {
+          "artifact_id": "f098c7aa-2dd8-4c7a-be3a-1a1c44eed4b7",
+          "target": {
+            "mean": 26.2429492854638,
+            "standard_deviation": 0.0174107250847033
+          }
+        },
+        "4": {
+          "artifact_id": "6b761de9-6ce4-424f-8a33-6262b8f412b5",
+          "target": {
+            "mean": 26.241256623488745,
+            "standard_deviation": 0.016718754852246685
+          }
+        },
+        "5": {
+          "artifact_id": "33d3bcbe-3782-4388-96c2-f813d1035c85",
+          "target": {
+            "mean": 26.240141721013153,
+            "standard_deviation": 0.016239731583774453
+          }
+        }
+      }
+    },
+    "avalanche": {
+      "context_blocks": 20,
+      "features": [
+        {
+          "name": "log_base_fee_per_gas",
+          "mean": 18.130407845447333,
+          "standard_deviation": 1.3994970695392202
+        },
+        {
+          "name": "gas_utilization",
+          "mean": 0.11238500608079542,
+          "standard_deviation": 0.12566457350206256
+        },
+        {
+          "name": "log_gas_limit",
+          "mean": 17.249853652028502,
+          "standard_deviation": 0.1497400935744111
+        },
+        {
+          "name": "log1p_tx_count",
+          "mean": 3.3370453890715845,
+          "standard_deviation": 0.6506318186156616
+        },
+        {
+          "name": "block_interval_seconds",
+          "mean": 1.1238919869344732,
+          "standard_deviation": 0.6283757900255712
+        },
+        {
+          "name": "hour_sin",
+          "mean": -0.0031878745642910603,
+          "standard_deviation": 0.7069764204260797
+        },
+        {
+          "name": "hour_cos",
+          "mean": 0.0025019866843415217,
+          "standard_deviation": 0.7072255075036183
+        },
+        {
+          "name": "dow_sin",
+          "mean": -0.0012004764562503604,
+          "standard_deviation": 0.7007906045135791
+        },
+        {
+          "name": "dow_cos",
+          "mean": -0.03678229721445848,
+          "standard_deviation": 0.7124171180388121
+        },
+        {
+          "name": "log1p_effective_priority_fee_per_gas_p50",
+          "mean": 11.55413533215223,
+          "standard_deviation": 5.795420514160418
+        },
+        {
+          "name": "log1p_effective_priority_fee_per_gas_p90",
+          "mean": 18.086711689804574,
+          "standard_deviation": 5.173212409472055
+        }
+      ],
+      "models": {
+        "2": {
+          "artifact_id": "329e6c4c-6b23-4bcb-ba85-17dc0ac06cb5",
+          "target": {
+            "mean": 18.12575090456713,
+            "standard_deviation": 1.3995730199387588
+          }
+        },
+        "3": {
+          "artifact_id": "75738a11-addb-4135-96bf-74a7e8d54983",
+          "target": {
+            "mean": 18.1221772284739,
+            "standard_deviation": 1.399563562965391
+          }
+        },
+        "4": {
+          "artifact_id": "b6037257-c793-4af9-9178-6ea7c4809e02",
+          "target": {
+            "mean": 18.11916519640291,
+            "standard_deviation": 1.3995063396753658
+          }
+        },
+        "5": {
+          "artifact_id": "4b31bc7f-ea12-416a-80f6-0a2df38f5673",
+          "target": {
+            "mean": 18.1164674774466,
+            "standard_deviation": 1.3994201019751373
+          }
+        }
+      }
+    }
+  }
+}

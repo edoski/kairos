@@ -270,76 +270,6 @@ def _feasibility_report(storage_root: Path, root: Path, policy: pl.DataFrame) ->
     return pl.DataFrame(rows).sort("_chain_order").drop("_chain_order")
 
 
-def _progress_markdown(
-    architecture: pl.DataFrame, policy: pl.DataFrame, feasibility: pl.DataFrame
-) -> str:
-    lines = [
-        "#### Local inference benchmark",
-        "",
-        "$K=5$ local CPU inference at batch size one. Latency is the median over "
-        "10,000 timed calls per artifact: 1,000 origins repeated across 10 sweeps. "
-        "Energy is mean incremental CPU+GPU+ANE energy over five paired 60-second trials. "
-        "Electricity cost uses €0.2966/kWh.",
-        "",
-        "| Chain | Architecture | Parameters | CPU latency | Energy | € / million |",
-        "| --- | --- | ---: | ---: | ---: | ---: |",
-    ]
-    for row in architecture.iter_rows(named=True):
-        lines.append(
-            f"| {str(row['chain']).title()} | {row['architecture']} | "
-            f"{row['parameters'] / 1_000_000:.3f}M | {row['latency_median_ms']:.3f} ms | "
-            f"{row['energy_mean_mj']:.3f} mJ | €{row['eur_per_million']:.6f} |"
-        )
-    lines.extend(
-        [
-            "",
-            "Selected LSTM policy latency. Standalone columns are CPU medians; cascade invokes "
-            "$K=5,4,3,2$ consecutively at the same origin. Energy and cost refer to the complete "
-            "cascade.",
-            "",
-            "| Chain | $K=2$ | $K=3$ | $K=4$ | $K=5$ | CPU cascade | Cascade energy | "
-            "€ / million |",
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-        ]
-    )
-    for chain in _CHAIN_ORDER:
-        group = {row["workload"]: row for row in policy.filter(pl.col("chain") == chain).to_dicts()}
-        cascade = group["cascade"]
-        lines.append(
-            f"| {chain.title()} | {group['k2']['latency_median_ms']:.3f} ms | "
-            f"{group['k3']['latency_median_ms']:.3f} ms | "
-            f"{group['k4']['latency_median_ms']:.3f} ms | "
-            f"{group['k5']['latency_median_ms']:.3f} ms | "
-            f"{cascade['latency_median_ms']:.3f} ms | {cascade['energy_mean_mj']:.3f} mJ | "
-            f"€{cascade['eur_per_million']:.6f} |"
-        )
-    lines.extend(
-        [
-            "",
-            "| Chain | block-interval p01 | CPU cascade p99 | Share of p01 |",
-            "| --- | ---: | ---: | ---: |",
-        ]
-    )
-    for row in feasibility.iter_rows(named=True):
-        lines.append(
-            f"| {str(row['chain']).title()} | {row['block_interval_p01_s']:.0f} s | "
-            f"{row['cascade_p99_ms']:.3f} ms | "
-            f"{row['cascade_p99_share_of_p01_percent']:.3f}% |"
-        )
-    lines.extend(
-        [
-            "",
-            "Even under the maximum four-inference same-head workload, CPU model computation "
-            "occupies less than 0.3% of the block-interval p01 on every chain. Resident inference "
-            "therefore fits comfortably within the observed block-time budget, although "
-            "end-to-end deployment latency remains outside the claim and is "
-            "RPC-endpoint-provider-dependent.",
-            "",
-        ]
-    )
-    return "\n".join(lines)
-
-
 def run_report(storage_root: Path, benchmark_root: Path, output: Path) -> None:
     """Validate and reduce the complete local inference benchmark."""
 
@@ -350,9 +280,6 @@ def run_report(storage_root: Path, benchmark_root: Path, output: Path) -> None:
     architecture.write_csv(output / "architecture.tsv", separator="\t")
     policy.write_csv(output / "policy.tsv", separator="\t")
     feasibility.write_csv(output / "feasibility.tsv", separator="\t")
-    (output / "progress.md").write_text(
-        _progress_markdown(architecture, policy, feasibility), encoding="utf-8"
-    )
 
 
 Directory = Annotated[Path, typer.Argument(resolve_path=True, exists=True, file_okay=False)]

@@ -10,11 +10,8 @@ from uuid import UUID
 import numpy as np
 from figure_style import DEFAULT_OUTPUT_DIRECTORY, display_name, save_pdf, subplots
 
-from kairos.corpus import load_corpus_blocks
-from kairos.evaluation import load_evaluation, reduce_baselines, reduce_evaluation
+from kairos.evaluation import reduce_baselines, reduce_evaluation, reduce_evaluation_intervals
 from kairos.experiments import ExperimentKind, load_experiment_manifest
-from kairos.observations import read_observations
-from kairos.statistics import clustered_metric_intervals
 
 _CHAIN_STYLES = {"ethereum": "#0072B2", "polygon": "#D55E00", "avalanche": "#009E73"}
 _POLICY_STYLES = {
@@ -73,21 +70,18 @@ def _load_results(
 def _confidence_intervals(
     storage_root: Path, evaluation_id: UUID
 ) -> dict[str, tuple[float, float]]:
-    request = load_evaluation(storage_root, evaluation_id)
-    columns = read_observations(
-        storage_root / "evaluations" / str(evaluation_id) / "observations.parquet"
-    )
-    blocks = load_corpus_blocks(storage_root, request.corpus_id).to_polars()
-    origins = columns["origin_block"]
-    rows = origins - int(blocks[0, "block_number"])
-    if np.any((rows < 0) | (rows >= blocks.height)):
-        raise ValueError("evaluation origins must lie within their Corpus")
-    if not np.array_equal(blocks["block_number"].to_numpy()[rows], origins):
-        raise ValueError("evaluation origins must align with contiguous Corpus blocks")
-    hour_clusters = blocks["timestamp"].to_numpy()[rows] // 3_600
-    return clustered_metric_intervals(
-        columns, hour_clusters, seed=2026 ^ (evaluation_id.int & 0xFFFF_FFFF)
-    )
+    row = reduce_evaluation_intervals(storage_root, evaluation_id).row(0, named=True)
+    return {
+        metric: (row[f"{metric}_lower"], row[f"{metric}_upper"])
+        for metric in (
+            "accuracy",
+            "f1_macro",
+            "log_fee_mae",
+            "log_fee_mse",
+            "base_fee_savings",
+            "base_fee_optimality_gap",
+        )
+    }
 
 
 def _configure_horizon_axis(axis, values: tuple[int, ...], *, bottom: bool) -> None:

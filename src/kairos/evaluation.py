@@ -24,7 +24,7 @@ from .observations import (
     reduce_observations,
     validate_observations,
 )
-from .statistics import clustered_mean_intervals
+from .statistics import clustered_mean_intervals, clustered_metric_intervals
 from .temporal import prepare_historical_window
 
 _DEVICE = torch.device("cuda:0")
@@ -84,6 +84,24 @@ def reduce_evaluation(storage_root: Path, evaluation_id: UUID) -> pl.DataFrame:
     return reduce_observations(evaluation_observations_path(storage_root, evaluation_id))
 
 
+def reduce_evaluation_intervals(storage_root: Path, evaluation_id: UUID) -> pl.DataFrame:
+    """Return one-hour clustered 95% intervals for one testing evaluation."""
+
+    columns = read_observations(evaluation_observations_path(storage_root, evaluation_id))
+    intervals = clustered_metric_intervals(
+        columns,
+        _evaluation_hour_clusters(storage_root, evaluation_id, columns["origin_block"]),
+        seed=2026 ^ (evaluation_id.int & 0xFFFF_FFFF),
+    )
+    return pl.DataFrame(
+        {
+            f"{metric}_{bound}": [values[index]]
+            for metric, values in intervals.items()
+            for index, bound in enumerate(("lower", "upper"))
+        }
+    )
+
+
 def reduce_baselines(storage_root: Path, evaluation_id: UUID) -> pl.DataFrame:
     """Derive immediate and deadline policy metrics from one testing evaluation."""
 
@@ -120,7 +138,7 @@ def reduce_rolling_intervals(
         rolling_savings = (immediate - rolling_selected) / immediate
         one_shot_gap = (one_shot_selected - minimum) / minimum
         rolling_gap = (rolling_selected - minimum) / minimum
-        clusters = _rolling_hour_clusters(
+        clusters = _evaluation_hour_clusters(
             storage_root, evaluation_ids[ROLLING_HORIZONS[0]], replay.initial["origin_block"]
         )
         intervals = clustered_mean_intervals(
@@ -219,9 +237,7 @@ def _replay_rolling_cell(
     maximum_run = current_run.copy()
     for index in range(1, stacked_origins.shape[1]):
         current_run = np.where(
-            stacked_origins[:, index] == stacked_origins[:, index - 1],
-            current_run + 1,
-            1,
+            stacked_origins[:, index] == stacked_origins[:, index - 1], current_run + 1, 1
         )
         maximum_run = np.maximum(maximum_run, current_run)
     return _RollingReplay(
@@ -240,16 +256,16 @@ def _load_rolling_observations(storage_root: Path, evaluation_id: UUID) -> dict[
     return columns
 
 
-def _rolling_hour_clusters(
+def _evaluation_hour_clusters(
     storage_root: Path, evaluation_id: UUID, origins: np.ndarray
 ) -> np.ndarray:
     request = load_evaluation(storage_root, evaluation_id)
     blocks = load_corpus_blocks(storage_root, request.corpus_id).to_polars()
     rows = origins - int(blocks[0, "block_number"])
     if np.any((rows < 0) | (rows >= blocks.height)):
-        raise ValueError("rolling origins must lie within their Corpus")
+        raise ValueError("evaluation origins must lie within their Corpus")
     if not np.array_equal(blocks["block_number"].to_numpy()[rows], origins):
-        raise ValueError("rolling origins must align with contiguous Corpus blocks")
+        raise ValueError("evaluation origins must align with contiguous Corpus blocks")
     return blocks["timestamp"].to_numpy()[rows] // 3_600
 
 

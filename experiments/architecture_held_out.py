@@ -8,7 +8,7 @@ from uuid import UUID
 from campaign import StorageRoot, author_experiment, close_experiment, print_metrics, run
 
 from kairos.config import BlockWindow, EvaluateRequest, SelectedStudySource, TrainRequest
-from kairos.evaluation import load_evaluation, reduce_evaluation
+from kairos.evaluation import load_evaluation, reduce_evaluation, reduce_evaluation_intervals
 from kairos.experiments import ExperimentKind, load_experiment_manifest
 from kairos.study import load_study
 
@@ -104,6 +104,10 @@ def report_evaluations(storage_root: StorageRoot, experiment_id: UUID) -> None:
     print_metrics(storage_root, ExperimentKind.HELD_OUT, experiment_id, reduce_evaluation)
 
 
+def report_evaluation_intervals(storage_root: StorageRoot, experiment_id: UUID) -> None:
+    print_metrics(storage_root, ExperimentKind.HELD_OUT, experiment_id, reduce_evaluation_intervals)
+
+
 if __name__ == "__main__":
     run(
         prepare_polygon_artifacts,
@@ -111,4 +115,5 @@ if __name__ == "__main__":
         close_polygon_artifacts,
         close_evaluations,
         report_evaluations,
+        report_evaluation_intervals,
     )

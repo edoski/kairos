@@ -1,5 +1,7 @@
 # KAIROS: Learning When to Execute Blockchain Transactions
 
+[![Data and models](https://zenodo.org/badge/DOI/10.5281/zenodo.22094893.svg)](https://doi.org/10.5281/zenodo.22094893)
+
 KAIROS learns from finalized block history to choose a low-base-fee block within a short future [horizon](docs/CONTEXT.md). It compares LSTM, Transformer, and Transformer-LSTM models.
 
 Its scientific lineage is the temporal experiment in *SPICE: A Predictive Framework for Cost-Optimization in Multichain Environments*: a future minimum-block decision paired with an auxiliary fee prediction. KAIROS's current equations and claim limits are documented in the [manual](docs/KAIROS.md#scientific-contract). The [glossary](docs/CONTEXT.md) defines its domain terms.

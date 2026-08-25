@@ -7,6 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from uuid import UUID
 
+from c_study import selected_context_studies
 from figure_style import (
     DEFAULT_OUTPUT_DIRECTORY,
     add_family_legend,
@@ -38,6 +39,9 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
         contexts_by_chain[chain].add(context)
         objectives[chain, family, context] = study.trials[0].objective
 
+    _, selections = selected_context_studies(storage_root, experiment_id, tuple(chains))
+    selected_contexts = {selection.chain: selection.selected_context for selection in selections}
+
     figure, axes = subplots(len(chains), 1, height=5.2)
     for row, chain in enumerate(chains):
         axis = axes[row, 0]
@@ -54,10 +58,11 @@ def render(storage_root: Path, experiment_id: UUID, output_directory: Path) -> P
         axis.set_title(display_name(chain), loc="left")
         axis.set_xscale("log", base=2)
         axis.set_xticks(contexts)
-        axis.set_xticklabels([str(context) for context in contexts])
-        if row < len(chains) - 1:
-            axis.tick_params(axis="x", labelbottom=False)
-        else:
+        labels = axis.set_xticklabels([str(context) for context in contexts])
+        for label, context in zip(labels, contexts, strict=True):
+            if context == selected_contexts[chain]:
+                label.set_fontweight("bold")
+        if row == len(chains) - 1:
             axis.set_xlabel("Context blocks C")
 
     add_family_legend(figure, axes[0, 0])

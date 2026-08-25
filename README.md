@@ -83,8 +83,9 @@ npm start
 ```
 
 The repository contains `MOBILE.yaml`, one manifest, and twelve generated `.pte` assets. The
-[acceptance record](docs/research/on-device-inference.md) separates exporter parity and the exercised
-iOS Simulator path from native cells and physical-device behavior that have not been tested.
+[mobile deployment reference](docs/KAIROS.md#mobile-deployment) separates exporter parity and the
+exercised iOS Simulator path from native cells and physical-device behavior that have not been
+tested.
 
 ## Where do I look?
 

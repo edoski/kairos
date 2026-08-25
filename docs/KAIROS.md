@@ -718,7 +718,7 @@ operator profiles, mobile bundle and runtime surfaces, and evaluation schemas.
 - Timestamps and elapsed values are integer seconds.
 - Raw JSON and durable bytes hydrate once with strict scalar parsing and unknown-field rejection. `StrictFrozenRecord` values are immutable; downstream code trusts already-typed nested Pydantic values instead of revalidating instances.
 
-Distribution name, import root, and installed executable are `kairos`; the static distribution version is `0.1.0`.
+Distribution name, import root, and installed executable are `kairos`; the static distribution version is `1.0.0`.
 
 ### Requests and definitions
 
@@ -1051,8 +1051,8 @@ The repository contains the final twelve-cell `MOBILE.yaml` roster, generated ma
 deterministic nonzero inputs. A custom native iOS Simulator Release build exercised real public-RPC
 inference for Ethereum `K=5` and Polygon `K=5`, including durable run history and resolved outcomes.
 This is not evidence for all twelve native cells or physical-device performance and memory. The
-[README](../README.md#mobile-demo) owns build commands; the
-[on-device decision](research/on-device-inference.md) owns the exact acceptance boundary.
+[README](../README.md#mobile-demo) owns build commands; this section owns the exact acceptance
+boundary.
 
 ### Execution runtime
 

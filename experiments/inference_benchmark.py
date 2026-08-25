@@ -60,10 +60,7 @@ class Selection(StrictFrozenRecord):
 
 class Protocol(StrictFrozenRecord):
     panel: Literal["policy", "architecture"]
-    k_study_experiment_id: UUID4
     held_out_experiment_id: UUID4
-    comparator_study_experiment_id: UUID4 | None
-    rolling_horizons: tuple[int, ...]
     roster: dict[str, Selection]
     warmup_iterations: Annotated[int, Field(ge=1)]
     origins_per_chain: Annotated[int, Field(ge=1)]
@@ -265,89 +262,57 @@ def _write_energy(path: Path, cell: _Cell, settings: dict[str, int]) -> None:
     pl.DataFrame(rows).write_parquet(path / "pairs.parquet")
 
 
-def _resolve(
-    storage_root: Path, k_study_experiment_id: UUID, held_out_experiment_id: UUID
+def _resolve_evaluations(
+    storage_root: Path, evaluations: Mapping[str, UUID]
 ) -> dict[str, dict[int, Selection]]:
-    k_study = load_experiment_manifest(storage_root, ExperimentKind.K_STUDY, k_study_experiment_id)
-    held_out = load_experiment_manifest(
-        storage_root, ExperimentKind.HELD_OUT, held_out_experiment_id
-    )
-
-    def rolling_roster(manifest: Mapping[str, UUID]) -> dict[str, dict[int, UUID]]:
-        roster: dict[str, dict[int, UUID]] = {}
-        labels = 0
-        for label, object_id in sorted(manifest.items()):
-            group, horizon_label = label.rsplit(".", maxsplit=1)
-            horizon = int(horizon_label.removeprefix("K"))
-            if horizon not in ROLLING_HORIZONS:
-                continue
-            labels += 1
-            horizons = roster.setdefault(group, {})
-            horizons[horizon] = object_id
-        if (
-            labels != 3 * len(ROLLING_HORIZONS)
-            or len(roster) != 3
-            or set(roster) != set(_LSTM_CELLS)
-            or any(set(horizons) != set(ROLLING_HORIZONS) for horizons in roster.values())
-        ):
-            raise ValueError("manifests must contain exactly three complete LSTM rolling groups")
-        return roster
-
-    artifacts = rolling_roster(k_study)
-    evaluations = rolling_roster(held_out)
-    if artifacts.keys() != evaluations.keys():
-        raise ValueError("manifests must contain the same three LSTM rolling groups")
-
     resolved: dict[str, dict[int, Selection]] = {}
-    for group, group_evaluations in evaluations.items():
-        for horizon, evaluation_id in group_evaluations.items():
-            label = f"{group}.K{horizon}"
-            request = EvaluateRequest.model_validate_json(
-                evaluation_json_path(storage_root, evaluation_id).read_bytes()
-            )
-            if request.artifact_id != artifacts[group][horizon]:
-                raise ValueError(f"{label} evaluation does not name its K-study artifact")
-            resolved.setdefault(group, {})[horizon] = Selection(
-                artifact_id=request.artifact_id,
-                support_evaluation_id=request.evaluation_id,
-                corpus_id=request.corpus_id,
-                testing_window=request.testing_window,
-            )
+    for label, evaluation_id in sorted(evaluations.items()):
+        group, horizon_label = label.rsplit(".", maxsplit=1)
+        horizon = int(horizon_label.removeprefix("K"))
+        request = EvaluateRequest.model_validate_json(
+            evaluation_json_path(storage_root, evaluation_id).read_bytes()
+        )
+        if request.evaluation_id != evaluation_id:
+            raise ValueError(f"{label} manifest and evaluation identities differ")
+        resolved.setdefault(group, {})[horizon] = Selection(
+            artifact_id=request.artifact_id,
+            support_evaluation_id=request.evaluation_id,
+            corpus_id=request.corpus_id,
+            testing_window=request.testing_window,
+        )
     return resolved
 
 
-def _resolve_architecture(
-    storage_root: Path,
-    k_study_experiment_id: UUID,
-    held_out_experiment_id: UUID,
-    comparator_study_experiment_id: UUID,
+def _resolve_policy(
+    storage_root: Path, held_out_experiment_id: UUID
 ) -> dict[str, dict[int, Selection]]:
-    policy = _resolve(storage_root, k_study_experiment_id, held_out_experiment_id)
-    comparators = load_experiment_manifest(
-        storage_root, ExperimentKind.COMPARATOR_STUDY, comparator_study_experiment_id
+    manifest = load_experiment_manifest(
+        storage_root, ExperimentKind.HELD_OUT, held_out_experiment_id
+    )
+    expected = {f"{chain}.lstm.K{horizon}" for chain in _CHAINS for horizon in ROLLING_HORIZONS}
+    evaluations = {label: object_id for label, object_id in manifest.items() if label in expected}
+    if set(evaluations) != expected:
+        raise ValueError("held-out manifest must contain three complete LSTM rolling groups")
+    return _resolve_evaluations(storage_root, evaluations)
+
+
+def _resolve_architecture(
+    storage_root: Path, held_out_experiment_id: UUID
+) -> dict[str, dict[int, Selection]]:
+    manifest = load_experiment_manifest(
+        storage_root, ExperimentKind.HELD_OUT, held_out_experiment_id
     )
     expected = {
         f"{chain}.{family}.K5"
         for chain in _CHAINS
-        for family in ("transformer", "transformer_lstm")
+        for family in ("lstm", "transformer", "transformer_lstm")
     }
-    if set(comparators) != expected:
-        raise ValueError("comparator manifest must contain two K5 families for every chain")
-
-    resolved: dict[str, dict[int, Selection]] = {}
-    for chain in _CHAINS:
-        template = policy[f"{chain}.lstm"][5]
-        resolved[f"{chain}.lstm"] = {5: template}
-        for family in ("transformer", "transformer_lstm"):
-            label = f"{chain}.{family}.K5"
-            resolved[f"{chain}.{family}"] = {
-                5: template.model_copy(update={"artifact_id": comparators[label]})
-            }
-    return resolved
+    if set(manifest) != expected:
+        raise ValueError("held-out manifest must contain three K5 families for every chain")
+    return _resolve_evaluations(storage_root, manifest)
 
 
 def _protocol(
-    k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
     resolved: Mapping[str, Mapping[int, Selection]],
     warmup_iterations: int,
@@ -356,10 +321,7 @@ def _protocol(
 ) -> Protocol:
     return Protocol(
         panel="policy",
-        k_study_experiment_id=k_study_experiment_id,
         held_out_experiment_id=held_out_experiment_id,
-        comparator_study_experiment_id=None,
-        rolling_horizons=ROLLING_HORIZONS,
         roster={
             f"{cell}.K{horizon}": request
             for cell, group in resolved.items()
@@ -372,9 +334,7 @@ def _protocol(
 
 
 def _architecture_protocol(
-    k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
-    comparator_study_experiment_id: UUID,
     resolved: Mapping[str, Mapping[int, Selection]],
     warmup_iterations: int,
     origins_per_chain: int,
@@ -382,10 +342,7 @@ def _architecture_protocol(
 ) -> Protocol:
     return Protocol(
         panel="architecture",
-        k_study_experiment_id=k_study_experiment_id,
         held_out_experiment_id=held_out_experiment_id,
-        comparator_study_experiment_id=comparator_study_experiment_id,
-        rolling_horizons=(5,),
         roster={f"{cell}.K5": group[5] for cell, group in resolved.items()},
         warmup_iterations=warmup_iterations,
         origins_per_chain=origins_per_chain,
@@ -604,7 +561,6 @@ def _run_latency(
 
 def run_policy_latency(
     storage_root: Path,
-    k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
     output: Path,
     warmup_iterations: int,
@@ -613,23 +569,16 @@ def run_policy_latency(
 ) -> None:
     """Validate, resume, and complete the LSTM policy latency panel."""
 
-    resolved = _resolve(storage_root, k_study_experiment_id, held_out_experiment_id)
+    resolved = _resolve_policy(storage_root, held_out_experiment_id)
     protocol = _protocol(
-        k_study_experiment_id,
-        held_out_experiment_id,
-        resolved,
-        warmup_iterations,
-        origins_per_chain,
-        sweeps,
+        held_out_experiment_id, resolved, warmup_iterations, origins_per_chain, sweeps
     )
     _run_latency(storage_root, output, protocol, resolved)
 
 
 def run_architecture_latency(
     storage_root: Path,
-    k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
-    comparator_study_experiment_id: UUID,
     output: Path,
     warmup_iterations: int,
     origins_per_chain: int,
@@ -637,60 +586,35 @@ def run_architecture_latency(
 ) -> None:
     """Validate, resume, and complete the matched K5 architecture latency panel."""
 
-    resolved = _resolve_architecture(
-        storage_root, k_study_experiment_id, held_out_experiment_id, comparator_study_experiment_id
-    )
+    resolved = _resolve_architecture(storage_root, held_out_experiment_id)
     protocol = _architecture_protocol(
-        k_study_experiment_id,
-        held_out_experiment_id,
-        comparator_study_experiment_id,
-        resolved,
-        warmup_iterations,
-        origins_per_chain,
-        sweeps,
+        held_out_experiment_id, resolved, warmup_iterations, origins_per_chain, sweeps
     )
     _run_latency(storage_root, output, protocol, resolved)
 
 
 def _resolve_protocol(storage_root: Path, protocol: Protocol) -> dict[str, dict[int, Selection]]:
     if protocol.panel == "policy":
-        if protocol.comparator_study_experiment_id is not None:
-            raise ValueError("policy protocol cannot name a comparator experiment")
-        return _resolve(
-            storage_root, protocol.k_study_experiment_id, protocol.held_out_experiment_id
-        )
-    comparator_id = protocol.comparator_study_experiment_id
-    if comparator_id is None:
-        raise ValueError("architecture protocol must name a comparator experiment")
-    return _resolve_architecture(
-        storage_root, protocol.k_study_experiment_id, protocol.held_out_experiment_id, comparator_id
-    )
-
-
-def _expected_protocol(
-    protocol: Protocol, resolved: Mapping[str, Mapping[int, Selection]]
-) -> Protocol:
-    if protocol.panel == "policy":
-        return _protocol(
-            protocol.k_study_experiment_id,
+        resolved = _resolve_policy(storage_root, protocol.held_out_experiment_id)
+        expected = _protocol(
             protocol.held_out_experiment_id,
             resolved,
             protocol.warmup_iterations,
             protocol.origins_per_chain,
             protocol.sweeps,
         )
-    comparator_id = protocol.comparator_study_experiment_id
-    if comparator_id is None:
-        raise ValueError("architecture protocol must name a comparator experiment")
-    return _architecture_protocol(
-        protocol.k_study_experiment_id,
-        protocol.held_out_experiment_id,
-        comparator_id,
-        resolved,
-        protocol.warmup_iterations,
-        protocol.origins_per_chain,
-        protocol.sweeps,
-    )
+    else:
+        resolved = _resolve_architecture(storage_root, protocol.held_out_experiment_id)
+        expected = _architecture_protocol(
+            protocol.held_out_experiment_id,
+            resolved,
+            protocol.warmup_iterations,
+            protocol.origins_per_chain,
+            protocol.sweeps,
+        )
+    if protocol != expected:
+        raise ValueError("saved protocol does not match the canonical held-out experiment")
+    return resolved
 
 
 def run_energy(
@@ -700,7 +624,6 @@ def run_energy(
 
     protocol = Protocol.model_validate_json((output / "protocol.json").read_bytes())
     resolved = _resolve_protocol(storage_root, protocol)
-    _ensure_protocol(output, _expected_protocol(protocol, resolved))
     settings = {
         "pairs": pairs,
         "phase_seconds": phase_seconds,
@@ -717,8 +640,7 @@ def run_footprint(storage_root: Path, output: Path) -> None:
     protocol = Protocol.model_validate_json((output / "protocol.json").read_bytes())
     if protocol.panel != "architecture":
         raise ValueError("footprint requires an architecture protocol")
-    resolved = _resolve_protocol(storage_root, protocol)
-    _ensure_protocol(output, _expected_protocol(protocol, resolved))
+    _resolve_protocol(storage_root, protocol)
     path = output / "footprint.parquet"
     if path.exists():
         return
@@ -752,7 +674,6 @@ Output = Annotated[Path, typer.Argument(resolve_path=True, file_okay=False)]
 
 def policy_latency(
     storage_root: StorageRoot,
-    k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
     output: Output,
     warmup_iterations: Annotated[int, typer.Option(min=1)],
@@ -760,35 +681,20 @@ def policy_latency(
     sweeps: Annotated[int, typer.Option(min=1)] = 10,
 ) -> None:
     run_policy_latency(
-        storage_root,
-        k_study_experiment_id,
-        held_out_experiment_id,
-        output,
-        warmup_iterations,
-        origins_per_chain,
-        sweeps,
+        storage_root, held_out_experiment_id, output, warmup_iterations, origins_per_chain, sweeps
     )
 
 
 def architecture_latency(
     storage_root: StorageRoot,
-    k_study_experiment_id: UUID,
     held_out_experiment_id: UUID,
-    comparator_study_experiment_id: UUID,
     output: Output,
     warmup_iterations: Annotated[int, typer.Option(min=1)],
     origins_per_chain: Annotated[int, typer.Option(min=1)],
     sweeps: Annotated[int, typer.Option(min=1)] = 10,
 ) -> None:
     run_architecture_latency(
-        storage_root,
-        k_study_experiment_id,
-        held_out_experiment_id,
-        comparator_study_experiment_id,
-        output,
-        warmup_iterations,
-        origins_per_chain,
-        sweeps,
+        storage_root, held_out_experiment_id, output, warmup_iterations, origins_per_chain, sweeps
     )
 
 

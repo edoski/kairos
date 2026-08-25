@@ -15,9 +15,9 @@ from kairos.experiments import ExperimentKind, load_experiment_manifest
 
 _CHAIN_STYLES = {"ethereum": "#0072B2", "polygon": "#D55E00", "avalanche": "#009E73"}
 _POLICY_STYLES = {
-    "learned": ("#0072B2", "o", "-", "Learned"),
     "immediate": ("#666666", "s", "--", "Immediate"),
     "deadline": ("#D55E00", "^", "--", "Deadline"),
+    "learned": ("#0072B2", "o", "-", "LSTM"),
 }
 _ECONOMIC_METRICS = (
     ("base_fee_savings", "Base-fee savings (%)"),

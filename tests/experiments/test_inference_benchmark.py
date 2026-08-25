@@ -29,9 +29,7 @@ from kairos.min_block_fee import MinBlockFeeOutput, TargetState
 from kairos.modeling import ArtifactAssociation
 from kairos.temporal import FeatureState, HistoricalDataset, _HistoricalBacking
 
-_K_STUDY_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 _HELD_OUT_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
-_COMPARATOR_ID = UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
 _CORPUS_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 _STUDY_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 _METHOD = Method(
@@ -168,7 +166,7 @@ def _resolved() -> dict[str, dict[int, benchmark.Selection]]:
 
 def _protocol() -> benchmark.Protocol:
     return benchmark._protocol(
-        _K_STUDY_ID, _HELD_OUT_ID, _resolved(), warmup_iterations=2, origins_per_chain=1, sweeps=1
+        _HELD_OUT_ID, _resolved(), warmup_iterations=2, origins_per_chain=1, sweeps=1
     )
 
 
@@ -185,26 +183,18 @@ def _architecture_resolved() -> dict[str, dict[int, benchmark.Selection]]:
 
 def _architecture_protocol() -> benchmark.Protocol:
     return benchmark._architecture_protocol(
-        _K_STUDY_ID,
-        _HELD_OUT_ID,
-        _COMPARATOR_ID,
-        _architecture_resolved(),
-        warmup_iterations=2,
-        origins_per_chain=1,
-        sweeps=1,
+        _HELD_OUT_ID, _architecture_resolved(), warmup_iterations=2, origins_per_chain=1, sweeps=1
     )
 
 
-def test_resolve_joins_canonical_artifacts_and_evaluations(
+def test_policy_resolve_uses_canonical_held_out_evaluations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    k_study = {}
     held_out = {}
     source = _resolved()
     for group, selections in source.items():
         for horizon, selection in selections.items():
             label = f"{group}.K{horizon}"
-            k_study[label] = selection.artifact_id
             held_out[label] = selection.support_evaluation_id
             request = EvaluateRequest(
                 evaluation_id=selection.support_evaluation_id,
@@ -220,22 +210,15 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
     for index, (group, horizon) in enumerate(
         (group, horizon) for group in source for horizon in (10, 25, 50, 100, 200)
     ):
-        k_study[f"{group}.K{horizon}"] = UUID(f"30000000-0000-4000-8000-{index:012d}")
         held_out[f"{group}.K{horizon}"] = UUID(f"40000000-0000-4000-8000-{index:012d}")
 
-    monkeypatch.setattr(
-        benchmark,
-        "load_experiment_manifest",
-        lambda root, kind, experiment_id: (
-            k_study if kind == benchmark.ExperimentKind.K_STUDY else held_out
-        ),
-    )
+    monkeypatch.setattr(benchmark, "load_experiment_manifest", lambda *_args: held_out)
     monkeypatch.setattr(benchmark, "_load_cell", lambda *_args: pytest.fail("model loaded"))
 
-    resolved = benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
+    resolved = benchmark._resolve_policy(tmp_path, _HELD_OUT_ID)
 
     assert resolved == source
-    protocol = benchmark._protocol(_K_STUDY_ID, _HELD_OUT_ID, resolved, 2, 1, 10)
+    protocol = benchmark._protocol(_HELD_OUT_ID, resolved, 2, 1, 10)
     assert len(protocol.roster) == 12
     assert sorted(protocol.roster) == [
         f"{group}.K{horizon}"
@@ -244,58 +227,40 @@ def test_resolve_joins_canonical_artifacts_and_evaluations(
     ]
     missing = held_out.pop("polygon.lstm.K4")
     with pytest.raises(ValueError, match="three complete LSTM rolling groups"):
-        benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
+        benchmark._resolve_policy(tmp_path, _HELD_OUT_ID)
     held_out["polygon.lstm.K4"] = missing
-    surplus_labels = []
-    for index, horizon in enumerate(reversed(benchmark.ROLLING_HORIZONS), start=36):
-        selection = _selection(index, horizon)
-        label = f"surplus.lstm.K{horizon}"
-        surplus_labels.append(label)
-        k_study[label] = selection.artifact_id
-        held_out[label] = selection.support_evaluation_id
-    with pytest.raises(ValueError, match="three complete LSTM rolling groups"):
-        benchmark._resolve(tmp_path, _K_STUDY_ID, _HELD_OUT_ID)
-    for label in surplus_labels:
-        del k_study[label], held_out[label]
     label = "ethereum.lstm.K5"
-    k_study[label] = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
-    with pytest.raises(ValueError, match="does not name"):
-        benchmark.run_policy_latency(
-            tmp_path, _K_STUDY_ID, _HELD_OUT_ID, tmp_path / "output", 2, 1, 1
-        )
+    held_out[label] = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
+    with pytest.raises(FileNotFoundError):
+        benchmark.run_policy_latency(tmp_path, _HELD_OUT_ID, tmp_path / "output", 2, 1, 1)
     assert not (tmp_path / "output").exists()
 
 
-def test_architecture_resolve_adds_two_matched_k5_comparators_per_chain(
+def test_architecture_resolve_uses_nine_canonical_held_out_evaluations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    policy = _resolved()
-    comparators = {
-        f"{chain}.{family}.K5": UUID(f"50000000-0000-4000-8000-{index:012d}")
-        for index, (chain, family) in enumerate(
-            (chain, family)
-            for chain in ("avalanche", "ethereum", "polygon")
-            for family in ("transformer", "transformer_lstm")
+    source = _architecture_resolved()
+    held_out = {}
+    for group, selections in source.items():
+        selection = selections[5]
+        label = f"{group}.K5"
+        held_out[label] = selection.support_evaluation_id
+        request = EvaluateRequest(
+            evaluation_id=selection.support_evaluation_id,
+            artifact_id=selection.artifact_id,
+            corpus_id=selection.corpus_id,
+            testing_window=selection.testing_window,
         )
-    }
-    monkeypatch.setattr(benchmark, "_resolve", lambda *_args: policy)
-    monkeypatch.setattr(benchmark, "load_experiment_manifest", lambda *_args: comparators)
+        path = tmp_path / "evaluations" / str(selection.support_evaluation_id) / "evaluation.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(request.model_dump_json())
+    monkeypatch.setattr(benchmark, "load_experiment_manifest", lambda *_args: held_out)
 
-    resolved = benchmark._resolve_architecture(tmp_path, _K_STUDY_ID, _HELD_OUT_ID, _COMPARATOR_ID)
+    assert benchmark._resolve_architecture(tmp_path, _HELD_OUT_ID) == source
 
-    assert len(resolved) == 9
-    assert all(set(group) == {5} for group in resolved.values())
-    for chain in ("avalanche", "ethereum", "polygon"):
-        template = policy[f"{chain}.lstm"][5]
-        assert resolved[f"{chain}.lstm"][5] == template
-        for family in ("transformer", "transformer_lstm"):
-            selection = resolved[f"{chain}.{family}"][5]
-            assert selection.artifact_id == comparators[f"{chain}.{family}.K5"]
-            assert selection.model_copy(update={"artifact_id": template.artifact_id}) == template
-
-    comparators.pop("polygon.transformer.K5")
-    with pytest.raises(ValueError, match="two K5 families"):
-        benchmark._resolve_architecture(tmp_path, _K_STUDY_ID, _HELD_OUT_ID, _COMPARATOR_ID)
+    held_out.pop("polygon.transformer.K5")
+    with pytest.raises(ValueError, match="three K5 families"):
+        benchmark._resolve_architecture(tmp_path, _HELD_OUT_ID)
 
 
 def test_batch_one_is_a_chronological_view() -> None:
@@ -767,7 +732,7 @@ def test_energy_command_reuses_the_existing_protocol(
     benchmark._ensure_protocol(output, protocol)
     resolved = _resolved()
     units: list[tuple[str, int, dict[str, int]]] = []
-    monkeypatch.setattr(benchmark, "_resolve", lambda *_args: resolved)
+    monkeypatch.setattr(benchmark, "_resolve_policy", lambda *_args: resolved)
 
     def run_unit(
         storage_root: Path,

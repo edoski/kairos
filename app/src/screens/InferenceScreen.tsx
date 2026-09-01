@@ -7,8 +7,8 @@ import {
   View,
 } from "react-native";
 
-import { formatGwei } from "../analytics";
-import { DetailRow } from "../components/DetailRow";
+import { formatWeiAsGwei } from "../analytics";
+import { DetailList } from "../components/DetailList";
 import { HorizonChoices } from "../components/HorizonChoices";
 import { NetworkChoices } from "../components/NetworkChoices";
 import { Overlay } from "../components/Overlay";
@@ -30,7 +30,7 @@ type Props = {
   onChainChange: (chain: Chain) => void;
   onHorizonChange: (horizon: Horizon) => void;
   onRun: () => void;
-  onRunAgain: () => void;
+  onReset: () => void;
 };
 
 function ErrorDialog({
@@ -76,16 +76,15 @@ function ErrorDialog({
 
 function Setup({
   horizon,
-  state,
+  loading,
   onHorizonChange,
   onRun,
 }: {
   horizon: Horizon;
-  state: InferenceState;
+  loading: boolean;
   onHorizonChange: (horizon: Horizon) => void;
   onRun: () => void;
 }) {
-  const loading = state.status === "loading";
   return (
     <>
       <View style={styles.section}>
@@ -149,14 +148,13 @@ function Timeline({
               name={active ? "cube" : "cube-outline"}
               size={22}
             />
-            <Text
-              style={[
-                styles.timelineTargetLabel,
-                active && styles.accentText,
-              ]}
-            >
-              {active ? "TARGET" : " "}
-            </Text>
+            <View style={styles.timelineTargetLabelSlot}>
+              {active && (
+                <Text style={[styles.timelineTargetLabel, styles.accentText]}>
+                  TARGET
+                </Text>
+              )}
+            </View>
           </View>
         );
       })}
@@ -166,10 +164,10 @@ function Timeline({
 
 function Result({
   result,
-  onRunAgain,
+  onReset,
 }: {
   result: InferenceResult;
-  onRunAgain: () => void;
+  onReset: () => void;
 }) {
   const recommendation =
     result.selected_action_k === 0
@@ -191,25 +189,22 @@ function Result({
 
       <View style={[styles.surface, styles.detailsCard]}>
         <Text style={styles.detailsTitle}>Technical details</Text>
-        <DetailRow label="Network" value={CHAIN_LABELS[result.chain]} />
-        <DetailRow label="Horizon" value={`${result.K} blocks`} />
-        <DetailRow
-          label="Action offset"
-          value={String(result.selected_action_k)}
-        />
-        <DetailRow
-          label="Target block"
-          value={result.target_block.toLocaleString()}
-        />
-        <DetailRow
-          label="Predicted horizon minimum"
-          last
-          value={formatGwei(result.predicted_minimum_base_fee_per_gas)}
+        <DetailList
+          items={[
+            ["Network", CHAIN_LABELS[result.chain]],
+            ["Horizon", `${result.K} blocks`],
+            ["Action offset", String(result.selected_action_k)],
+            ["Target block", result.target_block.toLocaleString()],
+            [
+              "Predicted horizon minimum",
+              formatWeiAsGwei(result.predicted_minimum_base_fee_per_gas),
+            ],
+          ]}
         />
       </View>
 
       <Pressable
-        onPress={onRunAgain}
+        onPress={onReset}
         style={[styles.button, styles.primaryButton]}
       >
         <Ionicons color={colors.surface} name="refresh" size={21} />
@@ -220,6 +215,7 @@ function Result({
 }
 
 export function InferenceScreen(props: Props) {
+  const loading = props.state.status === "loading";
   return (
     <>
       <ScrollView
@@ -231,28 +227,28 @@ export function InferenceScreen(props: Props) {
           <Text style={styles.sectionTitle}>Network</Text>
           <NetworkChoices
             chain={props.chain}
-            disabled={props.state.status === "loading"}
+            disabled={loading}
             onChange={props.onChainChange}
           />
         </View>
         {props.state.status === "success" ? (
           <Result
-            onRunAgain={props.onRunAgain}
+            onReset={props.onReset}
             result={props.state.result}
           />
         ) : (
           <Setup
             horizon={props.horizon}
+            loading={loading}
             onHorizonChange={props.onHorizonChange}
             onRun={props.onRun}
-            state={props.state}
           />
         )}
       </ScrollView>
       {props.state.status === "error" && (
         <ErrorDialog
           message={props.state.message}
-          onClose={props.onRunAgain}
+          onClose={props.onReset}
           onRetry={props.onRun}
         />
       )}

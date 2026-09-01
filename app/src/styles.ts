@@ -84,14 +84,14 @@ export const styles = StyleSheet.create({
   },
   horizonChoiceText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   horizonChoiceTextActive: { color: colors.blue },
-  storageError: {
+  errorBanner: {
     backgroundColor: colors.redSoft,
     borderColor: colors.errorBorder,
     borderRadius: radii.medium,
     borderWidth: 1,
     padding: 12,
   },
-  storageErrorText: { color: colors.errorInk, fontSize: 12 },
+  errorBannerText: { color: colors.errorInk, fontSize: 12 },
   refreshButton: { minHeight: 46, paddingHorizontal: 14 },
   summaryCard: {
     alignItems: "center",
@@ -209,11 +209,8 @@ export const styles = StyleSheet.create({
   timelineLabel: { color: colors.ink, fontSize: 11, fontWeight: "700" },
   timelineBlock: { color: colors.muted, fontSize: 8 },
   timelineOffset: { color: colors.ink, fontSize: 13, fontWeight: "700" },
-  timelineTargetLabel: {
-    color: colors.transparent,
-    fontSize: 7,
-    fontWeight: "800",
-  },
+  timelineTargetLabelSlot: { height: 8 },
+  timelineTargetLabel: { fontSize: 7, fontWeight: "800" },
   detailsTitle: {
     borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,

@@ -2,14 +2,14 @@ import { Text, View } from "react-native";
 
 import { styles } from "../styles";
 
-export function DetailRow({
+function DetailRow({
   label,
   value,
-  last = false,
+  last,
 }: {
   label: string;
   value: string;
-  last?: boolean;
+  last: boolean;
 }) {
   return (
     <View style={[styles.detailRow, last && styles.lastRow]}>
@@ -17,4 +17,19 @@ export function DetailRow({
       <Text style={styles.detailValue}>{value}</Text>
     </View>
   );
+}
+
+export function DetailList({
+  items,
+}: {
+  items: readonly (readonly [label: string, value: string])[];
+}) {
+  return items.map(([label, value], index) => (
+    <DetailRow
+      key={label}
+      label={label}
+      last={index === items.length - 1}
+      value={value}
+    />
+  ));
 }

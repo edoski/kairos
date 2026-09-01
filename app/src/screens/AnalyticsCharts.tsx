@@ -2,7 +2,7 @@ import { type PropsWithChildren, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { BarChart as GiftedBarChart } from "react-native-gifted-charts";
 
-import type { WaitBucket } from "../analytics";
+import { formatChartAxisValue, type WaitBucket } from "../analytics";
 import { styles as sharedStyles } from "../styles";
 import { colors, radii } from "../theme";
 
@@ -44,9 +44,6 @@ function chartScale(values: readonly number[]) {
   const negativeSections = Math.round(Math.abs(minimum) / step);
 
   return {
-    maxValue: maximum,
-    mostNegativeValue: minimum,
-    negativeStepValue: step,
     noOfSections: positiveSections,
     noOfSectionsBelowXAxis: negativeSections,
     stepHeight: CHART_HEIGHT / (positiveSections + negativeSections),
@@ -134,6 +131,7 @@ function SavingsByWaitChart({
           },
         ],
   );
+  const scale = chartScale(data.map(({ value }) => value));
   return (
     <ChartCard
       empty={data.length === 0 ? "outcomes" : null}
@@ -142,9 +140,11 @@ function SavingsByWaitChart({
     >
       <GiftedBarChart
         {...AXIS_PROPS}
-        {...chartScale(data.map(({ value }) => value))}
+        {...scale}
         data={data}
-        formatYLabel={(label) => `${Number(label).toFixed(0)}%`}
+        formatYLabel={(label) =>
+          formatChartAxisValue(Number(label), scale.stepValue, "%")
+        }
       />
     </ChartCard>
   );
@@ -159,9 +159,17 @@ function BaseFeeByWaitChart({
     (
       bucket,
     ): bucket is WaitBucket & {
-      kairosGwei: number;
-      immediateGwei: number;
-    } => bucket.kairosGwei !== null && bucket.immediateGwei !== null,
+      selectedBaseFeeGwei: number;
+      immediateBaseFeeGwei: number;
+    } =>
+      bucket.selectedBaseFeeGwei !== null &&
+      bucket.immediateBaseFeeGwei !== null,
+  );
+  const scale = chartScale(
+    data.flatMap((bucket) => [
+      bucket.immediateBaseFeeGwei,
+      bucket.selectedBaseFeeGwei,
+    ]),
   );
   return (
     <ChartCard
@@ -181,9 +189,7 @@ function BaseFeeByWaitChart({
     >
       <GiftedBarChart
         {...AXIS_PROPS}
-        {...chartScale(
-          data.flatMap((bucket) => [bucket.immediateGwei, bucket.kairosGwei]),
-        )}
+        {...scale}
         barWidth={18}
         data={data.flatMap((bucket, index) => [
           {
@@ -191,18 +197,17 @@ function BaseFeeByWaitChart({
             label: String(bucket.wait),
             labelWidth: 36,
             spacing: 4,
-            value: bucket.immediateGwei,
+            value: bucket.immediateBaseFeeGwei,
           },
           {
             frontColor: colors.blue,
             spacing: index === data.length - 1 ? 0 : 20,
-            value: bucket.kairosGwei,
+            value: bucket.selectedBaseFeeGwei,
           },
         ])}
-        formatYLabel={(label) => {
-          const value = Number(label);
-          return value >= 10 ? value.toFixed(0) : value.toFixed(1);
-        }}
+        formatYLabel={(label) =>
+          formatChartAxisValue(Number(label), scale.stepValue)
+        }
         spacing={0}
       />
     </ChartCard>

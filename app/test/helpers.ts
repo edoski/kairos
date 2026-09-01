@@ -1,5 +1,3 @@
-import type { Hash } from "viem";
-
 import type { Horizon } from "../src/domain";
 import type { InferenceRun } from "../src/history";
 import type { InferenceResult } from "../src/inference";
@@ -48,9 +46,7 @@ export function inferenceResult(
   return {
     chain: "ethereum",
     K: 5,
-    artifact_id: "artifact-5",
     head_block: 10,
-    head_hash: "0xhead",
     selected_action_k: 1,
     target_block: 12,
     predicted_minimum_base_fee_per_gas: 9_000_000_000,
@@ -67,16 +63,6 @@ export function inferenceRun(
     ...inferenceResult(),
     ...overrides,
   };
-}
-
-export function hashOf(value: bigint): Hash {
-  return `0x${value.toString(16).padStart(64, "0")}`;
-}
-
-export async function flushMicrotasks(): Promise<void> {
-  for (let index = 0; index < 10; index += 1) {
-    await Promise.resolve();
-  }
 }
 
 export function deferred<T>() {

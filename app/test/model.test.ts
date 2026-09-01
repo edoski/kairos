@@ -16,11 +16,7 @@ vi.mock("react-native-executorch-expo-resource-fetcher", () => ({
 }));
 
 import { createModelRuntime } from "../src/model";
-import {
-  deferred,
-  flushMicrotasks,
-  modelSelection,
-} from "./helpers";
+import { deferred, modelSelection } from "./helpers";
 
 type NativeTensor = {
   dataPtr: ArrayBuffer | Float32Array;
@@ -53,6 +49,10 @@ function native(
   };
 }
 
+function predictedFee(z: number): number {
+  return Math.exp(Math.log(100) + 0.5 * z);
+}
+
 describe("model runtime", () => {
   it("loads on first execution and reuses an unchanged model", async () => {
     const module = native();
@@ -76,8 +76,8 @@ describe("model runtime", () => {
       },
     ]);
     expect(first).toEqual({
-      actionLogits: new Float32Array([0, 1]),
-      minimumFeeZ: 0.25,
+      selectedAction: 1,
+      predictedFee: expect.closeTo(predictedFee(0.25)),
     });
     expect(second).toEqual(first);
 
@@ -85,7 +85,7 @@ describe("model runtime", () => {
     expect(module.delete).toHaveBeenCalledOnce();
   });
 
-  it("serializes concurrent execution, replacement, copied outputs, and disposal", async () => {
+  it("serializes concurrent execution, replacement, and disposal", async () => {
     const forward = deferred<NativeTensor[]>();
     const events: string[] = [];
     const firstOutputs = [
@@ -101,9 +101,6 @@ describe("model runtime", () => {
     });
     first.delete.mockImplementation(() => {
       events.push("delete first");
-      for (const tensor of firstOutputs) {
-        new Float32Array(tensor.dataPtr as ArrayBuffer).fill(-1);
-      }
     });
     const second = native(async () => {
       events.push("forward second");
@@ -132,18 +129,15 @@ describe("model runtime", () => {
       new Float32Array([1, 2]),
     );
     const disposal = runtime.dispose();
-    await flushMicrotasks();
-    expect(first.delete).not.toHaveBeenCalled();
-    expect(second.load).not.toHaveBeenCalled();
 
     forward.resolve(firstOutputs);
     await expect(firstRun).resolves.toEqual({
-      actionLogits: new Float32Array([0, 1]),
-      minimumFeeZ: 0.25,
+      selectedAction: 1,
+      predictedFee: expect.closeTo(predictedFee(0.25)),
     });
     await expect(secondRun).resolves.toEqual({
-      actionLogits: new Float32Array([1, 0, 2]),
-      minimumFeeZ: -0.5,
+      selectedAction: 2,
+      predictedFee: expect.closeTo(predictedFee(-0.5)),
     });
     await disposal;
     expect(events).toEqual([
@@ -160,7 +154,7 @@ describe("model runtime", () => {
     await expect(runtime.dispose()).resolves.toBeUndefined();
   });
 
-  it("deletes a module whose load fails and can load a fresh module", async () => {
+  it("retries with a fresh module after a load failure", async () => {
     const failed = native();
     failed.load.mockRejectedValueOnce(new Error("load failed"));
     const loaded = native();
@@ -175,11 +169,9 @@ describe("model runtime", () => {
     await expect(runtime.execute(selected, input)).rejects.toThrow(
       "load failed",
     );
-    expect(failed.delete).toHaveBeenCalledOnce();
-
     await expect(runtime.execute(selected, input)).resolves.toEqual({
-      actionLogits: new Float32Array([0, 1]),
-      minimumFeeZ: 0.25,
+      selectedAction: 1,
+      predictedFee: expect.closeTo(predictedFee(0.25)),
     });
     expect(loaded.load).toHaveBeenCalledOnce();
     await runtime.dispose();
@@ -203,9 +195,9 @@ describe("model runtime", () => {
       message: "shape [1, 2]",
     },
     {
-      name: "logit storage length",
-      outputs: [output([0], [1, 2]), output([0], [1])],
-      message: "exactly 2",
+      name: "minimum scalar type",
+      outputs: [output([0, 1], [1, 2]), output([0], [1], 3)],
+      message: "float32",
     },
     {
       name: "minimum shape",
@@ -227,6 +219,35 @@ describe("model runtime", () => {
         new Float32Array([1, 2]),
       ),
     ).rejects.toThrow(message);
+    await runtime.dispose();
+  });
+
+  it("selects the first action when maximum logits tie", async () => {
+    const module = native(async () => [
+      output([1, 4, 4, 0], [1, 4]),
+      output([0], [1]),
+    ]);
+    const runtime = createModelRuntime(() => module);
+
+    await expect(
+      runtime.execute(modelSelection(4), new Float32Array([1, 2])),
+    ).resolves.toEqual({
+      selectedAction: 1,
+      predictedFee: expect.closeTo(100),
+    });
+    await runtime.dispose();
+  });
+
+  it("rejects decoded fee overflow", async () => {
+    const module = native(async () => [
+      output([0, 1], [1, 2]),
+      output([2_000], [1]),
+    ]);
+    const runtime = createModelRuntime(() => module);
+
+    await expect(
+      runtime.execute(modelSelection(2), new Float32Array([1, 2])),
+    ).rejects.toThrow("Predicted fee must be positive and finite");
     await runtime.dispose();
   });
 });

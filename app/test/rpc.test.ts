@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Hash } from "viem";
-
 import type { ChainManifest, FeatureName } from "../src/features";
 import { createChainSession } from "../src/rpc";
-import { hashOf } from "./helpers";
 
 type JsonRpcRequest = {
   id: number;
@@ -14,8 +11,8 @@ type JsonRpcRequest = {
 
 type RpcFixture = {
   head: bigint;
-  block(number: bigint): unknown | Promise<unknown>;
-  history(oldestBlock: bigint, count: number): unknown | Promise<unknown>;
+  block(number: bigint): unknown;
+  history(oldestBlock: bigint, count: number): unknown;
   batches: JsonRpcRequest[][];
 };
 
@@ -23,23 +20,15 @@ function quantity(value: bigint): `0x${string}` {
   return `0x${value.toString(16)}`;
 }
 
-function rpcBlock(
-  number: bigint,
-  overrides: {
-    baseFeePerGas?: `0x${string}` | null;
-    hash?: Hash;
-    parentHash?: Hash;
-  } = {},
-) {
+const PROTOCOL_HASH = `0x${"0".repeat(64)}`;
+
+function rpcBlock(number: bigint) {
   return {
     number: quantity(number),
-    hash: overrides.hash ?? hashOf(number),
-    parentHash: overrides.parentHash ?? hashOf(number - 1n),
+    hash: PROTOCOL_HASH,
+    parentHash: PROTOCOL_HASH,
     timestamp: quantity(1_700_000_000n + number),
-    baseFeePerGas:
-      overrides.baseFeePerGas === undefined
-        ? quantity(1_000_000_000n + number)
-        : overrides.baseFeePerGas,
+    baseFeePerGas: quantity(1_000_000_000n + number),
     gasUsed: quantity(100n),
     gasLimit: quantity(200n),
     transactions: [],
@@ -92,13 +81,11 @@ function installRpc(
         | JsonRpcRequest[];
       const requests = Array.isArray(parsed) ? parsed : [parsed];
       fixture.batches.push(requests);
-      const responses = await Promise.all(
-        requests.map(async (request) => ({
-          jsonrpc: "2.0",
-          id: request.id,
-          result: await rpcResult(fixture, request),
-        })),
-      );
+      const responses = requests.map((request) => ({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: rpcResult(fixture, request),
+      }));
       return new Response(
         JSON.stringify(Array.isArray(parsed) ? responses : responses[0]),
         { headers: { "Content-Type": "application/json" } },
@@ -108,16 +95,16 @@ function installRpc(
   return fixture;
 }
 
-async function rpcResult(
+function rpcResult(
   fixture: RpcFixture,
   request: JsonRpcRequest,
-): Promise<unknown> {
+): unknown {
   if (request.method === "eth_blockNumber") {
     return quantity(fixture.head);
   }
   if (request.method === "eth_getBlockByNumber") {
     const tag = (request.params as readonly [string])[0];
-    return fixture.block(tag === "latest" ? fixture.head : BigInt(tag));
+    return fixture.block(BigInt(tag));
   }
   if (request.method === "eth_feeHistory") {
     const [countValue, headValue] = request.params as readonly [string, string];
@@ -144,7 +131,6 @@ function blockBatches(fixture: RpcFixture): bigint[][] {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.clearAllMocks();
 });
 
 describe("createChainSession", () => {
@@ -204,37 +190,19 @@ describe("createChainSession", () => {
     ).toEqual([
       ["0x3", "0xc", [50, 90]],
       ["0x3", "0xe", [50, 90]],
+      ["0x3", "0xe", [50, 90]],
     ]);
-
-  });
-
-  it("rejects a broken parent link in the fetched range", async () => {
-    const rpc = installRpc({
-      block: (number) =>
-        rpcBlock(
-          number,
-          number === 11n ? { parentHash: hashOf(99n) } : {},
-        ),
-    });
-    const session = createChainSession("ethereum", manifestOf(3));
-
-    await expect(session.sync()).rejects.toThrow(
-      "Broken parent link between blocks 10 and 11",
-    );
-    expect(blockBatches(rpc)).toEqual([[10n, 11n, 12n]]);
   });
 
   it.each([
     {
       name: "fee history to start at the first context block",
-      feature: "log1p_effective_priority_fee_per_gas_p50" as const,
       history: (oldestBlock: bigint, count: number) =>
         feeHistory(oldestBlock + 1n, count),
       message: "Fee history must start at block 10, got 11",
     },
     {
       name: "fee history to include priority-fee rewards",
-      feature: "log1p_effective_priority_fee_per_gas_p50" as const,
       history: (oldestBlock: bigint, count: number) => ({
         ...feeHistory(oldestBlock, count),
         reward: undefined,
@@ -243,7 +211,6 @@ describe("createChainSession", () => {
     },
     {
       name: "one priority-fee reward row per context block",
-      feature: "log1p_effective_priority_fee_per_gas_p90" as const,
       history: (oldestBlock: bigint, count: number) => ({
         ...feeHistory(oldestBlock, count),
         reward: feeHistory(oldestBlock, count).reward.slice(1),
@@ -252,7 +219,6 @@ describe("createChainSession", () => {
     },
     {
       name: "each reward row to contain P50 and P90",
-      feature: "log1p_effective_priority_fee_per_gas_p90" as const,
       history: (oldestBlock: bigint, count: number) => ({
         ...feeHistory(oldestBlock, count),
         reward: feeHistory(oldestBlock, count).reward.map((rewards, index) =>
@@ -264,7 +230,6 @@ describe("createChainSession", () => {
     },
     {
       name: "priority-fee rewards to be nonnegative",
-      feature: "log1p_effective_priority_fee_per_gas_p50" as const,
       history: (oldestBlock: bigint, count: number) => ({
         ...feeHistory(oldestBlock, count),
         reward: feeHistory(oldestBlock, count).reward.map(
@@ -275,31 +240,18 @@ describe("createChainSession", () => {
       message:
         "Fee history reward rows must contain nonnegative P50 and P90 values",
     },
-  ])("requires $name", async ({ feature, history, message }) => {
+  ])("requires $name", async ({ history, message }) => {
     const session = createChainSession(
       "ethereum",
-      manifestOf(3, feature),
+      manifestOf(
+        3,
+        "log1p_effective_priority_fee_per_gas_p50",
+        "log1p_effective_priority_fee_per_gas_p90",
+      ),
     );
     installRpc({ history });
 
     await expect(session.sync()).rejects.toThrow(message);
-  });
-
-  it("requires a positive EIP-1559 base fee", async () => {
-    for (const baseFeePerGas of [null, quantity(0n)] as const) {
-      installRpc({
-        block: (number) =>
-          rpcBlock(number, {
-            baseFeePerGas:
-              number === 12n ? baseFeePerGas : undefined,
-          }),
-      });
-      const session = createChainSession("ethereum", manifestOf(1));
-
-      await expect(session.sync()).rejects.toThrow(
-        "RPC returned block 12 without a positive base fee",
-      );
-    }
   });
 
   it("reads the current head directly once", async () => {

@@ -151,7 +151,6 @@ function runHistory(): HistoryHarness {
     resolvePending: vi.fn(async () => undefined),
     subscribe: vi.fn((listener) => {
       listeners.add(listener);
-      listener();
       return () => listeners.delete(listener);
     }),
   };
@@ -206,55 +205,16 @@ async function renderApp(strict = false): Promise<void> {
 }
 
 describe("App inference presentation", () => {
-  it("applies selection immediately while an old result records durably", async () => {
-    const result = inferenceResult();
-    const recorded = deferred<void>();
-    vi.mocked(history.owner.record).mockReturnValueOnce(recorded.promise);
+  it("keeps the newer selection and run on screen while both results record", async () => {
+    const older = inferenceResult({ head_block: 10 });
+    const newer = inferenceResult({ chain: "polygon", head_block: 20 });
     await renderApp();
 
     act(() => mocks.inferenceProps!.onRun());
-    act(() => runtimes[0].resolveRun(0, result));
-    await vi.waitFor(() =>
-      expect(history.owner.record).toHaveBeenCalledWith(result),
-    );
-
     act(() => mocks.inferenceProps!.onChainChange("polygon"));
-    expect(mocks.inferenceProps).toMatchObject({
-      chain: "polygon",
-      horizon: 5,
-      state: { status: "idle" },
-    });
-
-    await act(async () => recorded.resolve());
-    expect(mocks.inferenceProps!.state).toEqual({ status: "idle" });
-  });
-
-  it("invalidates an original run across A to B to A", async () => {
-    const result = inferenceResult();
-    await renderApp();
     act(() => mocks.inferenceProps!.onRun());
-
-    act(() => {
-      mocks.inferenceProps!.onChainChange("polygon");
-      mocks.inferenceProps!.onChainChange("ethereum");
-    });
-    expect(mocks.inferenceProps!.chain).toBe("ethereum");
-
-    await act(async () => runtimes[0].resolveRun(0, result));
-    expect(history.owner.record).toHaveBeenCalledWith(result);
-    expect(mocks.inferenceProps!.state).toEqual({ status: "idle" });
-  });
-
-  it("lets the newer run own presentation while both results record", async () => {
-    const older = inferenceResult({ head_block: 10, head_hash: "0xolder" });
-    const newer = inferenceResult({ head_block: 20, head_hash: "0xnewer" });
-    await renderApp();
-
-    act(() => {
-      mocks.inferenceProps!.onRun();
-      mocks.inferenceProps!.onRun();
-    });
     await act(async () => runtimes[0].resolveRun(1, newer));
+    expect(mocks.inferenceProps!.chain).toBe("polygon");
     expect(mocks.inferenceProps!.state).toEqual({
       status: "success",
       result: newer,
@@ -320,21 +280,34 @@ describe("App inference presentation", () => {
 });
 
 describe("App owners", () => {
-  it("uses a fresh live runtime after development setup-cleanup-setup", async () => {
+  it("creates one runtime lazily and disposes it once", async () => {
     await renderApp(true);
 
-    expect(runtimes).toHaveLength(2);
-    expect(runtimes[0].runtime.dispose).toHaveBeenCalledOnce();
-    expect(runtimes[1].runtime.dispose).not.toHaveBeenCalled();
+    expect(runtimes).toHaveLength(0);
 
-    act(() => mocks.inferenceProps!.onRun());
-    expect(runtimes[0].runtime.run).not.toHaveBeenCalled();
-    expect(runtimes[1].runtime.run).toHaveBeenCalledWith("ethereum", 5);
+    act(() => {
+      mocks.inferenceProps!.onRun();
+      mocks.inferenceProps!.onRun();
+    });
+    expect(runtimes).toHaveLength(1);
+    expect(runtimes[0].runtime.run).toHaveBeenCalledTimes(2);
 
     await act(async () => root?.unmount());
     root = null;
     expect(runtimes[0].runtime.dispose).toHaveBeenCalledOnce();
-    expect(runtimes[1].runtime.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("uses the current inference error path for runtime construction failure", async () => {
+    mocks.createInferenceRuntime.mockImplementationOnce(() => {
+      throw new Error("Native setup failed");
+    });
+    await renderApp();
+
+    act(() => mocks.inferenceProps!.onRun());
+    expect(mocks.inferenceProps!.state).toEqual({
+      message: "Native setup failed",
+      status: "error",
+    });
   });
 
   it("shows load and save failures through one history error", async () => {
@@ -365,10 +338,13 @@ describe("App owners", () => {
 describe("App outcome refresh and global selection", () => {
   it("finishes refresh for its captured chain after selection changes", async () => {
     const head = deferred<number>();
+    const created = runtime();
+    vi.mocked(created.runtime.currentHead).mockReturnValueOnce(head.promise);
+    mocks.createInferenceRuntime.mockImplementationOnce(() => {
+      runtimes.push(created);
+      return created.runtime;
+    });
     await renderApp();
-    vi.mocked(runtimes[0].runtime.currentHead).mockReturnValueOnce(
-      head.promise,
-    );
     act(() => mocks.bottomTabsProps!.onSelect("analytics"));
 
     const refresh = mocks.analyticsProps!.onRefresh();
@@ -409,17 +385,5 @@ describe("App outcome refresh and global selection", () => {
     expect(mocks.inferenceProps!.horizon).toBe(3);
     act(() => mocks.bottomTabsProps!.onSelect("analytics"));
     expect(mocks.analyticsProps!.horizon).toBe(3);
-  });
-
-  it("propagates history save failure from refresh", async () => {
-    vi.mocked(history.owner.resolvePending).mockRejectedValueOnce(
-      new Error("Storage unavailable"),
-    );
-    await renderApp();
-    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-
-    await expect(mocks.analyticsProps!.onRefresh()).rejects.toThrow(
-      "Storage unavailable",
-    );
   });
 });

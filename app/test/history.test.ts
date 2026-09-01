@@ -58,14 +58,14 @@ describe("run history", () => {
     storage.getItem.mockReturnValueOnce(load.promise);
     const history = startHistory();
 
-    const record = history.record(inferenceResult({ head_hash: "0xnew" }));
+    const record = history.record(inferenceResult({ head_block: 30 }));
     expect(storage.setItem).not.toHaveBeenCalled();
 
     load.resolve(JSON.stringify([existing]));
     await record;
 
     expect(history.runs).toHaveLength(2);
-    expect(history.runs[0]).toMatchObject({ head_hash: "0xnew" });
+    expect(history.runs[0]).toMatchObject({ head_block: 30 });
     expect(history.runs[1]).toEqual(existing);
     expect(storage.setItem).toHaveBeenCalledWith(
       "kairos.runs",
@@ -85,46 +85,33 @@ describe("run history", () => {
     expect(storage.setItem).not.toHaveBeenCalled();
   });
 
-  it("publishes only after save and preserves committed history on failure", async () => {
+  it("preserves committed history after a rejected save and continues with the next write", async () => {
     const existing = inferenceRun({ id: "existing" });
-    const save = deferred<void>();
+    const firstSave = deferred<void>();
+    const secondSave = deferred<void>();
     storage.getItem.mockResolvedValueOnce(JSON.stringify([existing]));
-    storage.setItem.mockReturnValueOnce(save.promise);
+    storage.setItem
+      .mockReturnValueOnce(firstSave.promise)
+      .mockReturnValueOnce(secondSave.promise);
     const history = startHistory();
     await vi.waitFor(() => expect(history.runs).toEqual([existing]));
-    const committed = history.runs;
 
-    const record = history.record(inferenceResult({ head_hash: "0xnew" }));
+    const first = history.record(inferenceResult({ head_block: 30 }));
+    const second = history.record(inferenceResult({ head_block: 40 }));
     await vi.waitFor(() => expect(storage.setItem).toHaveBeenCalledOnce());
-    expect(history.runs).toBe(committed);
+    expect(history.runs).toEqual([existing]);
 
-    save.reject(new Error("Storage unavailable"));
-    await expect(record).rejects.toThrow("Storage unavailable");
-    expect(history.runs).toBe(committed);
+    firstSave.reject(new Error("Storage unavailable"));
+    await expect(first).rejects.toThrow("Storage unavailable");
+    await vi.waitFor(() => expect(storage.setItem).toHaveBeenCalledTimes(2));
+    expect(history.runs).toEqual([existing]);
     expect(history.storageError).toBe("Storage unavailable");
 
-    await history.record(inferenceResult({ head_hash: "0xretry" }));
-    expect(storage.setItem).toHaveBeenCalledTimes(2);
-    expect(history.runs[0]).toMatchObject({ head_hash: "0xretry" });
-    expect(history.storageError).toBeNull();
-  });
-
-  it("serializes concurrent records and continues after rejection", async () => {
-    const firstSave = deferred<void>();
-    storage.setItem.mockReturnValueOnce(firstSave.promise);
-    const history = startHistory();
-    await vi.waitFor(() => expect(storage.getItem).toHaveBeenCalledOnce());
-
-    const first = history.record(inferenceResult({ head_hash: "0xfirst" }));
-    const second = history.record(inferenceResult({ head_hash: "0xsecond" }));
-    await vi.waitFor(() => expect(storage.setItem).toHaveBeenCalledOnce());
-    firstSave.reject(new Error("First save failed"));
-    await expect(first).rejects.toThrow("First save failed");
+    secondSave.resolve();
     await second;
-
-    expect(storage.setItem).toHaveBeenCalledTimes(2);
-    expect(history.runs).toHaveLength(1);
-    expect(history.runs[0]).toMatchObject({ head_hash: "0xsecond" });
+    expect(history.runs[0]).toMatchObject({ head_block: 40 });
+    expect(history.runs[1]).toEqual(existing);
+    expect(history.storageError).toBeNull();
   });
 
   it("commits concurrent successful records in FIFO order", async () => {
@@ -133,8 +120,8 @@ describe("run history", () => {
     const history = startHistory();
     await vi.waitFor(() => expect(storage.getItem).toHaveBeenCalledOnce());
 
-    const first = history.record(inferenceResult({ head_hash: "0xfirst" }));
-    const second = history.record(inferenceResult({ head_hash: "0xsecond" }));
+    const first = history.record(inferenceResult({ head_block: 30 }));
+    const second = history.record(inferenceResult({ head_block: 40 }));
     await vi.waitFor(() => expect(storage.setItem).toHaveBeenCalledOnce());
     firstSave.resolve();
     await first;
@@ -142,11 +129,11 @@ describe("run history", () => {
 
     expect(storage.setItem).toHaveBeenCalledTimes(2);
     expect(history.runs).toHaveLength(2);
-    expect(history.runs[0]).toMatchObject({ head_hash: "0xsecond" });
-    expect(history.runs[1]).toMatchObject({ head_hash: "0xfirst" });
+    expect(history.runs[0]).toMatchObject({ head_block: 40 });
+    expect(history.runs[1]).toMatchObject({ head_block: 30 });
   });
 
-  it("keeps no-op pending resolution as the original array without saving", async () => {
+  it("does not resolve, save, or publish a no-op pending update", async () => {
     const future = inferenceRun({
       id: "future",
       head_block: 20,
@@ -157,17 +144,19 @@ describe("run history", () => {
     storage.getItem.mockResolvedValueOnce(
       JSON.stringify([future, otherChain, complete]),
     );
-    const history = startHistory();
+    const publication = vi.fn();
+    const history = createRunHistory();
+    history.subscribe(publication);
     await vi.waitFor(() => expect(history.runs).toHaveLength(3));
-    const committed = history.runs;
+    publication.mockClear();
     storage.setItem.mockClear();
 
     const resolve = vi.fn();
     await history.resolvePending("ethereum", 24, resolve);
 
-    expect(history.runs).toBe(committed);
     expect(storage.setItem).not.toHaveBeenCalled();
     expect(resolve).not.toHaveBeenCalled();
+    expect(publication).not.toHaveBeenCalled();
   });
 
   it("commits successful outcomes while failed and future siblings remain retryable", async () => {

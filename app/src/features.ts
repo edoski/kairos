@@ -27,31 +27,25 @@ export type ChainManifest = {
 
 export type PriorityFeeRewards = readonly [p50: bigint, p90: bigint];
 
-export function needsPredecessor(manifest: ChainManifest): boolean {
+export function predecessorOffset(manifest: ChainManifest): 0 | 1 {
   return manifest.features.some(
     (feature) => feature.name === "block_interval_seconds",
-  );
-}
-
-export function usesPriorityFees(manifest: ChainManifest): boolean {
-  return manifest.features.some(
-    (feature) =>
-      feature.name === "log1p_effective_priority_fee_per_gas_p50" ||
-      feature.name === "log1p_effective_priority_fee_per_gas_p90",
-  );
+  )
+    ? 1
+    : 0;
 }
 
 export function buildModelInput(
   blocks: readonly BlockRow[],
-  priorityFeeRewards: readonly PriorityFeeRewards[] | null,
+  priorityFeeRewards: readonly PriorityFeeRewards[],
   manifest: ChainManifest,
 ): Float32Array {
-  const predecessorOffset = Number(needsPredecessor(manifest));
+  const offset = predecessorOffset(manifest);
   const featureCount = manifest.features.length;
   const output = new Float32Array(manifest.context_blocks * featureCount);
 
   for (let row = 0; row < manifest.context_blocks; row += 1) {
-    const blockIndex = row + predecessorOffset;
+    const blockIndex = row + offset;
     const block = blocks[blockIndex];
     for (let column = 0; column < featureCount; column += 1) {
       const feature = manifest.features[column];
@@ -59,14 +53,17 @@ export function buildModelInput(
         feature.name,
         block,
         blocks[blockIndex - 1],
-        priorityFeeRewards?.[row],
+        priorityFeeRewards[row],
       );
       const index = row * featureCount + column;
       output[index] =
         (raw - feature.mean) / feature.standard_deviation;
-      if (!Number.isFinite(output[index])) {
-        throw new Error("Model input must contain finite float32 values");
-      }
+    }
+  }
+
+  for (const value of output) {
+    if (!Number.isFinite(value)) {
+      throw new Error("Model input must contain finite float32 values");
     }
   }
 
@@ -77,23 +74,23 @@ function rawFeature(
   feature: FeatureName,
   block: BlockRow,
   predecessor: BlockRow,
-  priorityFeeRewards: PriorityFeeRewards | undefined,
+  priorityFeeRewards: PriorityFeeRewards,
 ): number {
   switch (feature) {
     case "log_base_fee_per_gas":
-      return positiveLog(block.baseFeePerGas);
+      return logBigInt(block.baseFeePerGas);
     case "gas_utilization":
       return Number(block.gasUsed) / Number(block.gasLimit);
     case "log_exact_forming_base_fee_per_gas":
-      return positiveLog(formingChildBaseFee(block));
+      return logBigInt(formingChildBaseFee(block));
     case "log_gas_limit":
-      return positiveLog(block.gasLimit);
+      return logBigInt(block.gasLimit);
     case "log1p_tx_count":
       return Math.log1p(block.transactionCount);
     case "log1p_effective_priority_fee_per_gas_p50":
-      return Math.log1p(Number(priorityFeeRewards![0]));
+      return Math.log1p(Number(priorityFeeRewards[0]));
     case "log1p_effective_priority_fee_per_gas_p90":
-      return Math.log1p(Number(priorityFeeRewards![1]));
+      return Math.log1p(Number(priorityFeeRewards[1]));
     case "block_interval_seconds": {
       return Number(block.timestamp - predecessor.timestamp);
     }
@@ -108,7 +105,7 @@ function rawFeature(
   }
 }
 
-function positiveLog(value: bigint): number {
+function logBigInt(value: bigint): number {
   return Math.log(Number(value));
 }
 

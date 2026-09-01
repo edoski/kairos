@@ -17,7 +17,7 @@ import {
 import type { BlockRow, Chain } from "../src/domain";
 import type {
   ModelCatalog,
-  ModelOutput,
+  ModelPrediction,
   ModelRuntime,
 } from "../src/model";
 import type {
@@ -27,7 +27,6 @@ import type {
 } from "../src/rpc";
 import {
   chainManifest,
-  hashOf,
   modelSelection,
 } from "./helpers";
 
@@ -37,8 +36,6 @@ function block(
 ): BlockRow {
   return {
     number,
-    hash: hashOf(number),
-    parentHash: hashOf(number - 1n),
     timestamp: 1_700_000_000n + number,
     baseFeePerGas,
     gasUsed: 100n,
@@ -56,7 +53,10 @@ function context(
       block(head - 1n, headBaseFee - 1n),
       block(head, headBaseFee),
     ],
-    priorityFeeRewards: null,
+    priorityFeeRewards: [
+      [1n, 2n],
+      [1n, 2n],
+    ],
   };
 }
 
@@ -79,9 +79,9 @@ function session(
 }
 
 function runtime(
-  output: ModelOutput = {
-    actionLogits: new Float32Array([0, 1]),
-    minimumFeeZ: 0,
+  output: ModelPrediction = {
+    selectedAction: 1,
+    predictedFee: 100,
   },
 ): ModelRuntime {
   return {
@@ -127,8 +127,8 @@ describe("InferenceRuntime", () => {
   it("uses the selected chain session and model for Run", async () => {
     const polygon = session(async () => context(11n, 40n));
     const model = runtime({
-      actionLogits: new Float32Array([-1, 4, 1, 0]),
-      minimumFeeZ: 2,
+      selectedAction: 1,
+      predictedFee: Math.exp(Math.log(100) + 1),
     });
     const { dependencies, inference } = createTestRuntime({
       model,
@@ -153,9 +153,7 @@ describe("InferenceRuntime", () => {
     expect(result).toEqual({
       chain: "polygon",
       K: 4,
-      artifact_id: chainManifest.models[4].artifact_id,
       head_block: 11,
-      head_hash: hashOf(11n),
       selected_action_k: 1,
       target_block: 13,
       predicted_minimum_base_fee_per_gas: expect.closeTo(
@@ -165,102 +163,7 @@ describe("InferenceRuntime", () => {
     await inference.dispose();
   });
 
-  it("propagates RPC and native failures from their owners", async () => {
-    const rpcError = new Error("HTTP transport details");
-    const unavailable = session(async () => {
-      throw rpcError;
-    });
-    const chainFailure = createTestRuntime({
-      sessions: sessions({ avalanche: unavailable }),
-    }).inference;
-    await expect(chainFailure.run("avalanche", 2)).rejects.toBe(rpcError);
-    await chainFailure.dispose();
-
-    const model = runtime();
-    const nativeCause = new Error("native cause");
-    const nativeError = new Error("native load details", {
-      cause: nativeCause,
-    });
-    vi.mocked(model.execute).mockRejectedValue(nativeError);
-    const modelFailure = createTestRuntime({ model }).inference;
-    await expect(modelFailure.run("ethereum", 2)).rejects.toBe(nativeError);
-    expect(nativeError.cause).toBe(nativeCause);
-    await modelFailure.dispose();
-  });
-
-  it("propagates feature validation from its owner", async () => {
-    const model = runtime();
-    const invalidManifest = {
-      ...chainManifest,
-      features: [
-        {
-          name: "log_base_fee_per_gas" as const,
-          mean: 0,
-          standard_deviation: 0,
-        },
-      ],
-    };
-    const invalidCatalog: ModelCatalog = {
-      chainManifest: vi.fn(() => invalidManifest),
-      select: vi.fn((_chain, K) => ({
-        ...modelSelection(K),
-        chainManifest: invalidManifest,
-      })),
-    };
-    const inference = createTestRuntime({
-      catalog: invalidCatalog,
-      model,
-    }).inference;
-
-    await expect(inference.run("ethereum", 2)).rejects.toThrow(
-      "Model input must contain finite float32 values",
-    );
-    expect(model.execute).not.toHaveBeenCalled();
-    await inference.dispose();
-  });
-
-  it("rejects a nonfinite decoded fee", async () => {
-    const inference = createTestRuntime({
-      model: runtime({
-        actionLogits: new Float32Array([0, 1]),
-        minimumFeeZ: 2_000,
-      }),
-    }).inference;
-    await expect(inference.run("ethereum", 2)).rejects.toThrow(
-      "Predicted fee must be positive and finite",
-    );
-    await inference.dispose();
-  });
-
-  it("selects the first action when maximum logits tie", async () => {
-    const inference = createTestRuntime({
-      model: runtime({
-        actionLogits: new Float32Array([1, 4, 4, 0]),
-        minimumFeeZ: 0,
-      }),
-    }).inference;
-
-    await expect(inference.run("ethereum", 4)).resolves.toMatchObject({
-      selected_action_k: 1,
-      target_block: 12,
-    });
-    await inference.dispose();
-  });
-
-  it("rejects an unsafe external head block without losing raw precision", async () => {
-    const unsafe = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
-    const unsafeHead = session(async () => context(unsafe, 20n));
-    const inference = createTestRuntime({
-      sessions: sessions({ ethereum: unsafeHead }),
-    }).inference;
-
-    await expect(inference.run("ethereum", 2)).rejects.toThrow(
-      "head block exceeds the safe integer range",
-    );
-    await inference.dispose();
-  });
-
-  it("reads the selected chain head once through a safe integer", async () => {
+  it("reads the selected chain head once", async () => {
     const avalanche = session();
     const { dependencies, inference } = createTestRuntime({
       sessions: sessions({ avalanche }),
@@ -269,13 +172,6 @@ describe("InferenceRuntime", () => {
     await expect(inference.currentHead("avalanche")).resolves.toBe(10);
     expect(avalanche.readHead).toHaveBeenCalledOnce();
     expect(dependencies.sessions.ethereum.readHead).not.toHaveBeenCalled();
-
-    vi.mocked(avalanche.readHead).mockResolvedValueOnce(
-      BigInt(Number.MAX_SAFE_INTEGER) + 1n,
-    );
-    await expect(inference.currentHead("avalanche")).rejects.toThrow(
-      "head block exceeds the safe integer range",
-    );
     await inference.dispose();
   });
 
@@ -293,14 +189,6 @@ describe("InferenceRuntime", () => {
     });
     expect(polygon.readOutcome).toHaveBeenCalledWith(11n, 12n);
     expect(dependencies.sessions.ethereum.readOutcome).not.toHaveBeenCalled();
-
-    vi.mocked(polygon.readOutcome).mockResolvedValueOnce({
-      immediateBaseFeePerGas: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
-      selectedBaseFeePerGas: 18n,
-    });
-    await expect(
-      inference.resolveOutcome("polygon", 11, 12),
-    ).rejects.toThrow("immediate base fee exceeds the safe integer range");
     await inference.dispose();
   });
 

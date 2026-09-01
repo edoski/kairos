@@ -59,16 +59,21 @@ export default function App() {
   }, [runHistory]);
 
   useEffect(() => {
-    const runtime = createInferenceRuntime();
-    activeRuntime.current = runtime;
-
     return () => {
-      if (activeRuntime.current === runtime) {
-        activeRuntime.current = null;
+      const runtime = activeRuntime.current;
+      activeRuntime.current = null;
+      if (runtime !== null) {
+        void runtime.dispose().catch(() => {});
       }
-      void runtime.dispose().catch(() => {});
     };
   }, []);
+
+  function getRuntime(): InferenceRuntime {
+    if (activeRuntime.current === null) {
+      activeRuntime.current = createInferenceRuntime();
+    }
+    return activeRuntime.current;
+  }
 
   function select(next: Selection): void {
     const current = selectionRef.current;
@@ -94,10 +99,7 @@ export default function App() {
 
   async function refreshOutcomes(): Promise<void> {
     const chain = selectionRef.current.chain;
-    const runtime = activeRuntime.current;
-    if (runtime === null) {
-      throw new Error("Could not connect to the selected chain.");
-    }
+    const runtime = getRuntime();
     const headBlock = await runtime.currentHead(chain);
     await runHistory.resolvePending(
       chain,
@@ -111,16 +113,12 @@ export default function App() {
     const selected = selectionRef.current;
     inferenceGeneration.current += 1;
     const generation = inferenceGeneration.current;
-    const runtime = activeRuntime.current;
-    if (runtime === null) {
-      fail("Could not connect to the selected chain.");
-      return;
-    }
     const isCurrent = () => inferenceGeneration.current === generation;
 
     setInference({ status: "loading" });
     let result;
     try {
+      const runtime = getRuntime();
       result = await runtime.run(selected.chain, selected.horizon);
     } catch (error) {
       if (isCurrent()) {
@@ -153,7 +151,7 @@ export default function App() {
               onChainChange={selectChain}
               onHorizonChange={selectHorizon}
               onRun={() => void runInference()}
-              onRunAgain={() => setInference({ status: "idle" })}
+              onReset={() => setInference({ status: "idle" })}
               state={inference}
             />
           ) : (

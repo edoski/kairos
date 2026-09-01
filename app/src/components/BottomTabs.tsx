@@ -3,12 +3,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors } from "../theme";
 
-export type AppTab = "inference" | "analytics";
-
 const TABS = [
   { value: "inference", label: "Inference", icon: "pulse-outline" },
   { value: "analytics", label: "Analytics", icon: "bar-chart-outline" },
 ] as const;
+
+export type AppTab = (typeof TABS)[number]["value"];
 
 export function BottomTabs({
   selected,

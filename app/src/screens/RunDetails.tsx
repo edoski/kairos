@@ -2,12 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
-  formatGwei,
+  formatWeiAsGwei,
   formatRunDate,
   formatSavings,
   realizedSavingsPercent,
 } from "../analytics";
-import { DetailRow } from "../components/DetailRow";
+import { DetailList } from "../components/DetailList";
 import { Overlay } from "../components/Overlay";
 import { CHAIN_LABELS } from "../domain";
 import type { InferenceRun } from "../history";
@@ -55,46 +55,43 @@ export function RunDetails({
 
         <Text style={styles.groupTitle}>Prediction</Text>
         <View style={[sharedStyles.surface, sharedStyles.detailsCard]}>
-          <DetailRow
-            label="Head block"
-            value={run.head_block.toLocaleString()}
-          />
-          <DetailRow
-            label="Action offset"
-            value={String(run.selected_action_k)}
-          />
-          <DetailRow
-            label="Target block"
-            value={run.target_block.toLocaleString()}
-          />
-          <DetailRow
-            label="Predicted base fee"
-            last
-            value={formatGwei(run.predicted_minimum_base_fee_per_gas)}
+          <DetailList
+            items={[
+              ["Head block", run.head_block.toLocaleString()],
+              ["Action offset", String(run.selected_action_k)],
+              ["Target block", run.target_block.toLocaleString()],
+              [
+                "Predicted base fee",
+                formatWeiAsGwei(run.predicted_minimum_base_fee_per_gas),
+              ],
+            ]}
           />
         </View>
         <Text style={styles.groupTitle}>Outcome</Text>
         <View style={[sharedStyles.surface, sharedStyles.detailsCard]}>
-          <DetailRow
-            label="Act-now base fee"
-            value={
-              run.outcome === undefined
-                ? "Pending"
-                : formatGwei(run.outcome.immediate_base_fee_per_gas)
-            }
-          />
-          <DetailRow
-            label="Selected base fee"
-            value={
-              run.outcome === undefined
-                ? "Pending"
-                : formatGwei(run.outcome.selected_base_fee_per_gas)
-            }
-          />
-          <DetailRow
-            label="Realized savings"
-            last
-            value={savings === null ? "Pending" : formatSavings(savings)}
+          <DetailList
+            items={[
+              [
+                "Act-now base fee",
+                run.outcome === undefined
+                  ? "Pending"
+                  : formatWeiAsGwei(
+                      run.outcome.immediate_base_fee_per_gas,
+                    ),
+              ],
+              [
+                "Selected base fee",
+                run.outcome === undefined
+                  ? "Pending"
+                  : formatWeiAsGwei(
+                      run.outcome.selected_base_fee_per_gas,
+                    ),
+              ],
+              [
+                "Realized savings",
+                savings === null ? "Pending" : formatSavings(savings),
+              ],
+            ]}
           />
         </View>
         <Pressable

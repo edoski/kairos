@@ -105,7 +105,6 @@ export function createRunHistory(): RunHistory {
     },
     subscribe(listener) {
       listeners.add(listener);
-      listener();
       start();
       return () => listeners.delete(listener);
     },
@@ -121,7 +120,7 @@ function addRun(
   runSequence += 1;
   return [
     {
-      id: `${ranAt}:${runSequence}:${result.chain}:${result.K}:${result.head_hash}`,
+      id: `${ranAt}:${runSequence}`,
       ran_at: ranAt,
       ...result,
     },

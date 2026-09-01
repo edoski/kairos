@@ -121,8 +121,8 @@ export function AnalyticsScreen({
         </View>
 
         {storageError && (
-          <View style={styles.storageError}>
-            <Text style={styles.storageErrorText}>{storageError}</Text>
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{storageError}</Text>
           </View>
         )}
 
@@ -147,8 +147,8 @@ export function AnalyticsScreen({
           </Text>
         </Pressable>
         {refreshState.status === "error" && (
-          <View style={styles.storageError}>
-            <Text style={styles.storageErrorText}>
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>
               {refreshState.message}
             </Text>
           </View>
@@ -186,7 +186,7 @@ export function AnalyticsScreen({
               value={horizon}
             />
           </View>
-          <AnalyticsCharts buckets={buckets} />
+          {graphRuns.length > 0 && <AnalyticsCharts buckets={buckets} />}
         </View>
 
         <Text style={styles.sectionTitle}>Runs ({graphRuns.length})</Text>

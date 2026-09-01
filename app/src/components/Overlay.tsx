@@ -26,7 +26,6 @@ export function Overlay({
       animationType={animationType}
       onRequestClose={onClose}
       transparent
-      visible
     >
       <View style={[styles.root, centered ? styles.centered : styles.bottom]}>
         <Pressable onPress={onClose} style={styles.backdrop} />

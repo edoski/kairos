@@ -43,16 +43,16 @@ export type ModelSelection = {
   modelManifest: ModelManifest;
 };
 
-export type ModelOutput = {
-  actionLogits: Float32Array;
-  minimumFeeZ: number;
+export type ModelPrediction = {
+  selectedAction: number;
+  predictedFee: number;
 };
 
 export type ModelRuntime = {
   execute(
     selection: ModelSelection,
     input: Float32Array,
-  ): Promise<ModelOutput>;
+  ): Promise<ModelPrediction>;
   dispose(): Promise<void>;
 };
 
@@ -121,12 +121,7 @@ export function createModelRuntime(
     }
 
     const module = createNativeModule();
-    try {
-      await module.load(selection.source);
-    } catch (error) {
-      module.delete();
-      throw error;
-    }
+    await module.load(selection.source);
 
     current = { artifactId, module };
     return module;
@@ -135,7 +130,7 @@ export function createModelRuntime(
   function execute(
     selection: ModelSelection,
     input: Float32Array,
-  ): Promise<ModelOutput> {
+  ): Promise<ModelPrediction> {
     if (disposal !== null) throw new Error("Model runtime is disposed");
     return serialize(async () => {
       const module = await ensureLoaded(selection);
@@ -150,7 +145,7 @@ export function createModelRuntime(
           scalarType: ScalarType.FLOAT,
         },
       ]);
-      return decodeOutputs(outputs, selection.K);
+      return decodeOutputs(outputs, selection);
     });
   }
 
@@ -170,8 +165,8 @@ export function createModelRuntime(
 
 function decodeOutputs(
   outputs: readonly TensorPtr[],
-  K: Horizon,
-): ModelOutput {
+  selection: ModelSelection,
+): ModelPrediction {
   if (outputs.length !== 2) {
     throw new Error(
       "ExecuTorch model must return exactly two float32 tensors",
@@ -179,7 +174,7 @@ function decodeOutputs(
   }
   const actionLogits = readFloatTensor(
     outputs[0],
-    [1, K],
+    [1, selection.K],
     "action logits",
   );
   const minimumFee = readFloatTensor(
@@ -187,10 +182,15 @@ function decodeOutputs(
     [1],
     "minimum fee z",
   );
-  return {
-    actionLogits,
-    minimumFeeZ: minimumFee[0],
-  };
+  const selectedAction = actionLogits.indexOf(Math.max(...actionLogits));
+  const target = selection.modelManifest.target;
+  const predictedFee = Math.exp(
+    target.mean + target.standard_deviation * minimumFee[0],
+  );
+  if (!Number.isFinite(predictedFee) || predictedFee <= 0) {
+    throw new Error("Predicted fee must be positive and finite");
+  }
+  return { selectedAction, predictedFee };
 }
 
 function readFloatTensor(
@@ -210,19 +210,10 @@ function readFloatTensor(
     );
   }
   const values = new Float32Array(tensor.dataPtr as ArrayBuffer);
-  const expectedLength = shape.reduce(
-    (size, dimension) => size * dimension,
-    1,
-  );
-  if (values.length !== expectedLength) {
-    throw new Error(
-      `${label} output must contain exactly ${expectedLength} values`,
-    );
-  }
   for (const value of values) {
     if (!Number.isFinite(value)) {
       throw new Error(`${label} output values must be finite`);
     }
   }
-  return values.slice();
+  return values;
 }

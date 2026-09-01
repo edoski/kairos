@@ -2,8 +2,8 @@ import type { Horizon } from "./domain";
 import type { InferenceRun } from "./history";
 
 export type WaitBucket = {
-  kairosGwei: number | null;
-  immediateGwei: number | null;
+  selectedBaseFeeGwei: number | null;
+  immediateBaseFeeGwei: number | null;
   runCount: number;
   savingsPercent: number | null;
   wait: number;
@@ -24,12 +24,13 @@ export function summarizeRuns(runs: readonly InferenceRun[]) {
     return savings === null ? [] : [[run.selected_action_k, savings] as const];
   });
   const waited = realized.filter(([action]) => action !== 0);
-  const winFraction = mean(waited.map(([, savings]) => Number(savings > 0)));
+  const winCount = waited.filter(([, savings]) => savings > 0).length;
 
   return {
     averageWait: mean(runs.map((run) => run.selected_action_k)),
     averageSavingsPercent: mean(realized.map(([, savings]) => savings)),
-    winPercent: winFraction === null ? null : winFraction * 100,
+    winPercent:
+      waited.length === 0 ? null : (winCount / waited.length) * 100,
   };
 }
 
@@ -51,10 +52,11 @@ export function formatRunDate(value: string): string {
 }
 
 export function formatSavings(value: number): string {
-  return `${value.toFixed(1)}%`;
+  const formatted = value.toFixed(1);
+  return `${formatted === "-0.0" ? "0.0" : formatted}%`;
 }
 
-export function formatGwei(value: number): string {
+export function formatWeiAsGwei(value: number): string {
   const gwei = value / GWEI;
   if (gwei >= 100) {
     return `${gwei.toFixed(0)} Gwei`;
@@ -63,6 +65,16 @@ export function formatGwei(value: number): string {
     return `${gwei.toFixed(1)} Gwei`;
   }
   return `${gwei.toFixed(2)} Gwei`;
+}
+
+export function formatChartAxisValue(
+  value: number,
+  step: number,
+  suffix = "",
+): string {
+  const fractionDigits =
+    step >= 1 ? 0 : Math.min(6, Math.ceil(-Math.log10(step)));
+  return `${value.toFixed(fractionDigits)}${suffix}`;
 }
 
 export function waitBuckets(
@@ -80,7 +92,7 @@ export function waitBuckets(
     const outcomes = matchingRuns.flatMap((run) =>
       run.outcome === undefined ? [] : [run.outcome],
     );
-    const kairosFeeMean = mean(
+    const selectedFeeMean = mean(
       outcomes.map((outcome) => outcome.selected_base_fee_per_gas),
     );
     const immediateFeeMean = mean(
@@ -88,8 +100,9 @@ export function waitBuckets(
     );
 
     return {
-      kairosGwei: kairosFeeMean === null ? null : kairosFeeMean / GWEI,
-      immediateGwei:
+      selectedBaseFeeGwei:
+        selectedFeeMean === null ? null : selectedFeeMean / GWEI,
+      immediateBaseFeeGwei:
         immediateFeeMean === null ? null : immediateFeeMean / GWEI,
       runCount: matchingRuns.length,
       savingsPercent: mean(outcomes.map(savingsPercent)),
@@ -102,8 +115,5 @@ function mean(values: readonly number[]): number | null {
   if (values.length === 0) {
     return null;
   }
-  return values.reduce(
-    (average, value, index) => average + (value - average) / (index + 1),
-    0,
-  );
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }

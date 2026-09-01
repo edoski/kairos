@@ -1,21 +1,14 @@
 import { buildModelInput } from "./features";
 import type { Chain, Horizon } from "./domain";
 import { createDefaultModelCatalog, createModelRuntime } from "./model";
-import type {
-  ModelCatalog,
-  ModelOutput,
-  ModelRuntime,
-  ModelSelection,
-} from "./model";
+import type { ModelCatalog, ModelRuntime } from "./model";
 import { createChainSession } from "./rpc";
 import type { ChainSession } from "./rpc";
 
 export type InferenceResult = {
   chain: Chain;
   K: Horizon;
-  artifact_id: string;
   head_block: number;
-  head_hash: string;
   selected_action_k: number;
   target_block: number;
   predicted_minimum_base_fee_per_gas: number;
@@ -59,27 +52,22 @@ export function createInferenceRuntime(
       context.priorityFeeRewards,
       selection.chainManifest,
     );
-    const prediction = decodePrediction(
-      selection,
-      await model.execute(selection, input),
-    );
+    const prediction = await model.execute(selection, input);
     const immediateBlock = head.number + 1n;
     const targetBlock = immediateBlock + BigInt(prediction.selectedAction);
     return {
       chain,
       K: selection.K,
-      artifact_id: selection.modelManifest.artifact_id,
-      head_block: safeBigInt(head.number, "head block"),
-      head_hash: head.hash,
+      head_block: Number(head.number),
       selected_action_k: prediction.selectedAction,
-      target_block: safeBigInt(targetBlock, "target block"),
+      target_block: Number(targetBlock),
       predicted_minimum_base_fee_per_gas: prediction.predictedFee,
     };
   }
 
   async function currentHead(chain: Chain): Promise<number> {
     const session = sessions[chain];
-    return safeBigInt(await session.readHead(), "head block");
+    return Number(await session.readHead());
   }
 
   async function resolveOutcome(
@@ -92,24 +80,16 @@ export function createInferenceRuntime(
     const selected = BigInt(selectedBlock);
     const outcome = await session.readOutcome(immediate, selected);
     return {
-      immediate_base_fee_per_gas: safeBigInt(
-        outcome.immediateBaseFeePerGas,
-        "immediate base fee",
-      ),
-      selected_base_fee_per_gas: safeBigInt(
-        outcome.selectedBaseFeePerGas,
-        "selected base fee",
-      ),
+      immediate_base_fee_per_gas: Number(outcome.immediateBaseFeePerGas),
+      selected_base_fee_per_gas: Number(outcome.selectedBaseFeePerGas),
     };
   }
-
-  const dispose = () => model.dispose();
 
   return {
     currentHead,
     run,
     resolveOutcome,
-    dispose,
+    dispose: () => model.dispose(),
   };
 }
 
@@ -118,7 +98,7 @@ function defaultDependencies(): InferenceRuntimeDependencies {
   return {
     catalog,
     model: createModelRuntime(),
-    sessions: Object.freeze({
+    sessions: {
       ethereum: createChainSession(
         "ethereum",
         catalog.chainManifest("ethereum"),
@@ -131,38 +111,6 @@ function defaultDependencies(): InferenceRuntimeDependencies {
         "avalanche",
         catalog.chainManifest("avalanche"),
       ),
-    }),
+    },
   };
-}
-
-function decodePrediction(
-  selection: ModelSelection,
-  output: ModelOutput,
-): {
-  selectedAction: number;
-  predictedFee: number;
-} {
-  const action = output.actionLogits.indexOf(
-    Math.max(...output.actionLogits),
-  );
-
-  const target = selection.modelManifest.target;
-  const predictedFee = Math.exp(
-    target.mean + target.standard_deviation * output.minimumFeeZ,
-  );
-  if (!Number.isFinite(predictedFee) || predictedFee <= 0) {
-    throw new Error("Predicted fee must be positive and finite");
-  }
-
-  return {
-    selectedAction: action,
-    predictedFee,
-  };
-}
-
-function safeBigInt(value: bigint, label: string): number {
-  if (value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new Error(`${label} exceeds the safe integer range`);
-  }
-  return Number(value);
 }

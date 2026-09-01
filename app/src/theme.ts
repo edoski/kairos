@@ -14,7 +14,6 @@ export const colors = {
   errorBorder: "#FECACA",
   errorInk: "#B42318",
   overlay: "rgba(7, 20, 38, 0.58)",
-  transparent: "transparent",
   ethereum: "#627EEA",
   polygon: "#8247E5",
   avalanche: "#E84142",

@@ -1,16 +1,14 @@
 {
   "expo": {
-    "name": "KAIROS Demo",
-    "slug": "kairos-demo",
-    "scheme": "kairos-demo",
+    "name": "KAIROS",
+    "slug": "kairos",
     "ios": {
-      "bundleIdentifier": "dev.edoski.kairos.demo"
+      "bundleIdentifier": "dev.edoski.kairos"
     },
     "android": {
-      "package": "dev.edoski.kairos.demo"
+      "package": "dev.edoski.kairos"
     },
     "plugins": [
-      "expo-font",
       [
         "expo-build-properties",
         {
@@ -21,8 +19,7 @@
             "minSdkVersion": 33
           }
         }
-      ],
-      "expo-asset"
+      ]
     ]
   }
 }

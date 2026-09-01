@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { Hash } from "viem";
-
 import type { BlockRow } from "../src/domain";
 import { buildModelInput } from "../src/features";
 import type { ChainManifest, FeatureName } from "../src/features";
@@ -9,8 +7,6 @@ import fixture from "./fixtures/features.json";
 function fixtureBlocks(): BlockRow[] {
   return fixture.blocks.map((block) => ({
     number: BigInt(block.number),
-    hash: block.hash as Hash,
-    parentHash: block.parentHash as Hash,
     timestamp: BigInt(block.timestamp),
     baseFeePerGas: BigInt(block.baseFeePerGas),
     gasUsed: BigInt(block.gasUsed),
@@ -49,7 +45,9 @@ describe("buildModelInput", () => {
       fixture.manifest.context_blocks * fixture.manifest.features.length,
     );
     result.forEach((value, index) => {
-      expect(Math.abs(value - fixture.expected[index])).toBeLessThanOrEqual(1e-6);
+      expect(
+        Math.abs(value - fixture.expected[index]),
+      ).toBeLessThanOrEqual(1e-6);
     });
   });
 
@@ -61,16 +59,25 @@ describe("buildModelInput", () => {
       { ...blocks[3], baseFeePerGas: 10n, gasUsed: 100n, gasLimit: 200n },
       blocks[4],
     ];
-    const formingInput = buildModelInput(formingBlocks, null, {
-      context_blocks: 4,
-      features: [
-        {
-          name: "log_exact_forming_base_fee_per_gas",
-          mean: 0,
-          standard_deviation: 1,
-        },
+    const formingInput = buildModelInput(
+      formingBlocks,
+      [
+        [0n, 0n],
+        [0n, 0n],
+        [0n, 0n],
+        [0n, 0n],
       ],
-    });
+      {
+        context_blocks: 4,
+        features: [
+          {
+            name: "log_exact_forming_base_fee_per_gas",
+            mean: 0,
+            standard_deviation: 1,
+          },
+        ],
+      },
+    );
 
     ["2", "8", "10", fixture.formingChildBaseFees[3]].forEach((fee, index) => {
       expect(
@@ -81,7 +88,7 @@ describe("buildModelInput", () => {
 
   it("rejects nonfinite final float32 features", () => {
     expect(() =>
-      buildModelInput(fixtureBlocks().slice(1, 2), null, {
+      buildModelInput(fixtureBlocks().slice(1, 2), [[0n, 0n]], {
         context_blocks: 1,
         features: [
           {

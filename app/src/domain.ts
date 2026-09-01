@@ -1,5 +1,3 @@
-import type { Hash } from "viem";
-
 export const CHAINS = ["ethereum", "polygon", "avalanche"] as const;
 export type Chain = (typeof CHAINS)[number];
 
@@ -14,8 +12,6 @@ export const CHAIN_LABELS: Record<Chain, string> = {
 
 export type BlockRow = {
   number: bigint;
-  hash: Hash;
-  parentHash: Hash;
   timestamp: bigint;
   baseFeePerGas: bigint;
   gasUsed: bigint;

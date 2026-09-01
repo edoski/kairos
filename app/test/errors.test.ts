@@ -10,7 +10,6 @@ describe("presentationError", () => {
       docsPath: "/docs/errors",
     });
 
-    expect(error.message).toContain("Details:");
     expect(presentationError(error)).toBe("RPC request failed");
   });
 

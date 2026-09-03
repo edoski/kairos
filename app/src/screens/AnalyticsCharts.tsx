@@ -58,7 +58,7 @@ function ChartCard({
   title,
   xAxisTitle,
 }: PropsWithChildren<{
-  empty: "runs" | "outcomes" | null;
+  empty: "outcomes" | null;
   legend?: ReactNode;
   title: string;
   xAxisTitle: string;
@@ -76,13 +76,9 @@ function ChartCard({
         </View>
       ) : (
         <View style={styles.emptyGraph}>
-          <Text style={styles.emptyGraphTitle}>
-            {empty === "outcomes" ? "No outcomes yet" : "No runs yet"}
-          </Text>
+          <Text style={styles.emptyGraphTitle}>No outcomes yet</Text>
           <Text style={styles.emptyGraphText}>
-            {empty === "outcomes"
-              ? "Resolved inferences will populate this graph."
-              : "Runs will populate this graph."}
+            Resolved inferences will populate this graph.
           </Text>
         </View>
       )}
@@ -97,7 +93,7 @@ function RecommendedWaitChart({
 }) {
   return (
     <ChartCard
-      empty={buckets.length === 0 ? "runs" : null}
+      empty={null}
       title="Recommended wait distribution"
       xAxisTitle="Wait (blocks)"
     >

@@ -58,12 +58,9 @@ export function buildModelInput(
       const index = row * featureCount + column;
       output[index] =
         (raw - feature.mean) / feature.standard_deviation;
-    }
-  }
-
-  for (const value of output) {
-    if (!Number.isFinite(value)) {
-      throw new Error("Model input must contain finite float32 values");
+      if (!Number.isFinite(output[index])) {
+        throw new Error("Model input must contain finite float32 values");
+      }
     }
   }
 

@@ -214,8 +214,16 @@ function Result({
   );
 }
 
-export function InferenceScreen(props: Props) {
-  const loading = props.state.status === "loading";
+export function InferenceScreen({
+  chain,
+  horizon,
+  onChainChange,
+  onHorizonChange,
+  onReset,
+  onRun,
+  state,
+}: Props) {
+  const loading = state.status === "loading";
   return (
     <>
       <ScrollView
@@ -226,30 +234,27 @@ export function InferenceScreen(props: Props) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Network</Text>
           <NetworkChoices
-            chain={props.chain}
+            chain={chain}
             disabled={loading}
-            onChange={props.onChainChange}
+            onChange={onChainChange}
           />
         </View>
-        {props.state.status === "success" ? (
-          <Result
-            onReset={props.onReset}
-            result={props.state.result}
-          />
+        {state.status === "success" ? (
+          <Result onReset={onReset} result={state.result} />
         ) : (
           <Setup
-            horizon={props.horizon}
+            horizon={horizon}
             loading={loading}
-            onHorizonChange={props.onHorizonChange}
-            onRun={props.onRun}
+            onHorizonChange={onHorizonChange}
+            onRun={onRun}
           />
         )}
       </ScrollView>
-      {props.state.status === "error" && (
+      {state.status === "error" && (
         <ErrorDialog
-          message={props.state.message}
-          onClose={props.onReset}
-          onRetry={props.onRun}
+          message={state.message}
+          onClose={onReset}
+          onRetry={onRun}
         />
       )}
     </>

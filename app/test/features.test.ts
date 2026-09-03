@@ -93,8 +93,8 @@ describe("buildModelInput", () => {
         features: [
           {
             name: "log_base_fee_per_gas",
-            mean: 0,
-            standard_deviation: 0,
+            mean: -Number.MAX_VALUE,
+            standard_deviation: 1,
           },
         ],
       }),

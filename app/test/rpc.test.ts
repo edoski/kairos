@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Hash } from "viem";
 
 import type { ChainManifest, FeatureName } from "../src/features";
 import { createChainSession } from "../src/rpc";
@@ -20,15 +21,26 @@ function quantity(value: bigint): `0x${string}` {
   return `0x${value.toString(16)}`;
 }
 
-const PROTOCOL_HASH = `0x${"0".repeat(64)}`;
+function hashOf(number: bigint): Hash {
+  return `0x${number.toString(16).padStart(64, "0")}`;
+}
 
-function rpcBlock(number: bigint) {
+function rpcBlock(
+  number: bigint,
+  overrides: {
+    baseFeePerGas?: `0x${string}` | null;
+    parentHash?: Hash;
+  } = {},
+) {
   return {
     number: quantity(number),
-    hash: PROTOCOL_HASH,
-    parentHash: PROTOCOL_HASH,
+    hash: hashOf(number),
+    parentHash: overrides.parentHash ?? hashOf(number - 1n),
     timestamp: quantity(1_700_000_000n + number),
-    baseFeePerGas: quantity(1_000_000_000n + number),
+    baseFeePerGas:
+      overrides.baseFeePerGas === undefined
+        ? quantity(1_000_000_000n + number)
+        : overrides.baseFeePerGas,
     gasUsed: quantity(100n),
     gasLimit: quantity(200n),
     transactions: [],
@@ -253,6 +265,40 @@ describe("createChainSession", () => {
 
     await expect(session.sync()).rejects.toThrow(message);
   });
+
+  it("rejects a broken parent link in the fetched context", async () => {
+    const rpc = installRpc({
+      block: (number) =>
+        rpcBlock(
+          number,
+          number === 11n ? { parentHash: hashOf(99n) } : {},
+        ),
+    });
+    const session = createChainSession("ethereum", manifestOf(3));
+
+    await expect(session.sync()).rejects.toThrow(
+      "Broken parent link between blocks 10 and 11",
+    );
+    expect(blockBatches(rpc)).toEqual([[10n, 11n, 12n]]);
+  });
+
+  it.each([null, quantity(0n)])(
+    "rejects the nonpositive base fee %s",
+    async (baseFeePerGas) => {
+      installRpc({
+        block: (number) =>
+          rpcBlock(number, {
+            baseFeePerGas:
+              number === 12n ? baseFeePerGas : undefined,
+          }),
+      });
+      const session = createChainSession("ethereum", manifestOf(1));
+
+      await expect(session.sync()).rejects.toThrow(
+        "RPC returned block 12 without a positive base fee",
+      );
+    },
+  );
 
   it("reads the current head directly once", async () => {
     const rpc = installRpc();

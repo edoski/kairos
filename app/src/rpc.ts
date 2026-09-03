@@ -1,5 +1,5 @@
 import { createPublicClient, http } from "viem";
-import type { GetBlockReturnType } from "viem";
+import type { GetBlockReturnType, Hash } from "viem";
 import { avalanche, mainnet, polygon } from "viem/chains";
 
 import type { BlockRow, Chain } from "./domain";
@@ -28,6 +28,12 @@ export type ChainSession = {
   ): Promise<ChainOutcome>;
 };
 
+type FetchedBlock = {
+  row: BlockRow;
+  hash: Hash;
+  parentHash: Hash;
+};
+
 const CHAIN_DEFINITIONS = {
   ethereum: mainnet,
   polygon,
@@ -49,27 +55,36 @@ export function createChainSession(
   });
   const offset = predecessorOffset(manifest);
 
-  function blockRow(
+  function fetchedBlock(
     block: GetBlockReturnType<typeof definition, false, "latest">,
-  ): BlockRow {
+  ): FetchedBlock {
+    if (block.baseFeePerGas === null || block.baseFeePerGas <= 0n) {
+      throw new Error(
+        `RPC returned block ${block.number} without a positive base fee`,
+      );
+    }
     return {
-      number: block.number,
-      timestamp: block.timestamp,
-      baseFeePerGas: block.baseFeePerGas as bigint,
-      gasUsed: block.gasUsed,
-      gasLimit: block.gasLimit,
-      transactionCount: block.transactions.length,
+      row: {
+        number: block.number,
+        timestamp: block.timestamp,
+        baseFeePerGas: block.baseFeePerGas,
+        gasUsed: block.gasUsed,
+        gasLimit: block.gasLimit,
+        transactionCount: block.transactions.length,
+      },
+      hash: block.hash,
+      parentHash: block.parentHash,
     };
   }
 
-  async function readBlock(number: bigint): Promise<BlockRow> {
-    return blockRow(await client.getBlock({ blockNumber: number }));
+  async function readBlock(number: bigint): Promise<FetchedBlock> {
+    return fetchedBlock(await client.getBlock({ blockNumber: number }));
   }
 
   async function readBlockRange(
     firstBlock: bigint,
     lastBlock: bigint,
-  ): Promise<BlockRow[]> {
+  ): Promise<FetchedBlock[]> {
     return Promise.all(
       Array.from(
         { length: Number(lastBlock - firstBlock + 1n) },
@@ -121,11 +136,23 @@ export function createChainSession(
       head - BigInt(manifest.context_blocks) + 1n;
     const firstRawBlock =
       firstContextBlock - BigInt(offset);
-    const [blocks, priorityFeeRewards] = await Promise.all([
+    const [fetchedBlocks, priorityFeeRewards] = await Promise.all([
       readBlockRange(firstRawBlock, head),
       readPriorityFeeRewards(head, firstContextBlock),
     ]);
-    return { blocks, priorityFeeRewards };
+    for (let index = 1; index < fetchedBlocks.length; index += 1) {
+      const previous = fetchedBlocks[index - 1];
+      const current = fetchedBlocks[index];
+      if (current.parentHash !== previous.hash) {
+        throw new Error(
+          `Broken parent link between blocks ${previous.row.number} and ${current.row.number}`,
+        );
+      }
+    }
+    return {
+      blocks: fetchedBlocks.map(({ row }) => row),
+      priorityFeeRewards,
+    };
   }
 
   function readHead(): Promise<bigint> {
@@ -136,7 +163,7 @@ export function createChainSession(
     immediateBlock: bigint,
     selectedBlock: bigint,
   ): Promise<ChainOutcome> {
-    const [immediate, selected] = await Promise.all([
+    const [{ row: immediate }, { row: selected }] = await Promise.all([
       readBlock(immediateBlock),
       readBlock(selectedBlock),
     ]);

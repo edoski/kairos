@@ -8,7 +8,7 @@ import { NetworkIcon } from "./NetworkIcon";
 
 export function NetworkChoices({
   chain,
-  disabled = false,
+  disabled,
   onChange,
 }: {
   chain: Chain;

@@ -16,7 +16,7 @@ function fixtureBlocks(): BlockRow[] {
 }
 
 function fixturePriorityFeeRewards(): readonly (readonly [bigint, bigint])[] {
-  return fixture.feeHistory.reward.map(([p50, p90]) => [
+  return fixture.priorityFeeRewards.map(([p50, p90]) => [
     BigInt(p50),
     BigInt(p90),
   ]);

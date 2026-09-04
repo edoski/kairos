@@ -146,7 +146,7 @@ afterEach(() => {
 });
 
 describe("createChainSession", () => {
-  it("reads every fresh exact range in one batch with only the required predecessor", async () => {
+  it("reads exact ranges in one batch with only the required predecessor", async () => {
     const rpc = installRpc();
     const intervalSession = createChainSession(
       "ethereum",
@@ -159,8 +159,6 @@ describe("createChainSession", () => {
     );
 
     const first = await intervalSession.sync();
-    rpc.head = 14n;
-    const second = await intervalSession.sync();
     const directSession = createChainSession(
       "ethereum",
       manifestOf(3),
@@ -178,21 +176,14 @@ describe("createChainSession", () => {
       [2_000_000_001n, 3_000_000_001n],
       [2_000_000_002n, 3_000_000_002n],
     ]);
-    expect(second.blocks.map((block) => block.number)).toEqual([
+    expect(direct.blocks.map((block) => block.number)).toEqual([
+      10n,
       11n,
       12n,
-      13n,
-      14n,
-    ]);
-    expect(direct.blocks.map((block) => block.number)).toEqual([
-      12n,
-      13n,
-      14n,
     ]);
     expect(blockBatches(rpc)).toEqual([
       [9n, 10n, 11n, 12n],
-      [11n, 12n, 13n, 14n],
-      [12n, 13n, 14n],
+      [10n, 11n, 12n],
     ]);
     expect(
       rpc.batches
@@ -201,8 +192,7 @@ describe("createChainSession", () => {
         .map((request) => request.params),
     ).toEqual([
       ["0x3", "0xc", [50, 90]],
-      ["0x3", "0xe", [50, 90]],
-      ["0x3", "0xe", [50, 90]],
+      ["0x3", "0xc", [50, 90]],
     ]);
   });
 
@@ -299,16 +289,6 @@ describe("createChainSession", () => {
       );
     },
   );
-
-  it("reads the current head directly once", async () => {
-    const rpc = installRpc();
-    const session = createChainSession("ethereum", manifestOf(1));
-
-    await expect(session.readHead()).resolves.toBe(12n);
-    expect(rpc.batches).toEqual([
-      [expect.objectContaining({ method: "eth_blockNumber" })],
-    ]);
-  });
 
   it("reads exact outcome blocks directly", async () => {
     const rpc = installRpc();

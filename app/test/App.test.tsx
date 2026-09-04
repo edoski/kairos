@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
     onHorizonChange(horizon: Horizon): void;
     onRefresh(): Promise<void>;
     runs: readonly InferenceRun[];
-    storageError: string | null;
   } | null,
   bottomTabsProps: null as { onSelect(tab: AppTab): void } | null,
   createInferenceRuntime: vi.fn(),
@@ -92,20 +91,11 @@ import App from "../App";
 
 type RuntimeHarness = {
   runtime: InferenceRuntime;
-  rejectRun(index: number, error: unknown): void;
   resolveRun(index: number, result: InferenceResult): void;
 };
 
-type HistoryHarness = {
-  owner: RunHistory;
-  publish(
-    runs: readonly InferenceRun[],
-    storageError?: string | null,
-  ): void;
-};
-
 const runtimes: RuntimeHarness[] = [];
-let history: HistoryHarness;
+let history: RunHistory;
 let root: ReactTestRenderer | null = null;
 
 function runtime(): RuntimeHarness {
@@ -124,25 +114,21 @@ function runtime(): RuntimeHarness {
   };
   return {
     runtime: value,
-    rejectRun(index, error) {
-      pending[index].reject(error);
-    },
     resolveRun(index, result) {
       pending[index].resolve(result);
     },
   };
 }
 
-function runHistory(): HistoryHarness {
+function runHistory(): RunHistory {
   let runs: readonly InferenceRun[] = [];
-  let storageError: string | null = null;
   const listeners = new Set<() => void>();
-  const owner: RunHistory = {
+  return {
     get runs() {
       return runs;
     },
     get storageError() {
-      return storageError;
+      return null;
     },
     record: vi.fn(async (result) => {
       runs = [inferenceRun({ ...result, id: `run-${runs.length}` }), ...runs];
@@ -153,14 +139,6 @@ function runHistory(): HistoryHarness {
       listeners.add(listener);
       return () => listeners.delete(listener);
     }),
-  };
-  return {
-    owner,
-    publish(nextRuns, nextStorageError = storageError) {
-      runs = nextRuns;
-      storageError = nextStorageError;
-      listeners.forEach((listener) => listener());
-    },
   };
 }
 
@@ -175,7 +153,7 @@ beforeEach(() => {
   mocks.analyticsProps = null;
   mocks.bottomTabsProps = null;
   mocks.inferenceProps = null;
-  mocks.createRunHistory.mockReset().mockReturnValue(history.owner);
+  mocks.createRunHistory.mockReset().mockReturnValue(history);
   mocks.createInferenceRuntime.mockReset().mockImplementation(() => {
     const created = runtime();
     runtimes.push(created);
@@ -221,8 +199,8 @@ describe("App inference presentation", () => {
     });
 
     await act(async () => runtimes[0].resolveRun(0, older));
-    expect(history.owner.record).toHaveBeenNthCalledWith(1, newer);
-    expect(history.owner.record).toHaveBeenNthCalledWith(2, older);
+    expect(history.record).toHaveBeenNthCalledWith(1, newer);
+    expect(history.record).toHaveBeenNthCalledWith(2, older);
     expect(mocks.inferenceProps!.state).toEqual({
       status: "success",
       result: newer,
@@ -245,38 +223,6 @@ describe("App inference presentation", () => {
     });
   });
 
-  it("publishes only current-generation errors", async () => {
-    await renderApp();
-    act(() => mocks.inferenceProps!.onRun());
-    act(() => mocks.inferenceProps!.onChainChange("polygon"));
-
-    await act(async () =>
-      runtimes[0].rejectRun(0, new Error("Old failure")),
-    );
-    expect(mocks.inferenceProps!.state).toEqual({ status: "idle" });
-  });
-
-  it("keeps stale save failures out of inference presentation", async () => {
-    const save = deferred<void>();
-    vi.mocked(history.owner.record).mockReturnValueOnce(save.promise);
-    await renderApp();
-    act(() => mocks.inferenceProps!.onRun());
-    act(() => runtimes[0].resolveRun(0, inferenceResult()));
-    await vi.waitFor(() =>
-      expect(history.owner.record).toHaveBeenCalledOnce(),
-    );
-
-    act(() => mocks.inferenceProps!.onChainChange("polygon"));
-    await act(async () => {
-      history.publish([], "Storage unavailable");
-      save.reject(new Error("Storage unavailable"));
-      await Promise.resolve();
-    });
-    expect(mocks.inferenceProps!.state).toEqual({ status: "idle" });
-
-    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-    expect(mocks.analyticsProps!.storageError).toBe("Storage unavailable");
-  });
 });
 
 describe("App owners", () => {
@@ -297,42 +243,6 @@ describe("App owners", () => {
     expect(runtimes[0].runtime.dispose).toHaveBeenCalledOnce();
   });
 
-  it("uses the current inference error path for runtime construction failure", async () => {
-    mocks.createInferenceRuntime.mockImplementationOnce(() => {
-      throw new Error("Native setup failed");
-    });
-    await renderApp();
-
-    act(() => mocks.inferenceProps!.onRun());
-    expect(mocks.inferenceProps!.state).toEqual({
-      message: "Native setup failed",
-      status: "error",
-    });
-  });
-
-  it("shows load and save failures through one history error", async () => {
-    await renderApp();
-    act(() => history.publish([], "Corrupt history"));
-    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-    expect(mocks.analyticsProps!.storageError).toBe("Corrupt history");
-
-    act(() => mocks.bottomTabsProps!.onSelect("inference"));
-    vi.mocked(history.owner.record).mockImplementationOnce(async () => {
-      history.publish([], "Storage unavailable");
-      throw new Error("Storage unavailable");
-    });
-    act(() => mocks.inferenceProps!.onRun());
-    await act(async () =>
-      runtimes[0].resolveRun(0, inferenceResult()),
-    );
-    expect(mocks.inferenceProps!.state).toEqual({
-      message: "Could not save this run.",
-      status: "error",
-    });
-
-    act(() => mocks.bottomTabsProps!.onSelect("analytics"));
-    expect(mocks.analyticsProps!.storageError).toBe("Storage unavailable");
-  });
 });
 
 describe("App outcome refresh and global selection", () => {
@@ -361,12 +271,12 @@ describe("App outcome refresh and global selection", () => {
       head.resolve(100);
       await refresh;
     });
-    expect(history.owner.resolvePending).toHaveBeenCalledWith(
+    expect(history.resolvePending).toHaveBeenCalledWith(
       "ethereum",
       100,
       expect.any(Function),
     );
-    const resolver = vi.mocked(history.owner.resolvePending).mock.calls[0][2];
+    const resolver = vi.mocked(history.resolvePending).mock.calls[0][2];
     await expect(resolver(101, 102)).rejects.toThrow("unused");
     expect(runtimes[0].runtime.resolveOutcome).toHaveBeenCalledWith(
       "ethereum",

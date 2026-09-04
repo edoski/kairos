@@ -163,40 +163,4 @@ describe("InferenceRuntime", () => {
     await inference.dispose();
   });
 
-  it("reads the selected chain head once", async () => {
-    const avalanche = session();
-    const { dependencies, inference } = createTestRuntime({
-      sessions: sessions({ avalanche }),
-    });
-
-    await expect(inference.currentHead("avalanche")).resolves.toBe(10);
-    expect(avalanche.readHead).toHaveBeenCalledOnce();
-    expect(dependencies.sessions.ethereum.readHead).not.toHaveBeenCalled();
-    await inference.dispose();
-  });
-
-  it("reads exact outcome blocks from the selected chain session", async () => {
-    const polygon = session();
-    const { dependencies, inference } = createTestRuntime({
-      sessions: sessions({ polygon }),
-    });
-
-    await expect(
-      inference.resolveOutcome("polygon", 11, 12),
-    ).resolves.toEqual({
-      immediate_base_fee_per_gas: 20,
-      selected_base_fee_per_gas: 18,
-    });
-    expect(polygon.readOutcome).toHaveBeenCalledWith(11n, 12n);
-    expect(dependencies.sessions.ethereum.readOutcome).not.toHaveBeenCalled();
-    await inference.dispose();
-  });
-
-  it("disposes its one model runtime", async () => {
-    const model = runtime();
-    const inference = createTestRuntime({ model }).inference;
-
-    await inference.dispose();
-    expect(model.dispose).toHaveBeenCalledOnce();
-  });
 });

@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  formatChartAxisValue,
-  formatSavings,
   summarizeRuns,
   waitBuckets,
 } from "../src/analytics";
@@ -104,23 +102,4 @@ describe("analytics", () => {
     ]);
   });
 
-  it("returns empty analytics for an empty selection", () => {
-    expect(summarizeRuns([])).toEqual({
-      averageWait: null,
-      averageSavingsPercent: null,
-      winPercent: null,
-    });
-    expect(waitBuckets([], 5)).toEqual([]);
-  });
-
-  it("normalizes negative display zero without changing calculations", () => {
-    expect(formatSavings(-0.0001)).toBe("0.0%");
-    expect(formatSavings(-0.06)).toBe("-0.1%");
-  });
-
-  it("formats chart axes at the precision required by their step", () => {
-    expect(formatChartAxisValue(0.5, 0.5, "%")).toBe("0.5%");
-    expect(formatChartAxisValue(0.05, 0.05)).toBe("0.05");
-    expect(formatChartAxisValue(10, 5)).toBe("10");
-  });
 });

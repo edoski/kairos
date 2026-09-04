@@ -9,6 +9,10 @@ import {
   type PriorityFeeRewards,
 } from "./features";
 
+/**
+ * Context prepared from one freshly observed head. Blocks are parent-linked;
+ * reward rows align by height with the final manifest context and use wei per gas.
+ */
 export type PreparedChainContext = {
   blocks: readonly BlockRow[];
   priorityFeeRewards: readonly PriorityFeeRewards[];

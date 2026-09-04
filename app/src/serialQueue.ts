@@ -1,3 +1,4 @@
+/** Creates a FIFO that survives rejection and returns each task's own result. */
 export function createSerialQueue() {
   let tail = Promise.resolve();
 

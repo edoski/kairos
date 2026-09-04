@@ -1,6 +1,9 @@
 import type { Horizon } from "./domain";
 import type { InferenceRun } from "./history";
 
+/**
+ * `runCount` includes pending runs; fee and savings means use resolved outcomes only.
+ */
 export type WaitBucket = {
   selectedBaseFeeGwei: number | null;
   immediateBaseFeeGwei: number | null;
@@ -18,6 +21,10 @@ const RUN_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
 });
 const GWEI = 1_000_000_000;
 
+/**
+ * Averages wait over all runs and savings over resolved runs.
+ * Win rate includes only resolved runs whose action waits at least one block.
+ */
 export function summarizeRuns(runs: readonly InferenceRun[]) {
   const realized = runs.flatMap((run) => {
     const savings = realizedSavingsPercent(run);
@@ -34,6 +41,10 @@ export function summarizeRuns(runs: readonly InferenceRun[]) {
   };
 }
 
+/**
+ * Returns base-fee savings versus acting in the next block.
+ * Positive means the selected block was cheaper.
+ */
 export function realizedSavingsPercent(run: InferenceRun): number | null {
   return run.outcome === undefined ? null : savingsPercent(run.outcome);
 }

@@ -32,6 +32,7 @@ function niceStep(range: number): number {
   return multiplier * magnitude;
 }
 
+/** Builds a zero-inclusive 1-2-5 scale with proportional room for negative bars. */
 function chartScale(values: readonly number[]) {
   const rawMinimum = Math.min(0, ...values);
   const rawMaximum = Math.max(0, ...values);

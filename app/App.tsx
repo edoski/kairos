@@ -97,6 +97,7 @@ export default function App() {
     select({ ...selectionRef.current, horizon });
   }
 
+  /** Resolves pending runs for the chain captured when refresh begins. */
   async function refreshOutcomes(): Promise<void> {
     const chain = selectionRef.current.chain;
     const runtime = getRuntime();
@@ -109,6 +110,10 @@ export default function App() {
     );
   }
 
+  /**
+   * Sends every completed inference to history; generation gates only
+   * inference-state publication.
+   */
   async function runInference() {
     const selected = selectionRef.current;
     inferenceGeneration.current += 1;

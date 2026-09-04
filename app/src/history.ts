@@ -15,6 +15,10 @@ export type InferenceRun = InferenceResult & {
   outcome?: InferenceOutcome;
 };
 
+/**
+ * Serializes initial load and complete save-before-publish mutations.
+ * Failed saves retain committed state; unresolved outcomes remain pending for retry.
+ */
 export type RunHistory = {
   readonly runs: readonly InferenceRun[];
   readonly storageError: string | null;

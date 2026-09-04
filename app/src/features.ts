@@ -35,6 +35,11 @@ export function predecessorOffset(manifest: ChainManifest): 0 | 1 {
     : 0;
 }
 
+/**
+ * Builds the flat row-major `[C,F]` Float32 matrix in manifest feature order.
+ * Expects ascending contiguous blocks, one leading predecessor for interval features,
+ * and reward rows aligned by height with the final `C` blocks.
+ */
 export function buildModelInput(
   blocks: readonly BlockRow[],
   priorityFeeRewards: readonly PriorityFeeRewards[],
@@ -106,6 +111,10 @@ function logBigInt(value: bigint): number {
   return Math.log(Number(value));
 }
 
+/**
+ * Applies Ethereum's EIP-1559 parent-to-child recurrence using ordered
+ * integer division and a minimum one-wei increase.
+ */
 function formingChildBaseFee(block: BlockRow): bigint {
   const gasTarget = block.gasLimit / 2n;
   if (block.gasUsed === gasTarget) {

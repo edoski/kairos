@@ -48,6 +48,10 @@ export type ModelPrediction = {
   predictedFee: number;
 };
 
+/**
+ * Owns at most one loaded native model behind the Float32
+ * `[1,C,F] -> [1,K] + [1]` tensor contract. Native work is serialized.
+ */
 export type ModelRuntime = {
   execute(
     selection: ModelSelection,

@@ -5,6 +5,10 @@ import type { ModelCatalog, ModelRuntime } from "./model";
 import { createChainSession } from "./rpc";
 import type { ChainSession } from "./rpc";
 
+/**
+ * A decision anchored at `head_block`; action `0` targets `head_block + 1`.
+ * The predicted minimum base fee is denominated in wei per gas.
+ */
 export type InferenceResult = {
   chain: Chain;
   K: Horizon;

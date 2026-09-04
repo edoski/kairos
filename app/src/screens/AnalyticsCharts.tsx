@@ -58,7 +58,7 @@ function ChartCard({
   title,
   xAxisTitle,
 }: PropsWithChildren<{
-  empty: "outcomes" | null;
+  empty?: boolean;
   legend?: ReactNode;
   title: string;
   xAxisTitle: string;
@@ -69,7 +69,7 @@ function ChartCard({
         <Text style={styles.chartTitle}>{title}</Text>
         {legend}
       </View>
-      {empty === null ? (
+      {!empty ? (
         <View style={styles.graph}>
           {children}
           <Text style={styles.graphXAxisTitle}>{xAxisTitle}</Text>
@@ -93,7 +93,6 @@ function RecommendedWaitChart({
 }) {
   return (
     <ChartCard
-      empty={null}
       title="Recommended wait distribution"
       xAxisTitle="Wait (blocks)"
     >
@@ -130,7 +129,7 @@ function SavingsByWaitChart({
   const scale = chartScale(data.map(({ value }) => value));
   return (
     <ChartCard
-      empty={data.length === 0 ? "outcomes" : null}
+      empty={data.length === 0}
       title="Savings by wait (%)"
       xAxisTitle="Wait (blocks)"
     >
@@ -180,7 +179,7 @@ function BaseFeeByWaitChart({
         </View>
       }
       title="Base fee by wait (Gwei)"
-      empty={data.length === 0 ? "outcomes" : null}
+      empty={data.length === 0}
       xAxisTitle="Recommended wait (blocks)"
     >
       <GiftedBarChart

@@ -31,7 +31,6 @@ export function RunDetails({
           styles.runDialog,
         ]}
       >
-        <View style={styles.handle} />
         <View style={styles.dialogHeader}>
           <View>
             <Text style={styles.dialogTitle}>Run details</Text>
@@ -107,13 +106,6 @@ export function RunDetails({
 
 const styles = StyleSheet.create({
   runDialog: { paddingTop: 9 },
-  handle: {
-    alignSelf: "center",
-    backgroundColor: colors.border,
-    borderRadius: 3,
-    height: 5,
-    width: 48,
-  },
   dialogHeader: {
     alignItems: "flex-start",
     flexDirection: "row",

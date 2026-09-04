@@ -48,7 +48,7 @@ describe("analytics", () => {
     expect(summary.winPercent).toBeCloseTo(50);
   });
 
-  it("builds all charts from resolved and pending cases consistently", () => {
+  it("aggregates resolved and pending runs into wait buckets", () => {
     const selectedRuns = [
       resolved("act-now", 0, 10, 10),
       resolved("saved", 1, 10, 8),

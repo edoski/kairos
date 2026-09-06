@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Hash } from "viem";
 
-import type { ChainManifest, FeatureName } from "../src/features";
-import { createChainSession } from "../src/rpc";
+import { createChainReader } from "../src/rpc";
 
 type JsonRpcRequest = {
   id: number;
@@ -58,20 +57,6 @@ function feeHistory(oldestBlock: bigint, count: number) {
       quantity(2_000_000_000n + BigInt(index)),
       quantity(3_000_000_000n + BigInt(index)),
     ]),
-  };
-}
-
-function manifestOf(
-  contextBlocks: number,
-  ...featureNames: FeatureName[]
-): ChainManifest {
-  return {
-    context_blocks: contextBlocks,
-    features: featureNames.map((name) => ({
-      name,
-      mean: 0,
-      standard_deviation: 1,
-    })),
   };
 }
 
@@ -145,25 +130,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("createChainSession", () => {
-  it("reads exact ranges in one batch with only the required predecessor", async () => {
+describe("createChainReader", () => {
+  it("reads exact ranges with one predecessor and aligned rewards", async () => {
     const rpc = installRpc();
-    const intervalSession = createChainSession(
-      "ethereum",
-      manifestOf(
-        3,
-        "block_interval_seconds",
-        "log1p_effective_priority_fee_per_gas_p50",
-        "log1p_effective_priority_fee_per_gas_p90",
-      ),
-    );
+    const reader = createChainReader("ethereum");
 
-    const first = await intervalSession.sync();
-    const directSession = createChainSession(
-      "ethereum",
-      manifestOf(3),
-    );
-    const direct = await directSession.sync();
+    const first = await reader.readContext(3);
 
     expect(first.blocks.map((block) => block.number)).toEqual([
       9n,
@@ -176,14 +148,8 @@ describe("createChainSession", () => {
       [2_000_000_001n, 3_000_000_001n],
       [2_000_000_002n, 3_000_000_002n],
     ]);
-    expect(direct.blocks.map((block) => block.number)).toEqual([
-      10n,
-      11n,
-      12n,
-    ]);
     expect(blockBatches(rpc)).toEqual([
       [9n, 10n, 11n, 12n],
-      [10n, 11n, 12n],
     ]);
     expect(
       rpc.batches
@@ -191,7 +157,6 @@ describe("createChainSession", () => {
         .filter((request) => request.method === "eth_feeHistory")
         .map((request) => request.params),
     ).toEqual([
-      ["0x3", "0xc", [50, 90]],
       ["0x3", "0xc", [50, 90]],
     ]);
   });
@@ -243,17 +208,10 @@ describe("createChainSession", () => {
         "Fee history reward rows must contain nonnegative P50 and P90 values",
     },
   ])("requires $name", async ({ history, message }) => {
-    const session = createChainSession(
-      "ethereum",
-      manifestOf(
-        3,
-        "log1p_effective_priority_fee_per_gas_p50",
-        "log1p_effective_priority_fee_per_gas_p90",
-      ),
-    );
+    const session = createChainReader("ethereum");
     installRpc({ history });
 
-    await expect(session.sync()).rejects.toThrow(message);
+    await expect(session.readContext(3)).rejects.toThrow(message);
   });
 
   it("rejects a broken parent link in the fetched context", async () => {
@@ -264,12 +222,12 @@ describe("createChainSession", () => {
           number === 11n ? { parentHash: hashOf(99n) } : {},
         ),
     });
-    const session = createChainSession("ethereum", manifestOf(3));
+    const session = createChainReader("ethereum");
 
-    await expect(session.sync()).rejects.toThrow(
+    await expect(session.readContext(3)).rejects.toThrow(
       "Broken parent link between blocks 10 and 11",
     );
-    expect(blockBatches(rpc)).toEqual([[10n, 11n, 12n]]);
+    expect(blockBatches(rpc)).toEqual([[9n, 10n, 11n, 12n]]);
   });
 
   it.each([null, quantity(0n)])(
@@ -282,17 +240,27 @@ describe("createChainSession", () => {
               number === 12n ? baseFeePerGas : undefined,
           }),
       });
-      const session = createChainSession("ethereum", manifestOf(1));
+      const session = createChainReader("ethereum");
 
-      await expect(session.sync()).rejects.toThrow(
+      await expect(session.readContext(1)).rejects.toThrow(
         "RPC returned block 12 without a positive base fee",
       );
     },
   );
 
+  it("deduplicates an act-now block into one actual RPC observation", async () => {
+    const rpc = installRpc();
+    const session = createChainReader("ethereum");
+    await expect(session.readOutcome(20n, 20n)).resolves.toEqual({
+      immediateBaseFeePerGas: 1_000_000_020n,
+      selectedBaseFeePerGas: 1_000_000_020n,
+    });
+    expect(blockBatches(rpc)).toEqual([[20n]]);
+  });
+
   it("reads exact outcome blocks directly", async () => {
     const rpc = installRpc();
-    const session = createChainSession("ethereum", manifestOf(3));
+    const session = createChainReader("ethereum");
 
     await expect(session.readOutcome(20n, 22n)).resolves.toEqual({
       immediateBaseFeePerGas: 1_000_000_020n,

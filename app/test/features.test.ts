@@ -54,6 +54,7 @@ describe("buildModelInput", () => {
   it("uses exact forming-fee integer arithmetic", () => {
     const blocks = fixtureBlocks();
     const formingBlocks = [
+      blocks[0],
       { ...blocks[1], baseFeePerGas: 1n, gasUsed: 101n, gasLimit: 200n },
       { ...blocks[2], baseFeePerGas: 9n, gasUsed: 0n, gasLimit: 200n },
       { ...blocks[3], baseFeePerGas: 10n, gasUsed: 100n, gasLimit: 200n },
@@ -88,7 +89,7 @@ describe("buildModelInput", () => {
 
   it("rejects nonfinite final float32 features", () => {
     expect(() =>
-      buildModelInput(fixtureBlocks().slice(1, 2), [[0n, 0n]], {
+      buildModelInput(fixtureBlocks().slice(0, 2), [[0n, 0n]], {
         context_blocks: 1,
         features: [
           {

@@ -5,11 +5,13 @@ import type { InferenceRun } from "./history";
  * `runCount` includes pending runs; fee and savings means use resolved outcomes only.
  */
 export type WaitBucket = {
-  selectedBaseFeeGwei: number | null;
-  immediateBaseFeeGwei: number | null;
   runCount: number;
-  savingsPercent: number | null;
   wait: number;
+  realized: {
+    selectedBaseFeeGwei: number;
+    immediateBaseFeeGwei: number;
+    savingsPercent: number;
+  } | null;
 };
 
 const RUN_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
@@ -34,8 +36,12 @@ export function summarizeRuns(runs: readonly InferenceRun[]) {
   const winCount = waited.filter(([, savings]) => savings > 0).length;
 
   return {
-    averageWait: mean(runs.map((run) => run.selected_action_k)),
-    averageSavingsPercent: mean(realized.map(([, savings]) => savings)),
+    averageWait: runs.length === 0
+      ? null
+      : mean(runs.map((run) => run.selected_action_k)),
+    averageSavingsPercent: realized.length === 0
+      ? null
+      : mean(realized.map(([, savings]) => savings)),
     winPercent:
       waited.length === 0 ? null : (winCount / waited.length) * 100,
   };
@@ -78,16 +84,6 @@ export function formatWeiAsGwei(value: number): string {
   return `${gwei.toFixed(2)} Gwei`;
 }
 
-export function formatChartAxisValue(
-  value: number,
-  step: number,
-  suffix = "",
-): string {
-  const fractionDigits =
-    step >= 1 ? 0 : Math.min(6, Math.ceil(-Math.log10(step)));
-  return `${value.toFixed(fractionDigits)}${suffix}`;
-}
-
 export function waitBuckets(
   runs: readonly InferenceRun[],
   horizon: Horizon,
@@ -103,28 +99,22 @@ export function waitBuckets(
     const outcomes = matchingRuns.flatMap((run) =>
       run.outcome === undefined ? [] : [run.outcome],
     );
-    const selectedFeeMean = mean(
-      outcomes.map((outcome) => outcome.selected_base_fee_per_gas),
-    );
-    const immediateFeeMean = mean(
-      outcomes.map((outcome) => outcome.immediate_base_fee_per_gas),
-    );
-
     return {
-      selectedBaseFeeGwei:
-        selectedFeeMean === null ? null : selectedFeeMean / GWEI,
-      immediateBaseFeeGwei:
-        immediateFeeMean === null ? null : immediateFeeMean / GWEI,
       runCount: matchingRuns.length,
-      savingsPercent: mean(outcomes.map(savingsPercent)),
       wait: offset,
+      realized: outcomes.length === 0 ? null : {
+        selectedBaseFeeGwei: mean(
+          outcomes.map((outcome) => outcome.selected_base_fee_per_gas),
+        ) / GWEI,
+        immediateBaseFeeGwei: mean(
+          outcomes.map((outcome) => outcome.immediate_base_fee_per_gas),
+        ) / GWEI,
+        savingsPercent: mean(outcomes.map(savingsPercent)),
+      },
     };
   });
 }
 
-function mean(values: readonly number[]): number | null {
-  if (values.length === 0) {
-    return null;
-  }
+function mean(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }

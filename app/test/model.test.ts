@@ -15,8 +15,8 @@ vi.mock("react-native-executorch-expo-resource-fetcher", () => ({
   ExpoResourceFetcher: { name: "expo-resource-fetcher" },
 }));
 
-import { createModelRuntime } from "../src/model";
-import { deferred, modelSelection } from "./helpers";
+import { executeModel } from "../src/model";
+import { modelSelection } from "./helpers";
 
 type NativeTensor = {
   dataPtr: ArrayBuffer | Float32Array;
@@ -54,128 +54,16 @@ function predictedFee(z: number): number {
 }
 
 describe("model runtime", () => {
-  it("loads on first execution and reuses an unchanged model", async () => {
+  it("builds the float32 input tensor and decodes ordinary numbers", async () => {
     const module = native();
-    const factory = vi.fn(() => module);
-    const runtime = createModelRuntime(factory);
-    const selected = modelSelection(2);
     const input = new Float32Array([1, 2]);
-
-    const first = await runtime.execute(selected, input);
-    const second = await runtime.execute(selected, input);
-
-    expect(factory).toHaveBeenCalledTimes(1);
-    expect(module.load).toHaveBeenCalledOnce();
-    expect(module.load).toHaveBeenCalledWith(12);
-    expect(module.forward).toHaveBeenCalledTimes(2);
-    expect(module.forward).toHaveBeenLastCalledWith([
-      {
-        dataPtr: input,
-        sizes: [1, 2, 1],
-        scalarType: 6,
-      },
+    await expect(executeModel(module, modelSelection(2), input)).resolves.toEqual({
+      selectedAction: 1,
+      predictedFee: expect.closeTo(predictedFee(0.25)),
+    });
+    expect(module.forward).toHaveBeenCalledWith([
+      { dataPtr: input, sizes: [1, 2, 1], scalarType: 6 },
     ]);
-    expect(first).toEqual({
-      selectedAction: 1,
-      predictedFee: expect.closeTo(predictedFee(0.25)),
-    });
-    expect(second).toEqual(first);
-
-    await runtime.dispose();
-    expect(module.delete).toHaveBeenCalledOnce();
-  });
-
-  it("serializes concurrent execution, replacement, and disposal", async () => {
-    const forward = deferred<NativeTensor[]>();
-    const events: string[] = [];
-    const firstOutputs = [
-      output([0, 1], [1, 2]),
-      output([0.25], [1]),
-    ];
-    const first = native(async () => {
-      events.push("forward first");
-      return forward.promise;
-    });
-    first.load.mockImplementation(async () => {
-      events.push("load first");
-    });
-    first.delete.mockImplementation(() => {
-      events.push("delete first");
-    });
-    const second = native(async () => {
-      events.push("forward second");
-      return [output([1, 0, 2], [1, 3]), output([-0.5], [1])];
-    });
-    second.load.mockImplementation(async () => {
-      events.push("load second");
-    });
-    second.delete.mockImplementation(() => events.push("delete second"));
-    const factory = vi
-      .fn()
-      .mockImplementationOnce(() => first)
-      .mockImplementationOnce(() => second);
-    const runtime = createModelRuntime(factory);
-    const firstSelection = modelSelection(2);
-    const secondSelection = modelSelection(3);
-
-    const firstRun = runtime.execute(
-      firstSelection,
-      new Float32Array([1, 2]),
-    );
-    await vi.waitFor(() => expect(first.forward).toHaveBeenCalledOnce());
-
-    const secondRun = runtime.execute(
-      secondSelection,
-      new Float32Array([1, 2]),
-    );
-    const disposal = runtime.dispose();
-
-    forward.resolve(firstOutputs);
-    await expect(firstRun).resolves.toEqual({
-      selectedAction: 1,
-      predictedFee: expect.closeTo(predictedFee(0.25)),
-    });
-    await expect(secondRun).resolves.toEqual({
-      selectedAction: 2,
-      predictedFee: expect.closeTo(predictedFee(-0.5)),
-    });
-    await disposal;
-    expect(events).toEqual([
-      "load first",
-      "forward first",
-      "delete first",
-      "load second",
-      "forward second",
-      "delete second",
-    ]);
-    expect(() =>
-      runtime.execute(firstSelection, new Float32Array([1, 2])),
-    ).toThrow("Model runtime is disposed");
-    await expect(runtime.dispose()).resolves.toBeUndefined();
-  });
-
-  it("retries with a fresh module after a load failure", async () => {
-    const failed = native();
-    failed.load.mockRejectedValueOnce(new Error("load failed"));
-    const loaded = native();
-    const factory = vi
-      .fn()
-      .mockImplementationOnce(() => failed)
-      .mockImplementationOnce(() => loaded);
-    const runtime = createModelRuntime(factory);
-    const selected = modelSelection(2);
-    const input = new Float32Array([1, 2]);
-
-    await expect(runtime.execute(selected, input)).rejects.toThrow(
-      "load failed",
-    );
-    await expect(runtime.execute(selected, input)).resolves.toEqual({
-      selectedAction: 1,
-      predictedFee: expect.closeTo(predictedFee(0.25)),
-    });
-    expect(loaded.load).toHaveBeenCalledOnce();
-    await runtime.dispose();
-    expect(loaded.delete).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -211,15 +99,14 @@ describe("model runtime", () => {
     },
   ])("rejects invalid $name", async ({ outputs, message }) => {
     const module = native(async () => outputs);
-    const runtime = createModelRuntime(() => module);
 
     await expect(
-      runtime.execute(
+      executeModel(
+        module,
         modelSelection(2),
         new Float32Array([1, 2]),
       ),
     ).rejects.toThrow(message);
-    await runtime.dispose();
   });
 
   it("selects the first action when maximum logits tie", async () => {
@@ -227,27 +114,23 @@ describe("model runtime", () => {
       output([1, 4, 4, 0], [1, 4]),
       output([0], [1]),
     ]);
-    const runtime = createModelRuntime(() => module);
 
     await expect(
-      runtime.execute(modelSelection(4), new Float32Array([1, 2])),
+      executeModel(module, modelSelection(4), new Float32Array([1, 2])),
     ).resolves.toEqual({
       selectedAction: 1,
       predictedFee: expect.closeTo(100),
     });
-    await runtime.dispose();
   });
 
-  it("rejects decoded fee overflow", async () => {
+  it.each([NaN, Infinity, -Infinity, 2_000, -2_000])("rejects invalid decoded fee from z=%s", async (z) => {
     const module = native(async () => [
       output([0, 1], [1, 2]),
-      output([2_000], [1]),
+      output([z], [1]),
     ]);
-    const runtime = createModelRuntime(() => module);
 
     await expect(
-      runtime.execute(modelSelection(2), new Float32Array([1, 2])),
+      executeModel(module, modelSelection(2), new Float32Array([1, 2])),
     ).rejects.toThrow("Predicted fee must be positive and finite");
-    await runtime.dispose();
   });
 });

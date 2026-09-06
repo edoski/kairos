@@ -15,13 +15,17 @@ export type InferenceRun = InferenceResult & {
   outcome?: InferenceOutcome;
 };
 
+type HistorySnapshot = {
+  readonly runs: readonly InferenceRun[];
+  readonly storageError: string | null;
+};
+
 /**
  * Serializes initial load and complete save-before-publish mutations.
  * Failed saves retain committed state; unresolved outcomes remain pending for retry.
  */
 export type RunHistory = {
-  readonly runs: readonly InferenceRun[];
-  readonly storageError: string | null;
+  getSnapshot(): HistorySnapshot;
   record(result: InferenceResult): Promise<void>;
   resolvePending(
     chain: Chain,
@@ -37,14 +41,14 @@ export type RunHistory = {
 let runSequence = 0;
 
 export function createRunHistory(): RunHistory {
-  let runs: readonly InferenceRun[] = [];
-  let storageError: string | null = null;
+  let snapshot: HistorySnapshot = { runs: [], storageError: null };
   let started = false;
   let loaded = false;
   const listeners = new Set<() => void>();
   const enqueue = createSerialQueue();
 
-  function publish(): void {
+  function publish(next: HistorySnapshot): void {
+    snapshot = next;
     listeners.forEach((listener) => listener());
   }
 
@@ -53,13 +57,12 @@ export function createRunHistory(): RunHistory {
     started = true;
     void enqueue(async () => {
       try {
-        runs = await loadRuns();
+        const runs = await loadRuns();
         loaded = true;
-        storageError = null;
+        publish({ runs, storageError: null });
       } catch (error) {
-        storageError = errorMessage(error);
+        publish({ ...snapshot, storageError: errorMessage(error) });
       }
-      publish();
     });
   }
 
@@ -71,34 +74,26 @@ export function createRunHistory(): RunHistory {
     start();
     return enqueue(async () => {
       if (!loaded) {
-        throw new Error(storageError ?? "Could not load run history.");
+        throw new Error(snapshot.storageError ?? "Could not load run history.");
       }
 
-      const current = runs;
+      const current = snapshot.runs;
       const next = await transform(current);
       if (next === current) return;
 
       try {
         await saveRuns(next);
       } catch (error) {
-        storageError = errorMessage(error);
-        publish();
+        publish({ ...snapshot, storageError: errorMessage(error) });
         throw error;
       }
 
-      runs = next;
-      storageError = null;
-      publish();
+      publish({ runs: next, storageError: null });
     });
   }
 
   const history: RunHistory = {
-    get runs() {
-      return runs;
-    },
-    get storageError() {
-      return storageError;
-    },
+    getSnapshot: () => snapshot,
     record(result) {
       return update((current) => addRun(current, result));
     },

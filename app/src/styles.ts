@@ -104,7 +104,6 @@ export const styles = StyleSheet.create({
   },
   summaryLabel: { color: colors.muted, fontSize: 10, textAlign: "center" },
   summaryValue: { color: colors.blue, fontSize: 20, fontWeight: "800" },
-  graphSection: { gap: 14 },
   runScroller: { maxHeight: 272 },
   runRow: {
     alignItems: "center",

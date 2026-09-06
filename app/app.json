@@ -2,6 +2,7 @@
   "expo": {
     "name": "KAIROS",
     "slug": "kairos",
+    "scheme": "kairos",
     "ios": {
       "bundleIdentifier": "dev.edoski.kairos"
     },

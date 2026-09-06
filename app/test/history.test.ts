@@ -43,13 +43,13 @@ describe("run history", () => {
     await history.record(result);
     await history.record(result);
 
-    expect(history.runs).toHaveLength(2);
-    expect(history.runs[0]).toMatchObject({
+    expect(history.getSnapshot().runs).toHaveLength(2);
+    expect(history.getSnapshot().runs[0]).toMatchObject({
       id: expect.any(String),
       ran_at: expect.any(String),
       ...result,
     });
-    expect(history.runs[0].id).not.toBe(history.runs[1].id);
+    expect(history.getSnapshot().runs[0].id).not.toBe(history.getSnapshot().runs[1].id);
   });
 
   it("loads stored history before an early run write", async () => {
@@ -64,12 +64,12 @@ describe("run history", () => {
     load.resolve(JSON.stringify([existing]));
     await record;
 
-    expect(history.runs).toHaveLength(2);
-    expect(history.runs[0]).toMatchObject({ head_block: 30 });
-    expect(history.runs[1]).toEqual(existing);
+    expect(history.getSnapshot().runs).toHaveLength(2);
+    expect(history.getSnapshot().runs[0]).toMatchObject({ head_block: 30 });
+    expect(history.getSnapshot().runs[1]).toEqual(existing);
     expect(storage.setItem).toHaveBeenCalledWith(
       "kairos.runs",
-      JSON.stringify(history.runs),
+      JSON.stringify(history.getSnapshot().runs),
     );
   });
 
@@ -80,8 +80,8 @@ describe("run history", () => {
     await expect(history.record(inferenceResult())).rejects.toThrow(
       "Corrupt history",
     );
-    expect(history.runs).toEqual([]);
-    expect(history.storageError).toBe("Corrupt history");
+    expect(history.getSnapshot().runs).toEqual([]);
+    expect(history.getSnapshot().storageError).toBe("Corrupt history");
     expect(storage.setItem).not.toHaveBeenCalled();
   });
 
@@ -94,24 +94,24 @@ describe("run history", () => {
       .mockReturnValueOnce(firstSave.promise)
       .mockReturnValueOnce(secondSave.promise);
     const history = startHistory();
-    await vi.waitFor(() => expect(history.runs).toEqual([existing]));
+    await vi.waitFor(() => expect(history.getSnapshot().runs).toEqual([existing]));
 
     const first = history.record(inferenceResult({ head_block: 30 }));
     const second = history.record(inferenceResult({ head_block: 40 }));
     await vi.waitFor(() => expect(storage.setItem).toHaveBeenCalledOnce());
-    expect(history.runs).toEqual([existing]);
+    expect(history.getSnapshot().runs).toEqual([existing]);
 
     firstSave.reject(new Error("Storage unavailable"));
     await expect(first).rejects.toThrow("Storage unavailable");
     await vi.waitFor(() => expect(storage.setItem).toHaveBeenCalledTimes(2));
-    expect(history.runs).toEqual([existing]);
-    expect(history.storageError).toBe("Storage unavailable");
+    expect(history.getSnapshot().runs).toEqual([existing]);
+    expect(history.getSnapshot().storageError).toBe("Storage unavailable");
 
     secondSave.resolve();
     await second;
-    expect(history.runs[0]).toMatchObject({ head_block: 40 });
-    expect(history.runs[1]).toEqual(existing);
-    expect(history.storageError).toBeNull();
+    expect(history.getSnapshot().runs[0]).toMatchObject({ head_block: 40 });
+    expect(history.getSnapshot().runs[1]).toEqual(existing);
+    expect(history.getSnapshot().storageError).toBeNull();
   });
 
   it("commits concurrent successful records in FIFO order", async () => {
@@ -128,9 +128,9 @@ describe("run history", () => {
     await second;
 
     expect(storage.setItem).toHaveBeenCalledTimes(2);
-    expect(history.runs).toHaveLength(2);
-    expect(history.runs[0]).toMatchObject({ head_block: 40 });
-    expect(history.runs[1]).toMatchObject({ head_block: 30 });
+    expect(history.getSnapshot().runs).toHaveLength(2);
+    expect(history.getSnapshot().runs[0]).toMatchObject({ head_block: 40 });
+    expect(history.getSnapshot().runs[1]).toMatchObject({ head_block: 30 });
   });
 
   it("does not resolve, save, or publish a no-op pending update", async () => {
@@ -147,7 +147,7 @@ describe("run history", () => {
     const publication = vi.fn();
     const history = createRunHistory();
     history.subscribe(publication);
-    await vi.waitFor(() => expect(history.runs).toHaveLength(3));
+    await vi.waitFor(() => expect(history.getSnapshot().runs).toHaveLength(3));
     publication.mockClear();
     storage.setItem.mockClear();
 
@@ -179,23 +179,47 @@ describe("run history", () => {
       JSON.stringify([failed, successful, future]),
     );
     const history = startHistory();
-    await vi.waitFor(() => expect(history.runs).toHaveLength(3));
+    await vi.waitFor(() => expect(history.getSnapshot().runs).toHaveLength(3));
     const resolve = vi
       .fn()
       .mockRejectedValueOnce(new Error("RPC unavailable"))
       .mockResolvedValue(outcome());
 
     await history.resolvePending("ethereum", 22, resolve);
-    expect(history.runs[0]).toMatchObject({ id: "failed" });
-    expect(history.runs[0].outcome).toBeUndefined();
-    expect(history.runs[1]).toEqual({ ...successful, outcome: outcome() });
-    expect(history.runs[2]).toMatchObject({ id: "future" });
-    expect(history.runs[2].outcome).toBeUndefined();
+    expect(history.getSnapshot().runs[0]).toMatchObject({ id: "failed" });
+    expect(history.getSnapshot().runs[0].outcome).toBeUndefined();
+    expect(history.getSnapshot().runs[1]).toEqual({ ...successful, outcome: outcome() });
+    expect(history.getSnapshot().runs[2]).toMatchObject({ id: "future" });
+    expect(history.getSnapshot().runs[2].outcome).toBeUndefined();
 
     await history.resolvePending("ethereum", 35, resolve);
-    expect(history.runs[0].outcome).toBeDefined();
-    expect(history.runs[1].outcome).toBeDefined();
-    expect(history.runs[2].outcome).toBeDefined();
+    expect(history.getSnapshot().runs[0].outcome).toBeDefined();
+    expect(history.getSnapshot().runs[1].outcome).toBeDefined();
+    expect(history.getSnapshot().runs[2].outcome).toBeDefined();
     expect(storage.setItem).toHaveBeenCalledTimes(2);
   });
+});
+
+it("keeps snapshots referentially stable between committed publications", async () => {
+  const existing = inferenceRun({ id: "existing", outcome: outcome() });
+  storage.getItem.mockResolvedValueOnce(JSON.stringify([existing]));
+  const history = startHistory();
+  const initial = history.getSnapshot();
+  expect(history.getSnapshot()).toBe(initial);
+  await vi.waitFor(() => expect(history.getSnapshot().runs).toEqual([existing]));
+  const loaded = history.getSnapshot();
+  expect(loaded).not.toBe(initial);
+  expect(history.getSnapshot()).toBe(loaded);
+  await history.resolvePending("ethereum", 100, vi.fn());
+  expect(history.getSnapshot()).toBe(loaded);
+
+  const save = deferred<void>();
+  storage.setItem.mockReturnValueOnce(save.promise);
+  const record = history.record(inferenceResult());
+  await vi.waitFor(() => expect(storage.setItem).toHaveBeenCalledOnce());
+  expect(history.getSnapshot()).toBe(loaded);
+  save.resolve();
+  await record;
+  expect(history.getSnapshot()).not.toBe(loaded);
+  expect(loaded.runs).toEqual([existing]);
 });

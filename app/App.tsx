@@ -1,18 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomTabs, type AppTab } from "./src/components/BottomTabs";
 import type { Chain, Horizon } from "./src/domain";
 import { presentationError } from "./src/errors";
-import {
-  createRunHistory,
-  type InferenceRun,
-} from "./src/history";
-import {
-  createInferenceRuntime,
-  type InferenceRuntime,
-} from "./src/inference";
+import { createRunHistory } from "./src/history";
+import { currentHead, infer, resolveOutcome } from "./src/inference";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
 import {
   InferenceScreen,
@@ -37,42 +31,15 @@ export default function App() {
     status: "idle",
   });
   const [runHistory] = useState(createRunHistory);
-  const [runs, setRuns] = useState<readonly InferenceRun[]>(
-    runHistory.runs,
+  const { runs, storageError } = useSyncExternalStore(
+    runHistory.subscribe,
+    runHistory.getSnapshot,
   );
-  const [storageError, setStorageError] = useState<string | null>(
-    runHistory.storageError,
-  );
-  const activeRuntime = useRef<InferenceRuntime | null>(null);
   const selectionRef = useRef<Selection>(INITIAL_SELECTION);
   const inferenceGeneration = useRef(0);
 
   function fail(message: string): void {
     setInference({ status: "error", message });
-  }
-
-  useEffect(() => {
-    return runHistory.subscribe(() => {
-      setRuns(runHistory.runs);
-      setStorageError(runHistory.storageError);
-    });
-  }, [runHistory]);
-
-  useEffect(() => {
-    return () => {
-      const runtime = activeRuntime.current;
-      activeRuntime.current = null;
-      if (runtime !== null) {
-        void runtime.dispose().catch(() => {});
-      }
-    };
-  }, []);
-
-  function getRuntime(): InferenceRuntime {
-    if (activeRuntime.current === null) {
-      activeRuntime.current = createInferenceRuntime();
-    }
-    return activeRuntime.current;
   }
 
   function select(next: Selection): void {
@@ -100,13 +67,12 @@ export default function App() {
   /** Resolves pending runs for the chain captured when refresh begins. */
   async function refreshOutcomes(): Promise<void> {
     const chain = selectionRef.current.chain;
-    const runtime = getRuntime();
-    const headBlock = await runtime.currentHead(chain);
+    const headBlock = await currentHead(chain);
     await runHistory.resolvePending(
       chain,
       headBlock,
       (immediateBlock, selectedBlock) =>
-        runtime.resolveOutcome(chain, immediateBlock, selectedBlock),
+        resolveOutcome(chain, immediateBlock, selectedBlock),
     );
   }
 
@@ -123,8 +89,7 @@ export default function App() {
     setInference({ status: "loading" });
     let result;
     try {
-      const runtime = getRuntime();
-      result = await runtime.run(selected.chain, selected.horizon);
+      result = await infer(selected.chain, selected.horizon);
     } catch (error) {
       if (isCurrent()) {
         fail(presentationError(error));
@@ -161,6 +126,7 @@ export default function App() {
             />
           ) : (
             <AnalyticsScreen
+              key={selection.chain}
               chain={selection.chain}
               horizon={selection.horizon}
               onChainChange={selectChain}

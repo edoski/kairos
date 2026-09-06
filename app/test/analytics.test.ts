@@ -65,41 +65,36 @@ describe("analytics", () => {
     ];
     expect(waitBuckets(selectedRuns, 5)).toEqual([
       {
-        selectedBaseFeeGwei: 10,
-        immediateBaseFeeGwei: 10,
         wait: 0,
         runCount: 1,
-        savingsPercent: 0,
+        realized: { selectedBaseFeeGwei: 10, immediateBaseFeeGwei: 10, savingsPercent: 0 },
       },
       {
-        selectedBaseFeeGwei: 10,
-        immediateBaseFeeGwei: 15,
         wait: 1,
         runCount: 3,
-        savingsPercent: 30,
+        realized: { selectedBaseFeeGwei: 10, immediateBaseFeeGwei: 15, savingsPercent: 30 },
       },
       {
-        selectedBaseFeeGwei: 12,
-        immediateBaseFeeGwei: 10,
         wait: 2,
         runCount: 1,
-        savingsPercent: -20,
+        realized: { selectedBaseFeeGwei: 12, immediateBaseFeeGwei: 10, savingsPercent: -20 },
       },
       {
-        selectedBaseFeeGwei: null,
-        immediateBaseFeeGwei: null,
         wait: 3,
         runCount: 0,
-        savingsPercent: null,
+        realized: null,
       },
       {
-        selectedBaseFeeGwei: null,
-        immediateBaseFeeGwei: null,
         wait: 4,
         runCount: 1,
-        savingsPercent: null,
+        realized: null,
       },
     ]);
   });
 
+});
+
+it("preserves absent summary populations without exposing NaN", () => {
+  expect(summarizeRuns([])).toEqual({ averageWait: null, averageSavingsPercent: null, winPercent: null });
+  expect(summarizeRuns([inferenceRun({ selected_action_k: 2 })])).toEqual({ averageWait: 2, averageSavingsPercent: null, winPercent: null });
 });

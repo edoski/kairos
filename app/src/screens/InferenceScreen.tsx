@@ -141,7 +141,7 @@ function Timeline({
                 active && styles.accentText,
               ]}
             >
-              +{offset}
+              k={offset}
             </Text>
             <Ionicons
               color={active ? colors.teal : colors.muted}
@@ -208,7 +208,7 @@ function Result({
         style={[styles.button, styles.primaryButton]}
       >
         <Ionicons color={colors.surface} name="refresh" size={21} />
-        <Text style={styles.buttonText}>Run again</Text>
+        <Text style={styles.buttonText}>Back to setup</Text>
       </Pressable>
     </>
   );

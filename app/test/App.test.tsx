@@ -1,4 +1,4 @@
-import { StrictMode, type ReactNode } from "react";
+import { StrictMode, type ComponentProps, type ReactNode } from "react";
 import {
   act,
   create,
@@ -6,11 +6,11 @@ import {
 } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AppTab } from "../src/components/BottomTabs";
-import type { Chain, Horizon } from "../src/domain";
-import type { InferenceRun, RunHistory } from "../src/history";
+import type { BottomTabs } from "../src/components/BottomTabs";
+import type { AnalyticsScreen } from "../src/screens/AnalyticsScreen";
+import type { InferenceScreen } from "../src/screens/InferenceScreen";
+import type { RunHistory } from "../src/history";
 import type {
-  InferenceRuntime,
   InferenceResult,
 } from "../src/inference";
 import {
@@ -20,25 +20,13 @@ import {
 } from "./helpers";
 
 const mocks = vi.hoisted(() => ({
-  analyticsProps: null as {
-    chain: Chain;
-    horizon: Horizon;
-    onChainChange(chain: Chain): void;
-    onHorizonChange(horizon: Horizon): void;
-    onRefresh(): Promise<void>;
-    runs: readonly InferenceRun[];
-  } | null,
-  bottomTabsProps: null as { onSelect(tab: AppTab): void } | null,
-  createInferenceRuntime: vi.fn(),
+  analyticsProps: null as ComponentProps<typeof AnalyticsScreen> | null,
+  bottomTabsProps: null as ComponentProps<typeof BottomTabs> | null,
+  infer: vi.fn(),
+  currentHead: vi.fn(),
+  resolveOutcome: vi.fn(),
   createRunHistory: vi.fn(),
-  inferenceProps: null as {
-    chain: Chain;
-    horizon: Horizon;
-    onChainChange(chain: Chain): void;
-    onHorizonChange(horizon: Horizon): void;
-    onRun(): void;
-    state: Record<string, unknown>;
-  } | null,
+  inferenceProps: null as ComponentProps<typeof InferenceScreen> | null,
 }));
 
 vi.mock("react-native", () => {
@@ -84,54 +72,25 @@ vi.mock("../src/history", () => ({
 }));
 
 vi.mock("../src/inference", () => ({
-  createInferenceRuntime: mocks.createInferenceRuntime,
+  infer: mocks.infer,
+  currentHead: mocks.currentHead,
+  resolveOutcome: mocks.resolveOutcome,
 }));
 
 import App from "../App";
 
-type RuntimeHarness = {
-  runtime: InferenceRuntime;
-  resolveRun(index: number, result: InferenceResult): void;
-};
-
-const runtimes: RuntimeHarness[] = [];
 let history: RunHistory;
 let root: ReactTestRenderer | null = null;
-
-function runtime(): RuntimeHarness {
-  const pending: Array<ReturnType<typeof deferred<InferenceResult>>> = [];
-  const value: InferenceRuntime = {
-    currentHead: vi.fn(async (_chain) => 100),
-    run: vi.fn((_chain, _horizon) => {
-      const request = deferred<InferenceResult>();
-      pending.push(request);
-      return request.promise;
-    }),
-    resolveOutcome: vi.fn(async (_chain, _immediate, _selected) => {
-      throw new Error("unused");
-    }),
-    dispose: vi.fn(async () => undefined),
-  };
-  return {
-    runtime: value,
-    resolveRun(index, result) {
-      pending[index].resolve(result);
-    },
-  };
-}
+const pending: Array<ReturnType<typeof deferred<InferenceResult>>> = [];
 
 function runHistory(): RunHistory {
-  let runs: readonly InferenceRun[] = [];
+  let snapshot: ReturnType<RunHistory["getSnapshot"]> = { runs: [], storageError: null };
   const listeners = new Set<() => void>();
   return {
-    get runs() {
-      return runs;
-    },
-    get storageError() {
-      return null;
-    },
+    getSnapshot: () => snapshot,
     record: vi.fn(async (result) => {
-      runs = [inferenceRun({ ...result, id: `run-${runs.length}` }), ...runs];
+      const runs = snapshot.runs;
+      snapshot = { runs: [inferenceRun({ ...result, id: `run-${runs.length}` }), ...runs], storageError: null };
       listeners.forEach((listener) => listener());
     }),
     resolvePending: vi.fn(async () => undefined),
@@ -148,17 +107,19 @@ beforeEach(() => {
       IS_REACT_ACT_ENVIRONMENT: boolean;
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
-  runtimes.length = 0;
+  pending.length = 0;
   history = runHistory();
   mocks.analyticsProps = null;
   mocks.bottomTabsProps = null;
   mocks.inferenceProps = null;
   mocks.createRunHistory.mockReset().mockReturnValue(history);
-  mocks.createInferenceRuntime.mockReset().mockImplementation(() => {
-    const created = runtime();
-    runtimes.push(created);
-    return created.runtime;
+  mocks.infer.mockReset().mockImplementation(() => {
+    const request = deferred<InferenceResult>();
+    pending.push(request);
+    return request.promise;
   });
+  mocks.currentHead.mockReset().mockResolvedValue(100);
+  mocks.resolveOutcome.mockReset().mockRejectedValue(new Error("unused"));
 });
 
 afterEach(async () => {
@@ -191,14 +152,14 @@ describe("App inference presentation", () => {
     act(() => mocks.inferenceProps!.onRun());
     act(() => mocks.inferenceProps!.onChainChange("polygon"));
     act(() => mocks.inferenceProps!.onRun());
-    await act(async () => runtimes[0].resolveRun(1, newer));
+    await act(async () => pending[1].resolve(newer));
     expect(mocks.inferenceProps!.chain).toBe("polygon");
     expect(mocks.inferenceProps!.state).toEqual({
       status: "success",
       result: newer,
     });
 
-    await act(async () => runtimes[0].resolveRun(0, older));
+    await act(async () => pending[0].resolve(older));
     expect(history.record).toHaveBeenNthCalledWith(1, newer);
     expect(history.record).toHaveBeenNthCalledWith(2, older);
     expect(mocks.inferenceProps!.state).toEqual({
@@ -216,7 +177,7 @@ describe("App inference presentation", () => {
       mocks.inferenceProps!.onHorizonChange(5);
     });
 
-    await act(async () => runtimes[0].resolveRun(0, result));
+    await act(async () => pending[0].resolve(result));
     expect(mocks.inferenceProps!.state).toEqual({
       status: "success",
       result,
@@ -225,35 +186,10 @@ describe("App inference presentation", () => {
 
 });
 
-describe("App owners", () => {
-  it("creates one runtime lazily and disposes it once", async () => {
-    await renderApp(true);
-
-    expect(runtimes).toHaveLength(0);
-
-    act(() => {
-      mocks.inferenceProps!.onRun();
-      mocks.inferenceProps!.onRun();
-    });
-    expect(runtimes).toHaveLength(1);
-    expect(runtimes[0].runtime.run).toHaveBeenCalledTimes(2);
-
-    await act(async () => root?.unmount());
-    root = null;
-    expect(runtimes[0].runtime.dispose).toHaveBeenCalledOnce();
-  });
-
-});
-
 describe("App outcome refresh and global selection", () => {
   it("finishes refresh for its captured chain after selection changes", async () => {
     const head = deferred<number>();
-    const created = runtime();
-    vi.mocked(created.runtime.currentHead).mockReturnValueOnce(head.promise);
-    mocks.createInferenceRuntime.mockImplementationOnce(() => {
-      runtimes.push(created);
-      return created.runtime;
-    });
+    mocks.currentHead.mockReturnValueOnce(head.promise);
     await renderApp();
     act(() => mocks.bottomTabsProps!.onSelect("analytics"));
 
@@ -278,7 +214,7 @@ describe("App outcome refresh and global selection", () => {
     );
     const resolver = vi.mocked(history.resolvePending).mock.calls[0][2];
     await expect(resolver(101, 102)).rejects.toThrow("unused");
-    expect(runtimes[0].runtime.resolveOutcome).toHaveBeenCalledWith(
+    expect(mocks.resolveOutcome).toHaveBeenCalledWith(
       "ethereum",
       101,
       102,

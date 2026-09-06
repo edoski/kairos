@@ -60,7 +60,7 @@ export function RunDetails({
               ["Action offset", String(run.selected_action_k)],
               ["Target block", run.target_block.toLocaleString()],
               [
-                "Predicted base fee",
+                "Predicted horizon minimum",
                 formatWeiAsGwei(run.predicted_minimum_base_fee_per_gas),
               ],
             ]}

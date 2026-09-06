@@ -119,6 +119,15 @@ export function AnalyticsScreen({
             onChange={onChainChange}
           />
         </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            Horizon (K = {horizon})
+          </Text>
+          <HorizonChoices
+            onChange={onHorizonChange}
+            value={horizon}
+          />
+        </View>
 
         {storageError && (
           <View style={styles.errorBanner}>
@@ -176,18 +185,7 @@ export function AnalyticsScreen({
           </View>
         </View>
 
-        <View style={styles.graphSection}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Horizon (K = {horizon})
-            </Text>
-            <HorizonChoices
-              onChange={onHorizonChange}
-              value={horizon}
-            />
-          </View>
-          {graphRuns.length > 0 && <AnalyticsCharts buckets={buckets} />}
-        </View>
+        {graphRuns.length > 0 && <AnalyticsCharts buckets={buckets} />}
 
         <Text style={styles.sectionTitle}>Runs ({graphRuns.length})</Text>
         <View style={[styles.surface, styles.clippedCard]}>

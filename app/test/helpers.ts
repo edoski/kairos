@@ -2,19 +2,16 @@ import type { Horizon } from "../src/domain";
 import type { InferenceRun } from "../src/history";
 import type { InferenceResult } from "../src/inference";
 import type {
-  MobileChainManifest,
-  ModelManifest,
   ModelSelection,
-} from "../src/model";
+} from "../src/bundledModels";
 
-function modelEntry(K: Horizon): ModelManifest {
+function modelEntry(): ModelSelection["modelManifest"] {
   return {
-    artifact_id: `00000000-0000-4000-8000-${K.toString().padStart(12, "0")}`,
     target: { mean: Math.log(100), standard_deviation: 0.5 },
   };
 }
 
-export const chainManifest: MobileChainManifest = {
+export const chainManifest: ModelSelection["chainManifest"] = {
   context_blocks: 2,
   features: [
     {
@@ -24,10 +21,10 @@ export const chainManifest: MobileChainManifest = {
     },
   ],
   models: {
-    2: modelEntry(2),
-    3: modelEntry(3),
-    4: modelEntry(4),
-    5: modelEntry(5),
+    2: modelEntry(),
+    3: modelEntry(),
+    4: modelEntry(),
+    5: modelEntry(),
   },
 };
 

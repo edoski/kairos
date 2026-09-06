@@ -1,13 +1,9 @@
 import { createPublicClient, http } from "viem";
-import type { GetBlockReturnType, Hash } from "viem";
+import type { Hash } from "viem";
 import { avalanche, mainnet, polygon } from "viem/chains";
 
 import type { BlockRow, Chain } from "./domain";
-import {
-  predecessorOffset,
-  type ChainManifest,
-  type PriorityFeeRewards,
-} from "./features";
+import type { PriorityFeeRewards } from "./features";
 
 /**
  * Context prepared from one freshly observed head. Blocks are parent-linked;
@@ -23,8 +19,8 @@ export type ChainOutcome = {
   selectedBaseFeePerGas: bigint;
 };
 
-export type ChainSession = {
-  sync(): Promise<PreparedChainContext>;
+export type ChainReader = {
+  readContext(contextBlocks: number): Promise<PreparedChainContext>;
   readHead(): Promise<bigint>;
   readOutcome(
     immediateBlock: bigint,
@@ -32,8 +28,7 @@ export type ChainSession = {
   ): Promise<ChainOutcome>;
 };
 
-type FetchedBlock = {
-  row: BlockRow;
+type FetchedBlock = BlockRow & {
   hash: Hash;
   parentHash: Hash;
 };
@@ -44,45 +39,34 @@ const CHAIN_DEFINITIONS = {
   avalanche,
 } as const;
 
-export function createChainSession(
-  chain: Chain,
-  manifest: ChainManifest,
-): ChainSession {
+export function createChainReader(chain: Chain): ChainReader {
   const definition = CHAIN_DEFINITIONS[chain];
   const client = createPublicClient({
     chain: definition,
     cacheTime: 0,
     transport: http(undefined, {
-      batch: true,
+      batch: chain === "polygon" ? { batchSize: 3 } : true,
       retryCount: 0,
     }),
   });
-  const offset = predecessorOffset(manifest);
 
-  function fetchedBlock(
-    block: GetBlockReturnType<typeof definition, false, "latest">,
-  ): FetchedBlock {
+  async function readBlock(number: bigint): Promise<FetchedBlock> {
+    const block = await client.getBlock({ blockNumber: number });
     if (block.baseFeePerGas === null || block.baseFeePerGas <= 0n) {
       throw new Error(
         `RPC returned block ${block.number} without a positive base fee`,
       );
     }
     return {
-      row: {
-        number: block.number,
-        timestamp: block.timestamp,
-        baseFeePerGas: block.baseFeePerGas,
-        gasUsed: block.gasUsed,
-        gasLimit: block.gasLimit,
-        transactionCount: block.transactions.length,
-      },
+      number: block.number,
+      timestamp: block.timestamp,
+      baseFeePerGas: block.baseFeePerGas,
+      gasUsed: block.gasUsed,
+      gasLimit: block.gasLimit,
+      transactionCount: block.transactions.length,
       hash: block.hash,
       parentHash: block.parentHash,
     };
-  }
-
-  async function readBlock(number: bigint): Promise<FetchedBlock> {
-    return fetchedBlock(await client.getBlock({ blockNumber: number }));
   }
 
   async function readBlockRange(
@@ -100,9 +84,10 @@ export function createChainSession(
   async function readPriorityFeeRewards(
     head: bigint,
     firstBlock: bigint,
+    contextBlocks: number,
   ): Promise<readonly PriorityFeeRewards[]> {
     const history = await client.getFeeHistory({
-      blockCount: manifest.context_blocks,
+      blockCount: contextBlocks,
       blockNumber: head,
       rewardPercentiles: [50, 90],
     });
@@ -114,9 +99,9 @@ export function createChainSession(
     if (history.reward === undefined) {
       throw new Error("Fee history must include priority-fee rewards");
     }
-    if (history.reward.length !== manifest.context_blocks) {
+    if (history.reward.length !== contextBlocks) {
       throw new Error(
-        `Fee history must contain exactly ${manifest.context_blocks} reward rows, got ${history.reward.length}`,
+        `Fee history must contain exactly ${contextBlocks} reward rows, got ${history.reward.length}`,
       );
     }
     return history.reward.map((rewards) => {
@@ -134,27 +119,25 @@ export function createChainSession(
     });
   }
 
-  async function sync(): Promise<PreparedChainContext> {
+  async function readContext(contextBlocks: number): Promise<PreparedChainContext> {
     const head = await client.getBlockNumber();
-    const firstContextBlock =
-      head - BigInt(manifest.context_blocks) + 1n;
-    const firstRawBlock =
-      firstContextBlock - BigInt(offset);
+    const firstContextBlock = head - BigInt(contextBlocks) + 1n;
+    const firstRawBlock = firstContextBlock - 1n;
     const [fetchedBlocks, priorityFeeRewards] = await Promise.all([
       readBlockRange(firstRawBlock, head),
-      readPriorityFeeRewards(head, firstContextBlock),
+      readPriorityFeeRewards(head, firstContextBlock, contextBlocks),
     ]);
     for (let index = 1; index < fetchedBlocks.length; index += 1) {
       const previous = fetchedBlocks[index - 1];
       const current = fetchedBlocks[index];
       if (current.parentHash !== previous.hash) {
         throw new Error(
-          `Broken parent link between blocks ${previous.row.number} and ${current.row.number}`,
+          `Broken parent link between blocks ${previous.number} and ${current.number}`,
         );
       }
     }
     return {
-      blocks: fetchedBlocks.map(({ row }) => row),
+      blocks: fetchedBlocks,
       priorityFeeRewards,
     };
   }
@@ -167,7 +150,7 @@ export function createChainSession(
     immediateBlock: bigint,
     selectedBlock: bigint,
   ): Promise<ChainOutcome> {
-    const [{ row: immediate }, { row: selected }] = await Promise.all([
+    const [immediate, selected] = await Promise.all([
       readBlock(immediateBlock),
       readBlock(selectedBlock),
     ]);
@@ -178,7 +161,7 @@ export function createChainSession(
   }
 
   return {
-    sync,
+    readContext,
     readHead,
     readOutcome,
   };

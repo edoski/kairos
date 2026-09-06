@@ -27,17 +27,9 @@ export type ChainManifest = {
 
 export type PriorityFeeRewards = readonly [p50: bigint, p90: bigint];
 
-export function predecessorOffset(manifest: ChainManifest): 0 | 1 {
-  return manifest.features.some(
-    (feature) => feature.name === "block_interval_seconds",
-  )
-    ? 1
-    : 0;
-}
-
 /**
  * Builds the flat row-major `[C,F]` Float32 matrix in manifest feature order.
- * Expects ascending contiguous blocks, one leading predecessor for interval features,
+ * Expects ascending contiguous blocks, one leading predecessor,
  * and reward rows aligned by height with the final `C` blocks.
  */
 export function buildModelInput(
@@ -45,28 +37,20 @@ export function buildModelInput(
   priorityFeeRewards: readonly PriorityFeeRewards[],
   manifest: ChainManifest,
 ): Float32Array {
-  const offset = predecessorOffset(manifest);
-  const featureCount = manifest.features.length;
-  const output = new Float32Array(manifest.context_blocks * featureCount);
-
-  for (let row = 0; row < manifest.context_blocks; row += 1) {
-    const blockIndex = row + offset;
-    const block = blocks[blockIndex];
-    for (let column = 0; column < featureCount; column += 1) {
-      const feature = manifest.features[column];
+  const values = blocks.slice(1).flatMap((block, row) =>
+    manifest.features.map((feature) => {
       const raw = rawFeature(
         feature.name,
         block,
-        blocks[blockIndex - 1],
+        blocks[row],
         priorityFeeRewards[row],
       );
-      const index = row * featureCount + column;
-      output[index] =
-        (raw - feature.mean) / feature.standard_deviation;
-      if (!Number.isFinite(output[index])) {
-        throw new Error("Model input must contain finite float32 values");
-      }
-    }
+      return (raw - feature.mean) / feature.standard_deviation;
+    }),
+  );
+  const output = Float32Array.from(values);
+  if (!output.every(Number.isFinite)) {
+    throw new Error("Model input must contain finite float32 values");
   }
 
   return output;

@@ -31,6 +31,10 @@ const readers = {
   avalanche: createChainReader("avalanche"),
 };
 
+/**
+ * Serializes inference calls, each with a fresh model released before completion.
+ * Reads chain context after loading so the observed head stays fresh.
+ */
 export function infer(chain: Chain, K: Horizon): Promise<InferenceResult> {
   return serialize(async () => {
     const selection = selectModel(chain, K);

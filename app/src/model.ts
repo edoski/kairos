@@ -16,6 +16,10 @@ type NativeModule = Pick<ExecutorchModule, "forward">;
 
 initExecutorch({ resourceFetcher: ExpoResourceFetcher });
 
+/**
+ * Runs a caller-owned, loaded module and returns ordinary JS numbers.
+ * Selects the earliest maximum logit and decodes the horizon minimum in wei per gas.
+ */
 export async function executeModel(
   module: NativeModule,
   selection: ModelSelection,
